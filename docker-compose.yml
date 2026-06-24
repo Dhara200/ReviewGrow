@@ -1,4 +1,5 @@
 services:
+
   mysql:
     image: mysql:8.0
 
@@ -18,6 +19,24 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+
+    container_name: reputation_app
+
+    restart: unless-stopped
+
+    env_file:
+      - .env.example
+
+    ports:
+      - "5000:5000"
+
+    depends_on:
+      - mysql
 
 volumes:
   mysql_data:
