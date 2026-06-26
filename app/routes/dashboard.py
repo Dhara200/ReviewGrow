@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 import json
 import io
 from flask import render_template
@@ -31,26 +31,23 @@ def get_report(business_id):
 
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(
-            """
-            SELECT
-                b.business_name,
-                r.summary,
-                r.top_complaints,
-                r.top_praises,
-                r.sentiment_score,
-                r.review_count,
-                r.generated_at
-            FROM reports r
-            JOIN businesses b
-                ON r.business_id = b.id
-            WHERE r.business_id = %s
-            ORDER BY r.generated_at DESC
-            LIMIT 1
-            """,
-            (business_id,)
-        )
+        cursor.execute("""
+SELECT review_text,
+rating,
+review_date
+FROM reviews
+WHERE business_id=%s
+ORDER BY created_at DESC
+LIMIT 10
+""", (business_id,))
 
+        reviews = cursor.fetchall()
+        return render_template(
+    "dashboard.html",
+    report=report,
+    reviews=reviews,
+    business_id=business_id
+)
         report = cursor.fetchone()
         
         if report:
@@ -232,55 +229,105 @@ def download_report_pdf(business_id):
         return {
             "message": str(e)
         }, 500
-        
+
 @dashboard_bp.route("/dashboard/<int:business_id>")
 def dashboard(business_id):
-    
-    if "user_id" not in session:
 
+    if "user_id" not in session:
         return redirect("/login-page")
 
     if not user_owns_business(
         session["user_id"],
         business_id
-):
-
+    ):
         return "Access denied", 403
-    
-    if "user_id" not in session:
-
-        return redirect(
-            "/login-page"
-        )
 
     conn = get_connection()
-
     cursor = conn.cursor(dictionary=True)
+
+    report_id = request.args.get("report")
+
+    if report_id:
+
+        cursor.execute(
+            """
+            SELECT
+                b.business_name,
+                b.business_type,
+                b.city,
+                b.state,
+                b.country,
+                r.id,
+                r.summary,
+                r.top_complaints,
+                r.top_praises,
+                r.sentiment_score,
+                r.review_count,
+                r.generated_at,
+                r.recommendations
+            FROM reports r
+            JOIN businesses b
+                ON r.business_id = b.id
+            WHERE r.id=%s
+            AND r.business_id=%s
+            AND b.user_id=%s
+            """,
+            (
+                report_id,
+                business_id,
+                session["user_id"]
+            )
+        )
+
+    else:
+
+        cursor.execute(
+            """
+            SELECT
+                b.business_name,
+                b.business_type,
+                b.city,
+                b.state,
+                b.country,
+                r.id,
+                r.summary,
+                r.top_complaints,
+                r.top_praises,
+                r.sentiment_score,
+                r.review_count,
+                r.generated_at,
+                r.recommendations
+            FROM reports r
+            JOIN businesses b
+                ON r.business_id = b.id
+            WHERE r.business_id=%s
+            AND b.user_id=%s
+            ORDER BY r.generated_at DESC
+            LIMIT 1
+            """,
+            (
+                business_id,
+                session["user_id"]
+            )
+        )
+
+    report = cursor.fetchone()
 
     cursor.execute(
         """
         SELECT
-            b.business_name,
-            r.summary,
-            r.top_complaints,
-            r.top_praises,
-            r.sentiment_score,
-            r.review_count
-        FROM reports r
-        JOIN businesses b
-            ON r.business_id = b.id
-            
-        WHERE r.business_id=%s
-        AND b.user_id=%s
-        ORDER BY r.generated_at DESC
-        LIMIT 1
+            id,
+            sentiment_score,
+            review_count,
+            generated_at
+        FROM reports
+        WHERE business_id=%s
+        ORDER BY generated_at DESC
         """,
-        (business_id,
-         session["user_id"]
-        )
+        (business_id,)
     )
 
-    report = cursor.fetchone()
+    report_history = cursor.fetchall()
 
     cursor.close()
     conn.close()
@@ -295,9 +342,31 @@ def dashboard(business_id):
     report["top_praises"] = json.loads(
         report["top_praises"]
     )
-    
+
+    if report.get("recommendations"):
+
+        report["recommendations"] = json.loads(
+            report["recommendations"]
+        )
+
+    else:
+
+        report["recommendations"] = [
+            "No recommendations available"
+        ]
+
+    for item in report_history:
+
+        if item["generated_at"]:
+
+            item["generated_at"] = item["generated_at"].strftime(
+                "%d %b %Y %I:%M %p"
+            )
+
     return render_template(
-    "dashboard.html",
-    report=report,
-    business_id=business_id
+        "dashboard.html",
+        report=report,
+        report_history=report_history,
+        business_id=business_id
     )
+

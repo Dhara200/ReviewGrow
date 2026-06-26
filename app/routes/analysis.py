@@ -184,7 +184,10 @@ def analyze():
         result = analyze_reviews(
             review_texts
         )
-
+        print("========== AI RESULT ==========")
+        print(result)
+        print("===============================")
+        print("Saving report...")
         cursor.execute(
             """
             INSERT INTO reports
@@ -193,6 +196,7 @@ def analyze():
                 summary,
                 top_complaints,
                 top_praises,
+                recommendations,
                 sentiment_score,
                 review_count
             )
@@ -204,6 +208,12 @@ def analyze():
                 result["summary"],
                 json.dumps(result["top_complaints"]),
                 json.dumps(result["top_praises"]),
+                json.dumps(
+    result.get(
+        "recommendations",
+        ["No recommendations generated"]
+    )
+),
                 result["sentiment_score"],
                 len(reviews)
             )
@@ -282,7 +292,8 @@ def analyze_ui():
             )
 
         result = analyze_reviews(
-            review_texts
+            review_texts,
+                print(result)
         )
 
         cursor.execute(
@@ -293,6 +304,7 @@ def analyze_ui():
                 summary,
                 top_complaints,
                 top_praises,
+                recommendations,
                 sentiment_score,
                 review_count
             )
@@ -304,6 +316,12 @@ def analyze_ui():
                 result["summary"],
                 json.dumps(result["top_complaints"]),
                 json.dumps(result["top_praises"]),
+                json.dumps(
+                  result.get(
+                   "recommendations",
+                  ["No recommendations generated"]
+                )
+            ),
                 result["sentiment_score"],
                 len(reviews)
             )

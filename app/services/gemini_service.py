@@ -18,6 +18,14 @@ def analyze_reviews(review_texts):
     prompt = f"""
 Analyze these customer reviews.
 
+
+Provide:
+1. Summary
+2. Top praises
+3. Top complaints
+4. Business improvement recommendations
+5. Sentiment score
+
 Return ONLY valid JSON.
 
 Format:
@@ -29,6 +37,11 @@ Format:
         "..."
     ],
     "top_complaints": [
+        "...",
+        "..."
+    ],
+    "recommendations": [
+        "...",
         "...",
         "..."
     ],

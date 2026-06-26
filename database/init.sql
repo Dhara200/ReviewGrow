@@ -49,6 +49,8 @@ CREATE TABLE reviews (
 
     review_date DATETIME,
 
+    analysis_status VARCHAR(50) DEFAULT 'pending',
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (business_id)
