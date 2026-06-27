@@ -14,7 +14,7 @@ href="{{ url_for('static', filename='reviewsense.css') }}"
 
 body{
     margin:0;
-    background:#0f172a;
+    background:#07111b;
 }
 
 .review-layout{
@@ -42,8 +42,8 @@ body{
 
     overflow-y:auto;
 
-    background:#111827;
-    border:1px solid #293548;
+    background:#102233;
+    border:1px solid #20394a;
     border-radius:16px;
     padding:25px;
 }
@@ -102,11 +102,11 @@ body{
 }
 
 .filter-btn:hover{
-    background:#374151;
+    background:#183549;
 }
 
 .filter-btn.active{
-    background:#6C5CE7;
+    background:#14b8a6;
 }
 
 /* RIGHT PANEL */
@@ -127,8 +127,8 @@ body{
 }
 
 .summary-card{
-    background:#111827;
-    border:1px solid #293548;
+    background:#102233;
+    border:1px solid #20394a;
     border-radius:16px;
     padding:22px;
 }
@@ -176,9 +176,9 @@ body{
 
 .review-card{
 
-background:#111827;
+background:#102233;
 
-border:1px solid #293548;
+border:1px solid #20394a;
 
 border-radius:18px;
 
@@ -192,7 +192,7 @@ transition:.25s;
 
 transform:translateY(-2px);
 
-border-color:#6C5CE7;
+border-color:#14b8a6;
 
 }
 
@@ -325,6 +325,75 @@ font-weight:600;
 .btn-danger:hover{
 
 background:#b91c1c;
+
+}
+
+.modal{
+display:none;
+position:fixed;
+left:0;
+top:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,.65);
+z-index:9999;
+justify-content:center;
+align-items:center;
+
+}
+
+.modal-content{
+width:700px;
+max-width:90%;
+background:#111827;
+border-radius:18px;
+padding:35px;
+border:1px solid #374151;
+color:white;
+position:relative;
+
+}
+
+.close-btn{
+position:absolute;
+right:25px;
+top:20px;
+font-size:30px;
+cursor:pointer;
+
+}
+
+.analysis-section{
+margin-bottom:25px;
+
+}
+
+.analysis-section h3{
+margin-bottom:10px;
+color:#9ca3af;
+
+}
+
+.sentiment-badge{
+display:inline-block;
+padding:8px 18px;
+border-radius:30px;
+background:#6C5CE7;
+font-weight:bold;
+
+}
+
+#modalReply{
+width:100%;
+height:170px;
+background:#1f2937;
+border:none;
+border-radius:12px;
+padding:15px;
+color:white;
+resize:none;
+font-size:15px;
+box-sizing:border-box;
 
 }
 
@@ -575,15 +644,16 @@ background:#b91c1c;
 
             {% if review.analysis_status == "pending" %}
 
-                <button class="btn-solid">
-
-                    Analyze
-
-                </button>
+            <button
+            class="btn-solid analyze-btn"
+            data-review-id="{{ review.id }}">
+            Analyze
+           </button>
 
             {% else %}
 
-                <button class="btn-ghost">
+                <button class="btn-ghost view-analysis"
+data-review-id="{{ review.id }}">
 
                     View Analysis
 
@@ -617,6 +687,56 @@ background:#b91c1c;
 
 </div>
 
+<!-- AI Analysis Modal -->
+
+<div id="analysisModal" class="modal">
+
+    <div class="modal-content">
+
+        <span id="closeModal" class="close-btn">&times;</span>
+
+        <h2>AI Review Analysis</h2>
+
+        <div class="analysis-section">
+
+            <h3>Sentiment</h3>
+
+            <span id="modalSentiment" class="sentiment-badge">
+                --
+            </span>
+
+        </div>
+
+        <div class="analysis-section">
+
+            <h3>Summary</h3>
+
+            <p id="modalSummary"></p>
+
+        </div>
+
+        <div class="analysis-section">
+
+            <h3>AI Reply</h3>
+
+            <textarea
+                id="modalReply"
+                readonly
+            ></textarea>
+
+        </div>
+
+        <button
+            id="copyReply"
+            class="btn-solid">
+
+            Copy Reply
+
+        </button>
+
+    </div>
+
+</div>
 <script>
 
 const reviewCards=document.querySelectorAll(".review-card");
@@ -768,8 +888,149 @@ function applyFilters(){
 
 }
 
-</script>
+document.querySelectorAll(".analyze-btn").forEach(button => {
 
+    button.addEventListener("click", async function () {
+
+        const reviewId = this.dataset.reviewId;
+
+        this.disabled = true;
+        this.innerText = "Analyzing...";
+
+        try {
+
+            const response = await fetch(
+                `/reviews/analyze/${reviewId}`,
+                {
+                    method: "POST"
+                }
+            );
+
+            const data = await response.json();
+
+            console.log(data);
+            document.getElementById("modalSentiment").textContent =
+data.sentiment;
+
+document.getElementById("modalSummary").textContent =
+data.summary;
+
+document.getElementById("modalReply").value =
+data.reply;
+
+document.getElementById("analysisModal").style.display="flex";
+
+        } catch (err) {
+
+            alert("Something went wrong.");
+
+        }
+
+        this.disabled = false;
+        this.innerText = "Analyze";
+
+    });
+
+});
+
+// ===============================
+// AI Analysis Modal
+// ===============================
+
+const modal = document.getElementById("analysisModal");
+
+const modalSummary =
+document.getElementById("modalSummary");
+
+const modalSentiment =
+document.getElementById("modalSentiment");
+
+const modalReply =
+document.getElementById("modalReply");
+
+const closeModal =
+document.getElementById("closeModal");
+
+const copyReply =
+document.getElementById("copyReply");
+
+document.querySelectorAll(".view-analysis").forEach(button=>{
+
+    button.addEventListener("click", async function(){
+
+        const reviewId=this.dataset.reviewId;
+
+        const response=await fetch(
+            `/reviews/analysis/${reviewId}`
+        );
+
+        const data=await response.json();
+
+        modalSummary.textContent=data.summary;
+
+        modalSentiment.textContent=data.sentiment;
+
+        modalReply.value=data.ai_reply;
+
+        if(data.sentiment==="Positive"){
+
+            modalSentiment.style.background="#166534";
+
+        }
+
+        else if(data.sentiment==="Negative"){
+
+            modalSentiment.style.background="#991b1b";
+
+        }
+
+        else{
+
+            modalSentiment.style.background="#92400e";
+
+        }
+
+        modal.style.display="flex";
+
+    });
+
+});
+
+closeModal.onclick=function(){
+
+    modal.style.display="none";
+
+}
+
+window.onclick=function(event){
+
+    if(event.target===modal){
+
+        modal.style.display="none";
+
+    }
+
+}
+
+copyReply.onclick=function(){
+
+    navigator.clipboard.writeText(
+
+        modalReply.value
+
+    );
+
+    copyReply.innerText="Copied!";
+
+    setTimeout(()=>{
+
+        copyReply.innerText="Copy Reply";
+
+    },1500);
+
+}
+
+</script>
 
 </body>
 

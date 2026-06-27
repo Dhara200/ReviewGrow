@@ -317,13 +317,321 @@ width:70%;
     background:#ef4444;
 }
 
+/* =======================================================
+   PREMIUM SAAS BACKGROUND
+======================================================= */
+
+body{
+    overflow-x:hidden;
+    position:relative;
+}
+
+.bg-wrapper{
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    pointer-events:none;
+    overflow:hidden;
+}
+
+.glow{
+    position:absolute;
+    border-radius:50%;
+    filter:blur(120px);
+    opacity:.18;
+}
+
+.glow1{
+    width:420px;
+    height:420px;
+    background:#00d4ff;
+    top:-120px;
+    left:-100px;
+}
+
+.glow2{
+    width:350px;
+    height:350px;
+    background:#6C5CE7;
+    right:-100px;
+    bottom:-100px;
+}
+
+.floating-card{
+
+    position:absolute;
+
+    background:rgba(25,35,55,.35);
+
+    backdrop-filter:blur(10px);
+
+    border:1px solid rgba(108,92,231,.25);
+
+    border-radius:18px;
+
+    color:#15d4d4;
+
+    animation:float 8s ease-in-out infinite;
+
+    box-shadow:0 20px 40px rgba(0,0,0,.35);
+}
+
+@keyframes float{
+
+0%{
+transform:translateY(0px);
+}
+
+50%{
+transform:translateY(-12px);
+}
+
+100%{
+transform:translateY(0px);
+}
+
+}
+
+/* Review Card */
+
+.review-card{
+
+left:40px;
+
+top:280px;
+
+width:180px;
+
+height:110px;
+
+padding:20px;
+
+font-size:24px;
+
+opacity:.22;
+}
+
+.review-lines{
+
+margin-top:12px;
+
+height:8px;
+
+background:#3b82f6;
+
+border-radius:20px;
+
+box-shadow:
+0 18px 0 #334155,
+0 36px 0 #334155,
+0 54px 0 #334155;
+}
+
+/* Gauge */
+
+.gauge-card{
+
+right:60px;
+
+top:140px;
+
+width:150px;
+
+height:170px;
+
+display:flex;
+
+flex-direction:column;
+
+align-items:center;
+
+justify-content:center;
+
+opacity:.28;
+}
+
+.gauge-circle{
+
+width:90px;
+
+height:90px;
+
+border-radius:50%;
+
+border:10px solid #0ea5e9;
+
+border-top-color:#14b8a6;
+
+transform:rotate(40deg);
+}
+
+.gauge-score{
+
+margin-top:10px;
+
+font-size:34px;
+
+font-weight:bold;
+
+color:#14d4d4;
+}
+
+/* PDF */
+
+.pdf-card{
+
+right:70px;
+
+top:340px;
+
+width:90px;
+
+height:110px;
+
+display:flex;
+
+flex-direction:column;
+
+justify-content:center;
+
+align-items:center;
+
+font-size:34px;
+
+opacity:.22;
+}
+
+.pdf-card span{
+
+font-size:22px;
+
+font-weight:bold;
+}
+
+/* Google */
+
+.google-card{
+
+left:90px;
+
+bottom:130px;
+
+width:80px;
+
+height:80px;
+
+display:flex;
+
+align-items:center;
+
+justify-content:center;
+
+font-size:48px;
+
+font-weight:bold;
+
+background:linear-gradient(
+45deg,
+#4285F4,
+#34A853,
+#FBBC05,
+#EA4335
+);
+
+-webkit-background-clip:text;
+
+-webkit-text-fill-color:transparent;
+
+opacity:.28;
+}
+
+/* Chat */
+
+.chat-card{
+
+left:140px;
+
+top:150px;
+
+width:70px;
+
+height:70px;
+
+display:flex;
+
+justify-content:center;
+
+align-items:center;
+
+font-size:34px;
+
+opacity:.28;
+}
+
+/* Chart */
+
+.chart-card{
+
+right:70px;
+
+bottom:120px;
+
+width:160px;
+
+height:110px;
+
+display:flex;
+
+justify-content:center;
+
+align-items:center;
+
+font-size:55px;
+
+opacity:.18;
+}
+
 </style>
 
 
 </head>
 
 <body>
+<!-- ========= BACKGROUND DECORATIONS ========= -->
 
+<div class="bg-wrapper">
+
+    <div class="floating-card review-card">
+        ★★★★★
+        <div class="review-lines"></div>
+    </div>
+
+    <div class="floating-card gauge-card">
+        <div class="gauge-circle"></div>
+        <div class="gauge-score">4.7</div>
+    </div>
+
+    <div class="floating-card pdf-card">
+        📄
+        <span>PDF</span>
+    </div>
+
+    <div class="floating-card google-card">
+        G
+    </div>
+
+    <div class="floating-card chat-card">
+        💬
+    </div>
+
+    <div class="floating-card chart-card">
+        📊
+    </div>
+
+    <div class="glow glow1"></div>
+    <div class="glow glow2"></div>
+
+</div>
 <nav>
 
 <a href="/" class="logo">
@@ -427,6 +735,7 @@ width:70%;
     </div>
 
     <button
+        id="copyBtn"
         class="copy-btn"
         onclick="copyReply()"
     >
@@ -539,20 +848,37 @@ width:70%;
 </div>
 <script>
 
-function copyReply(){
+async function copyReply() {
 
-    const replyText =
-        document.getElementById(
-            "replyContent"
-        ).innerText;
+    const replyText = document.getElementById("replyContent").innerText;
+    const button = document.getElementById("copyBtn");
 
-    navigator.clipboard.writeText(
-        replyText
-    );
+    try {
 
-    alert(
-        "Reply copied successfully!"
-    );
+        await navigator.clipboard.writeText(replyText);
+
+        button.innerHTML = "✅ Copied";
+        button.disabled = true;
+
+        setTimeout(() => {
+
+            button.innerHTML = "📋 Copy Reply";
+            button.disabled = false;
+
+        }, 2000);
+
+    } catch (err) {
+
+        button.innerHTML = "❌ Failed";
+
+        setTimeout(() => {
+
+            button.innerHTML = "📋 Copy Reply";
+
+        }, 2000);
+
+    }
+
 }
 
 </script>

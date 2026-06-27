@@ -5,7 +5,11 @@ from app.services.database_service import (
     get_connection,
     user_owns_business
 )
-from app.services.gemini_service import analyze_reviews
+from app.services.gemini_service import (
+    analyze_reviews,
+    analyze_single_review,
+    analyze_review_and_save
+)
 import json
 
 review_bp = Blueprint("reviews", __name__)
@@ -149,7 +153,7 @@ def upload_reviews():
                 review_date = None
             else:
                 review_date = review_date.strftime("%Y-%m-%d")
-            rating = row.get("rating")
+                rating = row.get("rating")
 
             if pd.isna(rating):
                rating = None
@@ -175,7 +179,7 @@ def upload_reviews():
                 (
                     business_id,
                     row.get("source") or "csv",
-                    rating,
+                    float(row.get("rating", 0)),
                     row.get("review_title") or "",
                     row.get("review_text") or "",
                     row.get("reviewer_name") or "Anonymous",
@@ -261,7 +265,7 @@ def upload_reviews_ui():
                 (
                     business_id,
                     row.get("source") or "csv",
-                    rating,
+                    float(row.get("rating", 0)),
                     row.get("review_title") or "",
                     row.get("review_text") or "",
                     row.get("reviewer_name") or "Anonymous",
@@ -292,6 +296,10 @@ AND analysis_status='pending'
     )
 
         result=analyze_reviews(review_texts)
+        print(result)
+        print("Reviews being sent to Gemini:")
+        print(review_texts)
+        print("Total:", len(review_texts))
 
         cursor.execute(
 """
@@ -317,16 +325,6 @@ json.dumps(result["recommendations"]),
 result["sentiment_score"],
 len(reviews)
 )
-)
-
-        cursor.execute(
-"""
-UPDATE reviews
-SET analysis_status='analyzed'
-WHERE business_id=%s
-AND analysis_status='pending'
-""",
-(business_id,)
 )
 
         conn.commit()
@@ -433,7 +431,6 @@ def review_history(business_id):
     for review in reviews:
         
 
-
         rating = str(int(review["rating"])) if review["rating"] else "0"
 
         if rating in rating_counts:
@@ -460,3 +457,143 @@ def review_history(business_id):
         source_counts=source_counts,
         analyzed_count=analyzed_count
     )
+    
+@review_bp.route("/reviews/analyze/<int:review_id>", methods=["POST"])
+def analyze_review(review_id):
+
+    if "user_id" not in session:
+        return jsonify({
+            "message": "Login required"
+        }), 401
+
+    try:
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT
+                r.id,
+                r.business_id,
+                r.review_text,
+                r.analysis_status
+            FROM reviews r
+            JOIN businesses b
+                ON r.business_id = b.id
+            WHERE r.id = %s
+            AND b.user_id = %s
+            """,
+            (
+                review_id,
+                session["user_id"]
+            )
+        )
+
+        review = cursor.fetchone()
+
+        if not review:
+
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "message": "Review not found"
+            }), 404
+
+        review_text = review["review_text"]
+
+        if not review_text:
+
+           cursor.close()
+           conn.close()
+
+           return jsonify({
+        "message": "Review text is empty."
+    }), 400
+
+        analysis = analyze_single_review(review_text)
+
+        cursor.execute(
+    """
+    UPDATE reviews
+    SET
+        sentiment=%s,
+        summary=%s,
+        ai_reply=%s,
+        analysis_status='analyzed',
+        analyzed_at=NOW()
+    WHERE id=%s
+    """,
+    (
+        analysis["sentiment"],
+        analysis["summary"],
+        analysis["reply"],
+        review_id
+    )
+)
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+
+    "success": True,
+
+    "sentiment": analysis["sentiment"],
+
+    "summary": analysis["summary"],
+
+    "reply": analysis["reply"]
+
+})
+
+    except Exception as e:
+
+        return jsonify({
+            "message": str(e)
+        }), 500
+        
+@review_bp.route("/reviews/analysis/<int:review_id>")
+def get_review_analysis(review_id):
+
+    if "user_id" not in session:
+        return jsonify({
+            "message": "Login required"
+        }),401
+
+    conn=get_connection()
+    cursor=conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT
+            r.summary,
+            r.sentiment,
+            r.ai_reply,
+            r.analysis_status
+        FROM reviews r
+        JOIN businesses b
+            ON r.business_id=b.id
+        WHERE
+            r.id=%s
+            AND b.user_id=%s
+    """,
+    (
+        review_id,
+        session["user_id"]
+    ))
+
+    review=cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if not review:
+
+        return jsonify({
+            "message":"Not found"
+        }),404
+
+    return jsonify(review)

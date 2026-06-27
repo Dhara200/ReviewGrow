@@ -1,8 +1,6 @@
 import json
 import re
-
 import google.generativeai as genai
-
 from app.config import Config
 
 
@@ -64,6 +62,109 @@ Reviews:
     )
 
     if not match:
+        raise Exception(
+            f"No JSON found in Gemini response: {response_text}"
+        )
+
+    return json.loads(match.group())
+def analyze_review_and_save(
+    cursor,
+    review_id,
+    review_text
+):
+
+    analysis = analyze_review(review_text)
+
+    cursor.execute(
+        """
+        UPDATE reviews
+        SET
+            sentiment=%s,
+            summary=%s,
+            ai_reply=%s,
+            analysis_status='analyzed',
+            analyzed_at=NOW()
+        WHERE id=%s
+        """,
+        (
+            analysis["sentiment"],
+            analysis["summary"],
+            analysis["ai_reply"],
+            review_id
+        )
+    )
+
+    return analysis
+
+def analyze_review(review_text):
+
+    prompt = f"""
+Analyze the following customer review.
+
+Return ONLY valid JSON.
+
+Format:
+
+{{
+    "summary": "...",
+    "sentiment": "Positive | Neutral | Negative",
+    "ai_reply": "..."
+}}
+
+Review:
+
+{review_text}
+"""
+
+    response = model.generate_content(prompt)
+
+    response_text = response.text.strip()
+
+    match = re.search(
+        r"\{.*\}",
+        response_text,
+        re.DOTALL
+    )
+
+    if not match:
+        raise Exception(
+            f"No JSON found in Gemini response: {response_text}"
+        )
+
+    return json.loads(match.group())
+
+def analyze_single_review(review_text):
+
+    prompt = f"""
+Analyze this customer review.
+
+Return ONLY valid JSON.
+
+Format:
+
+{{
+    "sentiment": "Positive | Neutral | Negative",
+    "summary": "...",
+    "reply": "..."
+}}
+
+Review:
+
+{review_text}
+"""
+
+    response = model.generate_content(prompt)
+
+    response_text = response.text.strip()
+
+    match = re.search(
+        r"\{.*\}",
+        response_text,
+        re.DOTALL
+    )
+
+    if not match:
+
         raise Exception(
             f"No JSON found in Gemini response: {response_text}"
         )

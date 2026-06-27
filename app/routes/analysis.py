@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app.services.database_service import get_connection
-from app.services.gemini_service import analyze_reviews
+from app.services.gemini_service import analyze_reviews, analyze_review
 import traceback
 import json
 from flask import redirect
