@@ -1,0 +1,141 @@
+{% extends "base_app.html" %}
+
+{% block title %}Admin Dashboard - ReviewGrow{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Admin / Dashboard</span>
+{% endblock %}
+
+{% block head %}
+<style>
+    .admin-icon-btn {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        justify-content: center;
+    }
+
+    .revenue-bar {
+        min-width: 48px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--rs-border);
+        overflow: hidden;
+    }
+
+    .revenue-bar span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--rs-primary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">Platform admin</p>
+        <h1 class="rs-page-title">Admin Dashboard</h1>
+        <p class="rs-page-subtitle">Monitor platform usage, users, businesses, reviews, and generated reports.</p>
+    </div>
+</div>
+
+<div class="rs-kpi-grid mb-4">
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-people"></i></div>
+        <p class="rs-kpi-value">{{ total_users }}</p>
+        <p class="rs-kpi-label">Total Users</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-building"></i></div>
+        <p class="rs-kpi-value">{{ total_businesses }}</p>
+        <p class="rs-kpi-label">Businesses</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-chat-left-text"></i></div>
+        <p class="rs-kpi-value">{{ total_reviews }}</p>
+        <p class="rs-kpi-label">Reviews</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-file-earmark-bar-graph"></i></div>
+        <p class="rs-kpi-value">{{ total_reports }}</p>
+        <p class="rs-kpi-label">Reports</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon" style="background:var(--rs-accent-soft);color:var(--rs-accent);"><i class="bi bi-cash-stack"></i></div>
+        <p class="rs-kpi-value">₹{{ "%.2f"|format(total_income) }}</p>
+        <p class="rs-kpi-label">Total Income</p>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
+        <div>
+            <p class="rs-eyebrow">Revenue Analytics</p>
+            <h2 class="h5 fw-bold mb-0">Income overview</h2>
+        </div>
+        <a href="/admin/payments" class="btn-ghost">
+            <i class="bi bi-receipt"></i>
+            Payments
+        </a>
+    </div>
+
+    <div class="rs-kpi-grid mb-4">
+        <div class="rs-card rs-kpi">
+            <div class="rs-kpi-icon"><i class="bi bi-calendar-month"></i></div>
+            <p class="rs-kpi-value">₹{{ "%.2f"|format(monthly_revenue) }}</p>
+            <p class="rs-kpi-label">MRR</p>
+        </div>
+        <div class="rs-card rs-kpi">
+            <div class="rs-kpi-icon"><i class="bi bi-calendar-range"></i></div>
+            <p class="rs-kpi-value">₹{{ "%.2f"|format(annual_recurring_revenue) }}</p>
+            <p class="rs-kpi-label">ARR</p>
+        </div>
+        <div class="rs-card rs-kpi">
+            <div class="rs-kpi-icon"><i class="bi bi-wallet2"></i></div>
+            <p class="rs-kpi-value">₹{{ "%.2f"|format(monthly_revenue) }}</p>
+            <p class="rs-kpi-label">This Month Revenue</p>
+        </div>
+        <div class="rs-card rs-kpi">
+            <div class="rs-kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
+            <p class="rs-kpi-value">₹{{ "%.2f"|format(total_income) }}</p>
+            <p class="rs-kpi-label">Total Revenue</p>
+        </div>
+        <div class="rs-card rs-kpi">
+            <div class="rs-kpi-icon" style="background:#fffbeb;color:var(--rs-warning);"><i class="bi bi-hourglass-split"></i></div>
+            <p class="rs-kpi-value">{{ pending_payment_count }}</p>
+            <p class="rs-kpi-label">Pending Payments</p>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Revenue</th>
+                    <th>Successful Payments</th>
+                    <th>Trend</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in revenue_trend %}
+                {% set width = ((item.revenue / max_trend_revenue) * 100) if max_trend_revenue else 0 %}
+                <tr>
+                    <td class="fw-semibold">{{ item.month_name }}</td>
+                    <td>₹{{ "%.2f"|format(item.revenue) }}</td>
+                    <td>{{ item.successful_payment_count }}</td>
+                    <td>
+                        <div class="revenue-bar" aria-label="Revenue trend for {{ item.month_name }}">
+                            <span style="width: {{ width }}%;"></span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

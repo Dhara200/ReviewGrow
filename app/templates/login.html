@@ -1,120 +1,176 @@
-<!DOCTYPE html>
+{% extends "base_public.html" %}
 
-<html>
-<head>
+{% block title %}Login - ReviewGrow{% endblock %}
 
+{% block public_nav %}
+<a href="/" class="btn-ghost">Home</a>
+<a href="/register-page" class="btn-solid">Register</a>
+{% endblock %}
 
-<title>Login - ReviewSense</title>
+{% block head %}
+<style>
+    @keyframes loginShake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-8px); }
+        40%, 80% { transform: translateX(8px); }
+    }
 
-<link
-    rel="stylesheet"
-    href="{{ url_for('static', filename='reviewsense.css') }}"
->
+    .login-card-error {
+        border-color: var(--rs-danger);
+        animation: loginShake .36s ease;
+    }
 
-</head>
+    .login-error-text {
+        color: var(--rs-danger);
+        font-weight: 700;
+    }
 
-<body>
+    .login-countdown-text {
+        color: var(--rs-danger);
+        font-size: .92rem;
+        font-weight: 700;
+    }
 
-<nav>
+    .btn-submit:disabled {
+        cursor: not-allowed;
+        opacity: .65;
+        box-shadow: none;
+    }
+</style>
+{% endblock %}
 
-<a href="/" class="logo">
-    Review<span>Sense</span>
-</a>
+{% block content %}
+<section class="rs-auth-page">
+    <div class="rs-public-container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-5">
+                <div class="rs-card rs-card-lg {% if login_error %}login-card-error{% endif %}">
+                    <div class="text-center mb-4">
+                        <img src="{{ url_for('static', filename='images/logo.png') }}" class="auth-logo mx-auto mb-3" alt="ReviewGrow Logo">
+                        <h1 class="h3 fw-bold mb-2">Welcome back</h1>
+                        <p class="text-muted mb-0">Login to continue managing your business reputation.</p>
+                    </div>
 
-<div class="nav-links">
+                    <form id="loginForm" method="POST" action="/login-page" data-lock-seconds="{{ login_lock_seconds or '' }}">
+                        {% if login_error %}
+                        <p class="login-error-text mb-3">{{ login_error }}</p>
+                        {% endif %}
+                        <p id="loginCountdown" class="login-countdown-text mb-3 d-none"></p>
 
-    <a
-        href="/"
-        class="btn-ghost"
-    >
-        Home
-    </a>
+                        <div class="field">
+                            <label for="email">Email address</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-envelope text-muted"></i></span>
+                                <input id="email" class="form-control border-start-0 rounded-end-4" type="email" name="email" value="{{ email or '' }}" placeholder="you@company.com" autocomplete="email" required>
+                            </div>
+                        </div>
 
-    <a
-        href="/register-page"
-        class="btn-solid"
-    >
-        Register
-    </a>
+                        <div class="field">
+                            <label for="password">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-lock text-muted"></i></span>
+                                <input id="password" class="form-control border-start-0 rounded-end-4" type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+                            </div>
+                        </div>
 
-</div>
+                        <button id="loginButton" type="submit" class="btn-submit w-100 mt-2">
+                            <i class="bi bi-box-arrow-in-right"></i>
+                            Login
+                        </button>
+                    </form>
 
-
-</nav>
-
-<div class="container">
-
-
-<div class="card">
-
-    <h2>
-        Welcome 
-    </h2>
-
-    <p>
-        Login to continue managing your business reputation.
-    </p>
-
-    <form
-        method="POST"
-        action="/login-page"
-    >
-
-        <div class="field">
-
-            <label>
-                EMAIL
-            </label>
-
-            <input
-                type="email"
-                name="email"
-                required
-            >
-
+                    <p class="text-center text-muted mt-4 mb-0">
+                        Don't have an account?
+                        <a href="/register-page" class="fw-bold text-decoration-none text-primary">Register</a>
+                    </p>
+                </div>
+            </div>
         </div>
+    </div>
+</section>
+{% endblock %}
 
-        <div class="field">
+{% block scripts %}
+<script>
+    (() => {
+        const form = document.getElementById("loginForm");
+        const emailInput = document.getElementById("email");
+        const loginButton = document.getElementById("loginButton");
+        const countdown = document.getElementById("loginCountdown");
+        let countdownTimer = null;
 
-            <label>
-                PASSWORD
-            </label>
+        const lockKey = (email) => `reviewgrow-login-lock:${(email || "").trim().toLowerCase()}`;
 
-            <input
-                type="password"
-                name="password"
-                required
-            >
+        const formatRemaining = (milliseconds) => {
+            const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+            const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+            const seconds = String(totalSeconds % 60).padStart(2, "0");
+            return `${minutes}:${seconds}`;
+        };
 
-        </div>
+        const clearLockState = () => {
+            window.clearInterval(countdownTimer);
+            countdownTimer = null;
+            loginButton.disabled = false;
+            countdown.classList.add("d-none");
+            countdown.textContent = "";
+        };
 
-        <button
-            type="submit"
-            class="btn-submit"
-        >
-            Login
-        </button>
+        const applyLock = (expiresAt) => {
+            window.clearInterval(countdownTimer);
 
-    </form>
+            const updateCountdown = () => {
+                const remaining = expiresAt - Date.now();
 
-    <br>
+                if (remaining <= 0) {
+                    localStorage.removeItem(lockKey(emailInput.value));
+                    clearLockState();
+                    return;
+                }
 
-    <p style="text-align:center">
+                loginButton.disabled = true;
+                countdown.textContent = `Login locked. Try again in ${formatRemaining(remaining)}`;
+                countdown.classList.remove("d-none");
+            };
 
-        Don't have an account?
+            updateCountdown();
+            countdownTimer = window.setInterval(updateCountdown, 1000);
+        };
 
-        <a
-            href="/register-page"
-            style="color:#8B7CF8;text-decoration:none"
-        >
-            Register
-        </a>
+        const loadStoredLock = () => {
+            clearLockState();
 
-    </p>
+            const email = emailInput.value;
 
-</div>
+            if (!email) {
+                return;
+            }
 
-</div>
+            const storedExpiry = Number(localStorage.getItem(lockKey(email)));
 
-</body>
-</html>
+            if (storedExpiry && storedExpiry > Date.now()) {
+                applyLock(storedExpiry);
+            } else {
+                localStorage.removeItem(lockKey(email));
+            }
+        };
+
+        const lockSeconds = Number(form.dataset.lockSeconds || 0);
+
+        if (lockSeconds > 0 && emailInput.value) {
+            const expiresAt = Date.now() + (lockSeconds * 1000);
+            localStorage.setItem(lockKey(emailInput.value), String(expiresAt));
+            applyLock(expiresAt);
+        } else {
+            loadStoredLock();
+        }
+
+        emailInput.addEventListener("input", loadStoredLock);
+        form.addEventListener("submit", (event) => {
+            if (loginButton.disabled) {
+                event.preventDefault();
+            }
+        });
+    })();
+</script>
+{% endblock %}

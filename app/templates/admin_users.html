@@ -1,0 +1,147 @@
+{% extends "base_app.html" %}
+
+{% block title %}Admin Users - ReviewGrow{% endblock %}
+{% block nav_admin_users %}active{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Admin / Users</span>
+{% endblock %}
+
+{% block head %}
+<style>
+    .admin-icon-btn {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        justify-content: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <div>
+        <p class="rs-eyebrow">Admin</p>
+        <h1 class="rs-page-title">Users</h1>
+        <p class="rs-page-subtitle">View user details or delete user records from one place.</p>
+    </div>
+    <a href="/admin/dashboard" class="btn-ghost">
+        <i class="bi bi-speedometer2"></i>
+        Admin dashboard
+    </a>
+</div>
+
+<div class="rs-card rs-card-lg mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+        <div>
+            <p class="rs-eyebrow">Users</p>
+            <h2 class="h5 fw-bold mb-0">Recent Users</h2>
+        </div>
+        <div class="input-group" style="max-width:320px;">
+            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control" placeholder="Search users" aria-label="Search users">
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Businesses</th>
+                    <th>Joined</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td class="fw-semibold">{{ user.name }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        <span class="{% if user.role == 'admin' %}badge-soft-primary{% else %}badge-soft-success{% endif %}">
+                            {{ user.role }}
+                        </span>
+                    </td>
+                    <td>{{ user.business_count }}</td>
+                    <td>{{ user.created_at }}</td>
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a
+                                href="/admin/users/{{ user.id }}"
+                                class="btn-ghost admin-icon-btn"
+                                title="View user details"
+                                aria-label="View user details for {{ user.name }}"
+                            >
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if user.id == session.get("user_id") %}
+                            <span class="text-muted small align-self-center">Current admin</span>
+                            {% else %}
+                            <button
+                                type="button"
+                                class="btn-ghost admin-icon-btn"
+                                title="Delete user"
+                                aria-label="Delete user {{ user.name }}"
+                                data-bs-toggle="modal"
+                                data-bs-target="#deleteUserModal"
+                                data-user-id="{{ user.id }}"
+                                data-user-name="{{ user.name }}"
+                                data-user-email="{{ user.email }}"
+                            >
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-5">No users found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5 fw-bold" id="deleteUserModalLabel">Delete user?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cancel"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">This will permanently delete the user and all related records.</p>
+                <p class="mb-0 fw-semibold" id="deleteUserName"></p>
+                <p class="mb-0 text-muted" id="deleteUserEmail"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteUserForm" method="POST">
+                    <button type="submit" class="btn-solid">Delete user</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const deleteUserModal = document.getElementById("deleteUserModal");
+
+    deleteUserModal.addEventListener("show.bs.modal", (event) => {
+        const button = event.relatedTarget;
+        const userId = button.getAttribute("data-user-id");
+        const userName = button.getAttribute("data-user-name");
+        const userEmail = button.getAttribute("data-user-email");
+
+        document.getElementById("deleteUserName").textContent = userName;
+        document.getElementById("deleteUserEmail").textContent = userEmail;
+        document.getElementById("deleteUserForm").action = `/admin/users/${userId}/delete`;
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,198 @@
+{% extends "base_app.html" %}
+
+{% block title %}User Details - ReviewGrow{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Admin / Users / {{ user.name }}</span>
+{% endblock %}
+
+{% block content %}
+{% macro status_badge(status) -%}
+    {% set normalized = (status or "")|lower %}
+    <span class="{% if normalized in ['active', 'success'] %}badge-soft-success{% elif normalized in ['pending'] %}badge-soft-warning{% elif normalized in ['rejected', 'failed', 'disabled', 'expired'] %}badge-soft-danger{% else %}badge-soft-primary{% endif %}">
+        {{ status or "Unknown" }}
+    </span>
+{%- endmacro %}
+
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <div>
+        <p class="rs-eyebrow">Admin</p>
+        <h1 class="rs-page-title">User Details</h1>
+        <p class="rs-page-subtitle">Subscription, payment, and business activity for {{ user.name }}.</p>
+    </div>
+    <a href="/admin/dashboard" class="btn-ghost">
+        <i class="bi bi-arrow-left"></i>
+        Admin dashboard
+    </a>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="rs-card h-100">
+            <p class="rs-eyebrow">User info</p>
+            <h2 class="h4 fw-bold mb-3">{{ user.name }}</h2>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Email</span>
+                <span class="fw-semibold text-end">{{ user.email }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Role</span>
+                {{ status_badge(user.role) }}
+            </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Joined</span>
+                <span class="fw-semibold text-end">{{ user.created_at }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3">
+                <span class="text-muted">Account status</span>
+                <span class="badge-soft-success">Active</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="rs-card h-100">
+            <p class="rs-eyebrow">Subscription</p>
+            {% if subscription %}
+            <h2 class="h5 fw-bold mb-3">{{ subscription.plan_name or "No plan" }}</h2>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Status</span>
+                {{ status_badge(subscription.status) }}
+            </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Start date</span>
+                <span class="fw-semibold text-end">{{ subscription.subscription_start_date or "-" }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">End date</span>
+                <span class="fw-semibold text-end">{{ subscription.subscription_end_date or "-" }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3">
+                <span class="text-muted">Review credits</span>
+                <span class="fw-semibold">{{ subscription.review_credits or 0 }}</span>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No subscription found.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="rs-card h-100">
+            <p class="rs-eyebrow">Latest payment</p>
+            {% if latest_payment %}
+            <h2 class="h5 fw-bold mb-3">{{ latest_payment.currency }} {{ "%.2f"|format(latest_payment.amount or 0) }}</h2>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Status</span>
+                {{ status_badge(latest_payment.payment_status) }}
+            </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Transaction ID</span>
+                <span class="fw-semibold text-end">{{ latest_payment.transaction_id or "-" }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Method</span>
+                <span class="fw-semibold">{{ latest_payment.payment_method or "-" }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3">
+                <span class="text-muted">Paid date</span>
+                <span class="fw-semibold text-end">{{ latest_payment.paid_at or "-" }}</span>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No payments found.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+        <div>
+            <p class="rs-eyebrow">Payments</p>
+            <h2 class="h5 fw-bold mb-0">Payment History</h2>
+        </div>
+        <a href="/admin/payments" class="btn-ghost">
+            <i class="bi bi-receipt"></i>
+            All payments
+        </a>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Payment ID</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                    <th>Transaction ID</th>
+                    <th>Created At</th>
+                    <th>Paid At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in payments %}
+                <tr>
+                    <td>{{ payment.id }}</td>
+                    <td>{{ payment.currency }} {{ "%.2f"|format(payment.amount or 0) }}</td>
+                    <td>{{ payment.payment_method or "-" }}</td>
+                    <td>{{ status_badge(payment.payment_status) }}</td>
+                    <td>{{ payment.transaction_id or "-" }}</td>
+                    <td>{{ payment.created_at }}</td>
+                    <td>{{ payment.paid_at or "-" }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-5">No payments found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg">
+    <div class="mb-3">
+        <p class="rs-eyebrow">Businesses</p>
+        <h2 class="h5 fw-bold mb-0">User Businesses</h2>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Business</th>
+                    <th>Type</th>
+                    <th>Location</th>
+                    <th>Google Business Profile</th>
+                    <th>Reviews</th>
+                    <th>Reports</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for business in businesses %}
+                <tr>
+                    <td class="fw-semibold">{{ business.business_name }}</td>
+                    <td><span class="badge-soft-primary">{{ business.business_type }}</span></td>
+                    <td>
+                        {% set location = [business.city, business.state, business.country]|select|join(", ") %}
+                        {{ location or "-" }}
+                    </td>
+                    <td>
+                        {% if business.google_is_connected %}
+                        <span class="badge-soft-success">Connected</span>
+                        {% else %}
+                        <span class="badge-soft-warning">Not Connected</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ business.review_count }}</td>
+                    <td>{{ business.report_count }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-5">No businesses found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

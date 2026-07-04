@@ -1,0 +1,171 @@
+{% extends "base_app.html" %}
+
+{% block title %}AI Analysis - ReviewGrow{% endblock %}
+{% block nav_admin_ai_analysis %}active{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Admin / AI Analysis</span>
+{% endblock %}
+
+{% block content %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">Platform admin</p>
+        <h1 class="rs-page-title">AI Analysis</h1>
+        <p class="rs-page-subtitle">Global AI usage analytics across users, businesses, providers, and models.</p>
+    </div>
+    <a href="/admin/dashboard" class="btn-ghost">
+        <i class="bi bi-speedometer2"></i>
+        Admin dashboard
+    </a>
+</div>
+
+<div class="rs-card rs-card-lg mb-4">
+    <form method="GET" action="/admin/ai-analysis" class="row g-3 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label" for="month">Month</label>
+            <input id="month" class="form-control" type="month" name="month" value="{{ filters.month }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="user_id">User</label>
+            <select id="user_id" class="form-select" name="user_id">
+                <option value="">All users</option>
+                {% for user in options.users %}
+                <option value="{{ user.id }}" {% if filters.user_id == user.id %}selected{% endif %}>
+                    {{ user.name }} - {{ user.email }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="business_id">Business</label>
+            <select id="business_id" class="form-select" name="business_id">
+                <option value="">All businesses</option>
+                {% for business in options.businesses %}
+                <option value="{{ business.id }}" {% if filters.business_id == business.id %}selected{% endif %}>
+                    {{ business.business_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="provider">Provider</label>
+            <select id="provider" class="form-select" name="provider">
+                <option value="">All providers</option>
+                {% for provider in options.providers %}
+                <option value="{{ provider }}" {% if filters.provider == provider %}selected{% endif %}>{{ provider }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" for="model">Model</label>
+            <select id="model" class="form-select" name="model">
+                <option value="">All models</option>
+                {% for model in options.models %}
+                <option value="{{ model }}" {% if filters.model == model %}selected{% endif %}>{{ model }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 d-flex flex-wrap gap-2">
+            <button type="submit" class="btn-solid">
+                <i class="bi bi-funnel"></i>
+                Apply filters
+            </button>
+            <a href="/admin/ai-analysis" class="btn-ghost">
+                <i class="bi bi-x-circle"></i>
+                Clear
+            </a>
+        </div>
+    </form>
+</div>
+
+<div class="rs-kpi-grid mb-4">
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-cpu"></i></div>
+        <p class="rs-kpi-value">{{ summary.total_requests or 0 }}</p>
+        <p class="rs-kpi-label">Total AI Requests</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon" style="background:var(--rs-accent-soft);color:var(--rs-accent);"><i class="bi bi-check2-circle"></i></div>
+        <p class="rs-kpi-value">{{ summary.successful_requests or 0 }}</p>
+        <p class="rs-kpi-label">Successful Requests</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon" style="background:#fef2f2;color:var(--rs-danger);"><i class="bi bi-exclamation-circle"></i></div>
+        <p class="rs-kpi-value">{{ summary.failed_requests or 0 }}</p>
+        <p class="rs-kpi-label">Failed Requests</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-braces"></i></div>
+        <p class="rs-kpi-value">{{ summary.total_tokens or 0 }}</p>
+        <p class="rs-kpi-label">Total Tokens Used</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon" style="background:#fffbeb;color:var(--rs-warning);"><i class="bi bi-cash-stack"></i></div>
+        <p class="rs-kpi-value">${{ "%.4f"|format(summary.estimated_cost or 0) }}</p>
+        <p class="rs-kpi-label">Estimated AI Cost</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-stopwatch"></i></div>
+        <p class="rs-kpi-value">{{ "%.0f"|format(summary.average_response_time_ms or 0) }}ms</p>
+        <p class="rs-kpi-label">Average Response Time</p>
+    </div>
+    <div class="rs-card rs-kpi">
+        <div class="rs-kpi-icon"><i class="bi bi-chat-square-text"></i></div>
+        <p class="rs-kpi-value">{{ summary.reviews_analyzed or 0 }}</p>
+        <p class="rs-kpi-label">Reviews Analyzed</p>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg">
+    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+        <div>
+            <p class="rs-eyebrow">User analysis</p>
+            <h2 class="h5 fw-bold mb-0">AI usage by user</h2>
+        </div>
+        <span class="badge-soft-primary">{{ filters.month }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>User Name</th>
+                    <th>Email</th>
+                    <th>Businesses</th>
+                    <th>Total AI Requests</th>
+                    <th>Current Month Requests</th>
+                    <th>Current Month Tokens</th>
+                    <th>Current Month Cost</th>
+                    <th>Failed Requests</th>
+                    <th>Last AI Activity</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in user_rows %}
+                <tr>
+                    <td class="fw-semibold">{{ row.name }}</td>
+                    <td>{{ row.email }}</td>
+                    <td>{{ row.business_count or 0 }}</td>
+                    <td>{{ row.total_ai_requests or 0 }}</td>
+                    <td>{{ row.current_month_ai_requests or 0 }}</td>
+                    <td>{{ row.current_month_tokens or 0 }}</td>
+                    <td>${{ "%.4f"|format(row.current_month_estimated_cost or 0) }}</td>
+                    <td>{{ row.failed_requests or 0 }}</td>
+                    <td>{{ row.last_ai_activity or "-" }}</td>
+                    <td class="text-end">
+                        <a class="btn-ghost" href="/admin/users/{{ row.id }}/ai-analysis?month={{ filters.month }}{% if filters.business_id %}&business_id={{ filters.business_id }}{% endif %}{% if filters.provider %}&provider={{ filters.provider }}{% endif %}{% if filters.model %}&model={{ filters.model }}{% endif %}">
+                            View Details
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" class="text-center text-muted py-5">No AI usage found for these filters.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

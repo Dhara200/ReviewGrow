@@ -1,0 +1,266 @@
+from datetime import datetime, timedelta
+from functools import wraps
+
+from flask import flash, redirect, session
+
+from app.services.database_service import get_connection
+
+
+def latest_subscription(user_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT *
+        FROM subscriptions
+        WHERE user_id=%s
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        (user_id,)
+    )
+    subscription = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    return subscription
+
+
+def has_active_subscription(user_id):
+    if session.get("role") == "admin":
+        return True
+
+    subscription = latest_subscription(user_id)
+
+    if not subscription:
+        return False
+
+    end_date = subscription.get("subscription_end_date")
+
+    return (
+        subscription.get("status") == "active"
+        and end_date is not None
+        and end_date > datetime.utcnow()
+    )
+
+
+def subscription_required(view_func):
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect("/login-page")
+
+        if session.get("role") == "admin" or has_active_subscription(session["user_id"]):
+            return view_func(*args, **kwargs)
+
+        flash("Please subscribe to access ReviewGrow.", "warning")
+        return redirect("/pricing")
+
+    return wrapper
+
+
+def create_expired_subscription(user_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO subscriptions
+        (
+            user_id,
+            plan_name,
+            status,
+            subscription_start_date,
+            subscription_end_date,
+            review_credits
+        )
+        VALUES
+        (%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            user_id,
+            "starter",
+            "expired",
+            None,
+            None,
+            0
+        )
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def pending_payment(user_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT *
+        FROM payments
+        WHERE user_id=%s
+        AND payment_status='pending'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (user_id,)
+    )
+    payment = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    return payment
+
+
+def submit_manual_upi_payment(user_id, amount, transaction_id, notes):
+    existing = pending_payment(user_id)
+
+    if existing:
+        return existing, False
+
+    subscription = latest_subscription(user_id)
+    subscription_id = subscription["id"] if subscription else None
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        INSERT INTO payments
+        (
+            user_id,
+            subscription_id,
+            amount,
+            currency,
+            payment_method,
+            payment_status,
+            transaction_id,
+            payment_gateway,
+            notes
+        )
+        VALUES
+        (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            user_id,
+            subscription_id,
+            amount,
+            "INR",
+            "UPI",
+            "pending",
+            transaction_id,
+            "manual_upi",
+            notes
+        )
+    )
+    payment_id = cursor.lastrowid
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM payments
+        WHERE id=%s
+        """,
+        (payment_id,)
+    )
+    payment = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    return payment, True
+
+
+def approve_payment(payment_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT *
+        FROM payments
+        WHERE id=%s
+        """,
+        (payment_id,)
+    )
+    payment = cursor.fetchone()
+
+    if not payment:
+        cursor.close()
+        conn.close()
+        return False
+
+    start_date = datetime.utcnow()
+    end_date = start_date + timedelta(days=30)
+
+    cursor.execute(
+        """
+        UPDATE payments
+        SET payment_status='success',
+            paid_at=NOW()
+        WHERE id=%s
+        """,
+        (payment_id,)
+    )
+
+    subscription_id = payment.get("subscription_id")
+
+    if subscription_id:
+        cursor.execute(
+            """
+            UPDATE subscriptions
+            SET plan_name='starter',
+                status='active',
+                subscription_start_date=%s,
+                subscription_end_date=%s,
+                review_credits=500
+            WHERE id=%s
+            """,
+            (start_date, end_date, subscription_id)
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO subscriptions
+            (
+                user_id,
+                plan_name,
+                status,
+                subscription_start_date,
+                subscription_end_date,
+                review_credits
+            )
+            VALUES
+            (%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                payment["user_id"],
+                "starter",
+                "active",
+                start_date,
+                end_date,
+                500
+            )
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return True
+
+
+def reject_payment(payment_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE payments
+        SET payment_status='rejected'
+        WHERE id=%s
+        """,
+        (payment_id,)
+    )
+    changed = cursor.rowcount > 0
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return changed

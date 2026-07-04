@@ -1,0 +1,148 @@
+{% extends "base_public.html" %}
+
+{% block title %}ReviewGrow Pricing{% endblock %}
+
+{% block public_nav %}
+{% if session.get("user_id") %}
+<a href="/logout" class="btn-ghost">
+    <i class="bi bi-box-arrow-right"></i>
+    Logout
+</a>
+{% else %}
+<a href="/login-page" class="btn-ghost">Login</a>
+<a href="#payment" class="btn-solid">Subscribe Now</a>
+{% endif %}
+{% if session.get("role") == "admin" %}
+<a href="/admin/payments" class="btn-solid">Admin Payments</a>
+{% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+    .pricing-page {
+        padding: 2.75rem 0 3rem;
+    }
+
+    .pricing-access-note {
+        display: inline-flex;
+        align-items: center;
+        gap: .55rem;
+        margin-bottom: 1.4rem;
+        padding: .75rem 1rem;
+        border: 1px solid rgba(239, 68, 68, .28);
+        border-radius: .85rem;
+        background: #fef2f2;
+        color: #b91c1c;
+        font-size: .95rem;
+        font-weight: 700;
+    }
+
+    .pricing-page-header {
+        margin-bottom: 2.2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="pricing-page">
+    <div class="rs-public-container">
+        {% if session.get("user_id") and not is_subscribed and session.get("role") != "admin" %}
+        <div class="text-center">
+            <span class="pricing-access-note">
+                <i class="bi bi-exclamation-circle"></i>
+                Please subscribe to access ReviewGrow.
+            </span>
+        </div>
+        {% endif %}
+
+        <div class="text-center pricing-page-header">
+            <p class="rs-eyebrow">Pricing</p>
+            <h1 class="fw-bold">ReviewGrow Starter</h1>
+            <p class="lead text-muted mb-0">One paid subscription for all ReviewGrow app features.</p>
+        </div>
+
+        <div class="row justify-content-center g-4">
+            <div class="col-lg-6">
+                <div class="rs-card rs-card-lg rs-pricing-card h-100">
+                    <h2 class="h4 fw-bold mb-2">ReviewGrow Starter</h2>
+                    <div class="display-5 fw-bold text-primary mb-4">₹{{ "%.0f"|format(subscription_price) }}<span class="h6 text-muted">/month</span></div>
+                    <div class="rs-pricing-list mb-4">
+                        {% for item in [
+                            "Google Review Integration",
+                            "AI Review Analysis",
+                            "AI Reply Generator",
+                            "Live Dashboard",
+                            "Performance Insights",
+                            "Excel Upload",
+                            "PDF Reports"
+                        ] %}
+                        <div><i class="bi bi-check-circle-fill"></i><span>{{ item }}</span></div>
+                        {% endfor %}
+                    </div>
+                    <a href="#payment" class="btn-solid w-100">Subscribe Now</a>
+                    <p class="text-muted mt-4 mb-0">
+                        Pay via UPI and submit your payment reference. Admin will verify and activate your subscription.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-lg-6" id="payment">
+                <div class="rs-card rs-card-lg h-100">
+                    <p class="rs-eyebrow">Manual UPI payment</p>
+                    <h2 class="h4 fw-bold mb-3">Submit payment reference</h2>
+
+                    {% if upi_qr_exists %}
+                    <div class="text-center mb-4">
+                        <img src="{{ url_for('static', filename='images/upi_qr.png') }}" alt="UPI QR code" class="img-fluid rounded-3 border" style="max-width: 240px;">
+                    </div>
+                    {% endif %}
+
+                    <div class="p-3 rounded-3 bg-light mb-4">
+                        <div class="d-flex justify-content-between gap-3 mb-2">
+                            <span class="text-muted">UPI ID</span>
+                            <strong>{{ upi_id }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3">
+                            <span class="text-muted">Amount</span>
+                            <strong>₹{{ "%.0f"|format(subscription_price) }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mb-4">
+                        <strong>Steps to complete payment:</strong>
+                        Pay the amount shown above to the UPI ID, copy the UPI transaction/reference ID from your payment app, paste it below, add notes if needed, then click <strong>Yes, I paid</strong>. Admin will verify and activate your subscription.
+                    </div>
+
+                    {% if not session.get("user_id") %}
+                    <p class="text-muted">Create an account or login before submitting your UPI payment reference.</p>
+                    <div class="d-flex flex-column flex-sm-row gap-3">
+                        <a href="/register-page" class="btn-solid flex-fill">Subscribe Now</a>
+                        <a href="/login-page" class="btn-ghost flex-fill">Login</a>
+                    </div>
+                    {% elif pending_payment and pending_payment.payment_status == "pending" %}
+                    <div class="alert alert-info mb-0">
+                        You already have a pending payment. Admin will verify it soon.
+                    </div>
+                    {% elif is_subscribed %}
+                    <div class="alert alert-success mb-0">
+                        Your subscription is active.
+                    </div>
+                    {% else %}
+                    <form method="POST" action="/pricing/submit-payment">
+                        <div class="mb-3">
+                            <label for="transaction_id" class="form-label">Transaction/reference ID</label>
+                            <input id="transaction_id" name="transaction_id" class="form-control" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea id="notes" name="notes" class="form-control" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn-solid w-100">Yes, I paid</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

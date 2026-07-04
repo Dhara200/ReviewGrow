@@ -9,3 +9,5 @@ uploads/*
 .vscode/
 
 .idea/
+
+.env.example

@@ -1,139 +1,83 @@
-<!DOCTYPE html>
+{% extends "base_app.html" %}
 
-<html>
-<head>
+{% block title %}Create Business - ReviewGrow{% endblock %}
+{% block nav_create %}active{% endblock %}
 
-<title>Create Business - ReviewSense</title>
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Workspace / Create business</span>
+{% endblock %}
 
-<link
-    rel="stylesheet"
-    href="{{ url_for('static', filename='reviewsense.css') }}"
->
-
-</head>
-
-<body>
-
-<nav>
-
-<a href="/" class="logo">
-    Review<span>Sense</span>
-</a>
-
-<div class="nav-links">
-
-    <a
-        href="/logout"
-        class="btn-ghost"
-    >
-        Logout
-    </a>
-
+{% block content %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">Onboarding</p>
+        <h1 class="rs-page-title">Create your first business</h1>
+        <p class="rs-page-subtitle">Add the business profile that will be used for review uploads, dashboards, and AI reports.</p>
+    </div>
 </div>
 
-</nav>
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="rs-card rs-card-lg">
+            <form method="POST" action="/create-business-ui">
+                <div class="field">
+                    <label for="business_name">Business name</label>
+                    <input id="business_name" type="text" name="business_name" placeholder="Name of your business" required>
+                </div>
 
-<div class="container">
+                <div class="field">
+                    <label for="business_type">Business type</label>
+                    <input id="business_type" type="text" name="business_type" placeholder="Hotel, Homestay, Restaurant..." required>
+                </div>
 
-<div class="card">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="field">
+                            <label for="city">City</label>
+                            <input id="city" type="text" name="city" placeholder="City">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="field">
+                            <label for="state">State</label>
+                            <input id="state" type="text" name="state" placeholder="State">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="field">
+                            <label for="country">Country</label>
+                            <input id="country" type="text" name="country" placeholder="Country">
+                        </div>
+                    </div>
+                </div>
 
-    <h2>
-        Create Your First Business
-    </h2>
-
-    <p>
-        Add your business to start tracking reviews,
-        sentiment and customer feedback.
-    </p>
-
-    <form
-        method="POST"
-        action="/create-business-ui"
-    >
-
-        <div class="field">
-
-            <label>
-                BUSINESS NAME
-            </label>
-
-            <input
-                type="text"
-                name="business_name"
-                placeholder="Name of your business"
-                required
-            >
-
+                <button type="submit" class="btn-submit mt-2">
+                    <i class="bi bi-building-add"></i>
+                    Create business
+                </button>
+            </form>
         </div>
-
-        <div class="field">
-
-            <label>
-                BUSINESS TYPE
-            </label>
-
-            <input
-                type="text"
-                name="business_type"
-                placeholder="Hotel, Homestay, Restaurant..."
-                required
-            >
-
+    </div>
+    <div class="col-lg-5">
+        <div class="rs-card rs-card-lg h-100">
+            <div class="rs-kpi-icon"><i class="bi bi-clipboard-data"></i></div>
+            <h2 class="h5 fw-bold">What happens next?</h2>
+            <p class="text-muted">After creating a business, upload an Excel file of reviews. ReviewGrow will generate an AI dashboard, report history, and response suggestions.</p>
+            <div class="d-flex flex-column gap-3 mt-4">
+                <div class="d-flex gap-3">
+                    <span class="badge-soft-primary">1</span>
+                    <span class="fw-semibold">Create business profile</span>
+                </div>
+                <div class="d-flex gap-3">
+                    <span class="badge-soft-primary">2</span>
+                    <span class="fw-semibold">Upload reviews</span>
+                </div>
+                <div class="d-flex gap-3">
+                    <span class="badge-soft-primary">3</span>
+                    <span class="fw-semibold">Review AI insights</span>
+                </div>
+            </div>
         </div>
-
-        <div class="field">
-
-            <label>
-                CITY
-            </label>
-
-            <input
-                type="text"
-                name="city"
-                
-            >
-
-        </div>
-
-        <div class="field">
-
-            <label>
-                STATE
-            </label>
-
-            <input
-                type="text"
-                name="state"
-               
-            >
-
-        </div>
-
-        <div class="field">
-
-            <label>
-                COUNTRY
-            </label>
-
-            <input
-                type="text"
-                name="country"
-            >
-
-        </div>
-
-        <button
-            type="submit"
-            class="btn-submit"
-        >
-            Create Business
-        </button>
-
-    </form>
-
+    </div>
 </div>
-
-</div>
-
-</body>
-</html>
+{% endblock %}

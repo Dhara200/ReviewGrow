@@ -1,5 +1,5 @@
 from flask import Flask
-from app.services.database_service import get_connection
+from app.services.database_service import get_connection, ensure_mvp_schema
 from app.routes.auth import auth_bp
 from app.routes.business import business_bp
 from app.routes.reviews import review_bp
@@ -9,7 +9,9 @@ from app.config import Config
 from flask import render_template
 from flask import session
 from flask import redirect
-
+from app.routes.admin import admin_bp
+from app.routes.google_business import google_business_bp
+from app.routes.subscription import subscription_bp
 
 app = Flask(__name__)
 app.secret_key = Config.SECRET_KEY
@@ -19,7 +21,14 @@ app.register_blueprint(business_bp)
 app.register_blueprint(review_bp)
 app.register_blueprint(analysis_bp)
 app.register_blueprint(dashboard_bp)
+app.register_blueprint(admin_bp)
+app.register_blueprint(google_business_bp)
+app.register_blueprint(subscription_bp)
 
+try:
+    ensure_mvp_schema()
+except Exception as e:
+    print(f"Schema check skipped: {e}")
 
 @app.route("/")
 def home():

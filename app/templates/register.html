@@ -1,131 +1,107 @@
-<!DOCTYPE html>
+{% extends "base_public.html" %}
 
-<html>
-<head>
+{% block title %}Register - ReviewGrow{% endblock %}
 
-<title>Register - ReviewSense</title>
+{% block public_nav %}
+<a href="/" class="btn-ghost">Home</a>
+<a href="/login-page" class="btn-solid">Login</a>
+{% endblock %}
 
-<link
-    rel="stylesheet"
-    href="{{ url_for('static', filename='reviewsense.css') }}"
->
+{% block content %}
+<section class="rs-auth-page">
+    <div class="rs-public-container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-5">
+                <div class="rs-card rs-card-lg">
+                    <div class="text-center mb-4">
+                        <img src="{{ url_for('static', filename='images/logo.png') }}" class="auth-logo mx-auto mb-3" alt="ReviewGrow Logo">
+                        <h1 class="h3 fw-bold mb-2">Create your workspace</h1>
+                        <p class="text-muted mb-0">Start managing customer reviews with AI-powered insights.</p>
+                    </div>
 
-</head>
+                    <form method="POST" action="/register-page">
+                        {% if register_error %}
+                        <div class="alert alert-danger" role="alert">
+                            {{ register_error }}
+                        </div>
+                        {% endif %}
 
-<body>
+                        <div class="field">
+                            <label for="name">Full name</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-person text-muted"></i></span>
+                                <input id="name" class="form-control border-start-0 rounded-end-4" type="text" name="name" value="{{ name or '' }}" placeholder="Your name" autocomplete="name" required>
+                            </div>
+                        </div>
 
-<nav>
+                        <div class="field">
+                            <label for="email">Email address</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-envelope text-muted"></i></span>
+                                <input id="email" class="form-control border-start-0 rounded-end-4" type="email" name="email" value="{{ email or '' }}" placeholder="you@company.com" autocomplete="email" required>
+                            </div>
+                        </div>
 
-<a href="/" class="logo">
-    Review<span>Sense</span>
-</a>
+                        <div class="field">
+                            <label for="password">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-lock text-muted"></i></span>
+                                <input id="password" class="form-control border-start-0 rounded-end-4" type="password" name="password" placeholder="Create a password" autocomplete="new-password" required>
+                            </div>
+                            <div class="form-hint">Use a password that is unique to ReviewGrow.</div>
+                        </div>
 
-<div class="nav-links">
+                        <div class="field">
+                            <label for="confirm_password">Confirm password</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-shield-lock text-muted"></i></span>
+                                <input id="confirm_password" class="form-control border-start-0 rounded-end-4" type="password" name="confirm_password" placeholder="Re-enter your password" autocomplete="new-password" required>
+                            </div>
+                            <div class="form-hint" id="passwordMatchHint">Passwords must match.</div>
+                        </div>
 
-    <a
-        href="/"
-        class="btn-ghost"
-    >
-        Home
-    </a>
+                        <button type="submit" class="btn-submit w-100 mt-2">
+                            <i class="bi bi-arrow-right-circle"></i>
+                            Create account
+                        </button>
+                    </form>
 
-    <a
-        href="/login-page"
-        class="btn-solid"
-    >
-        Login
-    </a>
-
-</div>
-
-</nav>
-
-<div class="container">
-
-<div class="card">
-
-    <h2>
-        Create Account
-    </h2>
-
-    <p>
-        Start managing your online reputation with AI.
-    </p>
-
-    <form
-        method="POST"
-        action="/register-page"
-    >
-
-        <div class="field">
-
-            <label>
-                FULL NAME
-            </label>
-
-            <input
-                type="text"
-                name="name"
-                required
-            >
-
+                    <p class="text-center text-muted mt-4 mb-0">
+                        Already have an account?
+                        <a href="/login-page" class="fw-bold text-decoration-none text-primary">Login</a>
+                    </p>
+                </div>
+            </div>
         </div>
+    </div>
+</section>
+{% endblock %}
 
-        <div class="field">
+{% block scripts %}
+<script>
+(() => {
+    const password = document.getElementById("password");
+    const confirmPassword = document.getElementById("confirm_password");
+    const hint = document.getElementById("passwordMatchHint");
 
-            <label>
-                EMAIL
-            </label>
+    function validatePasswordMatch() {
+        if (!password || !confirmPassword) {
+            return;
+        }
 
-            <input
-                type="email"
-                name="email"
-                required
-            >
+        const hasConfirmValue = confirmPassword.value.length > 0;
+        const matches = password.value === confirmPassword.value;
+        const message = hasConfirmValue && !matches ? "Passwords do not match." : "";
 
-        </div>
+        confirmPassword.setCustomValidity(message);
+        if (hint) {
+            hint.textContent = message || "Passwords must match.";
+            hint.classList.toggle("text-danger", Boolean(message));
+        }
+    }
 
-        <div class="field">
-
-            <label>
-                PASSWORD
-            </label>
-
-            <input
-                type="password"
-                name="password"
-                required
-            >
-
-        </div>
-
-        <button
-            type="submit"
-            class="btn-submit"
-        >
-            Create Account
-        </button>
-
-    </form>
-
-    <br>
-
-    <p style="text-align:center">
-
-        Already have an account?
-
-        <a
-            href="/login-page"
-            style="color:#8B7CF8;text-decoration:none"
-        >
-            Login
-        </a>
-
-    </p>
-
-</div>
-
-</div>
-
-</body>
-</html>
+    password?.addEventListener("input", validatePasswordMatch);
+    confirmPassword?.addEventListener("input", validatePasswordMatch);
+})();
+</script>
+{% endblock %}

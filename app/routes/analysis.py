@@ -1,29 +1,33 @@
 from flask import Blueprint, jsonify, request
-from app.services.database_service import get_connection
-from app.services.gemini_service import analyze_reviews, analyze_review
-import traceback
-import json
 from flask import redirect
 from flask import render_template
-from app.services.gemini_service import model
+from flask import session
+from app.services.ai_service import AIService, log_ai_usage
+from app.services.analysis_job_service import (
+    create_analysis_job,
+    get_job_status_for_user
+)
+from app.services.database_service import get_connection, user_owns_business
+from app.services.subscription_service import subscription_required
 
 analysis_bp = Blueprint("analysis", __name__)
+ai_service = AIService()
 
+#ANALYSIS PAGE ROUTE
 
 @analysis_bp.route("/review-assistant")
+@subscription_required
 def review_assistant():
 
   return render_template(
     "review_assistant.html"
 )
-
-
-
     
 @analysis_bp.route(
 "/review-assistant/analyze",
 methods=["POST"]
 )
+@subscription_required
 def analyze_single_review():
 
   try:
@@ -51,20 +55,16 @@ Review:
 {review_text}
 """
 
-    response = model.generate_content(
-        prompt
-    )
+    result = ai_service.generate_json(prompt, "review_assistant_analysis")
+    data = result.data
 
-    result_text = (
-        response.text
-        .replace("```json","")
-        .replace("```","")
-        .strip()
-    )
-
-    data = json.loads(
-        result_text
-    )
+    if session.get("user_id"):
+        conn = get_connection()
+        cursor = conn.cursor()
+        log_ai_usage(cursor, session["user_id"], None, result)
+        conn.commit()
+        cursor.close()
+        conn.close()
 
     return render_template(
         "review_assistant.html",
@@ -81,11 +81,13 @@ Review:
         "message": str(e)
     }, 500
 
-        
+#  review-assistant REPLY PAGE ROUTE
+      
 @analysis_bp.route(
 "/review-assistant/reply",
 methods=["POST"]
 )
+@subscription_required
 
 def generate_review_reply():
  try:
@@ -95,9 +97,8 @@ def generate_review_reply():
     )
 
     prompt = f"""
-```
 
-Analyze this review and generate a professional reply.
+Analyze this customer review and generate a professional reply.
 
 Return ONLY valid JSON.
 
@@ -110,25 +111,16 @@ Review:
 
 {review_text}
 """
-    response = model.generate_content(
-        prompt
-    )
+    result = ai_service.generate_json(prompt, "review_reply")
+    result_json = result.data
 
-    result_text = response.text
-
-    result_text = result_text.replace(
-        "```json",
-        ""
-    )
-
-    result_text = result_text.replace(
-        "```",
-        ""
-    )
-
-    result_json = json.loads(
-        result_text.strip()
-    )
+    if session.get("user_id"):
+        conn = get_connection()
+        cursor = conn.cursor()
+        log_ai_usage(cursor, session["user_id"], None, result)
+        conn.commit()
+        cursor.close()
+        conn.close()
 
     return render_template(
         "review_assistant.html",
@@ -141,219 +133,84 @@ Review:
 
     return {
         "message": str(e)
-    }, 500  
-        
-@analysis_bp.route("/analyze", methods=["POST"])
-def analyze():
+    }, 500
 
-    try:
 
-        data = request.get_json()
+@analysis_bp.route("/businesses/<int:business_id>/analysis-jobs", methods=["POST"])
+@subscription_required
+def create_business_analysis_job(business_id):
+    if "user_id" not in session:
+        return jsonify({"message": "Login required"}), 401
 
-        business_id = data.get("business_id")
+    if not user_owns_business(session["user_id"], business_id):
+        return jsonify({"message": "Access denied"}), 403
 
-        conn = get_connection()
+    force_reanalysis = request.form.get("force_reanalysis") == "1"
+    if request.is_json:
+        force_reanalysis = bool((request.get_json(silent=True) or {}).get("force_reanalysis"))
 
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM reviews
-            WHERE business_id=%s
-            AND analysis_status='pending'
-            """,
-            (business_id,)
-        )
-
-        reviews = cursor.fetchall()
-
-        if not reviews:
-
-            return jsonify({
-                "message": "No pending reviews found"
-            })
-
-        review_texts = []
-
-        for review in reviews:
-            review_texts.append(
-                review["review_text"]
-            )
-
-        result = analyze_reviews(
-            review_texts
-        )
-        print("========== AI RESULT ==========")
-        print(result)
-        print("===============================")
-        print("Saving report...")
-        cursor.execute(
-            """
-            INSERT INTO reports
-            (
-                business_id,
-                summary,
-                top_complaints,
-                top_praises,
-                recommendations,
-                sentiment_score,
-                review_count
-            )
-            VALUES
-            (%s,%s,%s,%s,%s,%s)
-            """,
-            (
-                business_id,
-                result["summary"],
-                json.dumps(result["top_complaints"]),
-                json.dumps(result["top_praises"]),
-                json.dumps(
-    result.get(
-        "recommendations",
-        ["No recommendations generated"]
+    job_id, created = create_analysis_job(
+        session["user_id"],
+        business_id,
+        force_reanalysis=force_reanalysis
     )
-),
-                result["sentiment_score"],
-                len(reviews)
-            )
-        )
 
-        cursor.execute(
-            """
-            UPDATE reviews
-            SET analysis_status='analyzed'
-            WHERE business_id=%s
-            AND analysis_status='pending'
-            """,
-            (business_id,)
-        )
+    return jsonify({
+        "success": True,
+        "job_id": job_id,
+        "created": created,
+        "status": "pending" if created else "already_running",
+        "status_url": f"/analysis-jobs/{job_id}/status"
+    }), 201 if created else 200
+
+
+@analysis_bp.route("/analysis-jobs/<int:job_id>/status", methods=["GET"])
+@subscription_required
+def analysis_job_status(job_id):
+    if "user_id" not in session:
+        return jsonify({"message": "Login required"}), 401
+
+    job = get_job_status_for_user(
+        job_id,
+        session["user_id"],
+        is_admin=session.get("role") == "admin"
+    )
+
+    if not job:
+        return jsonify({"message": "Job not found"}), 404
+
+    return jsonify(job)
+
+
+@analysis_bp.route("/analysis-jobs/<int:job_id>/retry", methods=["POST"])
+@subscription_required
+def retry_analysis_job(job_id):
+    if "user_id" not in session:
+        return jsonify({"message": "Login required"}), 401
+
+    job = get_job_status_for_user(
+        job_id,
+        session["user_id"],
+        is_admin=session.get("role") == "admin"
+    )
+
+    if not job:
+        return jsonify({"message": "Job not found"}), 404
+
+    if job["status"] not in ("failed", "completed"):
+        return jsonify({"message": "Only failed or completed jobs can be retried."}), 400
+
+    job_id, created = create_analysis_job(
+        session["user_id"],
+        job["business_id"],
+        force_reanalysis=True
+    )
+
+    return jsonify({
+        "success": True,
+        "job_id": job_id,
+        "created": created,
+        "status_url": f"/analysis-jobs/{job_id}/status"
+    })
         
-        report_id = cursor.lastrowid
-
-        conn.commit()
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({
-            "message": "Analysis completed",
-            "report_id": report_id
-        })
-
-    except Exception as e:
-
-        if "429" in str(e):
-
-            return {
-            "message": "Daily AI quota reached. Please try again later or use a new API key."
-        }, 429
-
-    return {
-        "message": str(e)
-    }, 500
-        
-@analysis_bp.route("/analyze-ui", methods=["POST"])
-def analyze_ui():
-
-    try:
-
-        business_id = request.form.get("business_id")
-
-        # reuse existing logic
-
-        conn = get_connection()
-
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(
-            """
-            SELECT *
-            FROM reviews
-            WHERE business_id=%s
-            AND analysis_status='pending'
-            """,
-            (business_id,)
-        )
-
-        reviews = cursor.fetchall()
-
-        if not reviews:
-
-            return redirect(
-                f"/dashboard/{business_id}"
-            )
-
-        review_texts = []
-
-        for review in reviews:
-            review_texts.append(
-                review["review_text"]
-            )
-
-        result = analyze_reviews(
-            review_texts,
-                print(result)
-        )
-
-        cursor.execute(
-            """
-            INSERT INTO reports
-            (
-                business_id,
-                summary,
-                top_complaints,
-                top_praises,
-                recommendations,
-                sentiment_score,
-                review_count
-            )
-            VALUES
-            (%s,%s,%s,%s,%s,%s)
-            """,
-            (
-                business_id,
-                result["summary"],
-                json.dumps(result["top_complaints"]),
-                json.dumps(result["top_praises"]),
-                json.dumps(
-                  result.get(
-                   "recommendations",
-                  ["No recommendations generated"]
-                )
-            ),
-                result["sentiment_score"],
-                len(reviews)
-            )
-        )
-
-        cursor.execute(
-            """
-            UPDATE reviews
-            SET analysis_status='analyzed'
-            WHERE business_id=%s
-            AND analysis_status='pending'
-            """,
-            (business_id,)
-        )
-
-        conn.commit()
-
-        cursor.close()
-        conn.close()
-
-        return redirect(
-            f"/dashboard/{business_id}"
-        )
-
-    except Exception as e:
-
-        if "429" in str(e):
-
-            return {
-            "message": "Daily AI quota reached. Please try again later or use a new API key."
-        }, 429
-
-    return {
-        "message": str(e)
-    }, 500
+ 

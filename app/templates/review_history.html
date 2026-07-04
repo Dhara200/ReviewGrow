@@ -1,1037 +1,572 @@
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-<title>Review History</title>
-
-<link
-rel="stylesheet"
-href="{{ url_for('static', filename='reviewsense.css') }}"
->
-<style>
-
-body{
-    margin:0;
-    background:#07111b;
-}
-
-.review-layout{
-    display:flex;
-    align-items:flex-start;
-    gap:30px;
-    max-width:1500px;
-    margin:30px auto;
-    padding:0 25px;
-    flex-wrap:nowrap;
-}
-
-/* LEFT PANEL */
-
-.sidebar{
-    width:280px;
-    min-width:280px;
-
-    position:sticky;
-    top:20px;
-
-    align-self:flex-start;
-
-    max-height:calc(100vh - 40px);
-
-    overflow-y:auto;
-
-    background:#102233;
-    border:1px solid #20394a;
-    border-radius:16px;
-    padding:25px;
-}
-
-/* Nice scrollbar */
-
-.sidebar::-webkit-scrollbar{
-    width:8px;
-}
-
-.sidebar::-webkit-scrollbar-track{
-    background:#111827;
-}
-
-.sidebar::-webkit-scrollbar-thumb{
-    background:#374151;
-    border-radius:20px;
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover{
-    background:#6C5CE7;
-}
-
-.filter-group{
-    margin-bottom:30px;
-}
-
-.filter-group label{
-    display:block;
-    color:#9ca3af;
-    font-weight:600;
-    margin-bottom:12px;
-}
-
-.filter-group input{
-    width:100%;
-    padding:12px;
-    border-radius:10px;
-    border:1px solid #293548;
-    background:#1f2937;
-    color:white;
-    outline:none;
-    box-sizing:border-box;
-}
-
-.filter-btn{
-    width:100%;
-    margin-bottom:10px;
-    padding:11px;
-    border:none;
-    border-radius:10px;
-    cursor:pointer;
-    background:#1f2937;
-    color:white;
-    transition:.2s;
-}
-
-.filter-btn:hover{
-    background:#183549;
-}
-
-.filter-btn.active{
-    background:#14b8a6;
-}
-
-/* RIGHT PANEL */
-
-.content{
-    flex:1;
-    min-width:0;
-    overflow:hidden;
-}
-
-/* TOP SUMMARY */
-
-.summary-bar{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:20px;
-    margin-bottom:30px;
-}
-
-.summary-card{
-    background:#102233;
-    border:1px solid #20394a;
-    border-radius:16px;
-    padding:22px;
-}
-
-.summary-card h3{
-    color:#9ca3af;
-    margin:0;
-    margin-bottom:15px;
-    font-size:15px;
-}
-
-.summary-card p{
-    color:white;
-    font-size:38px;
-    font-weight:bold;
-    margin:0;
-}
-
-/* REVIEW LIST */
-
-.review-list{
-    display:flex;
-    flex-direction:column;
-    gap:20px;
-}
-
-/* MOBILE */
-
-@media(max-width:900px){
-
-.review-layout{
-    flex-direction:column;
-}
-
-.sidebar{
-    width:auto;
-    position:relative;
-}
-
-.summary-bar{
-    grid-template-columns:1fr;
-}
-
-}
-
-.review-card{
-
-background:#102233;
-
-border:1px solid #20394a;
-
-border-radius:18px;
-
-padding:25px;
-min-height:220px;
-transition:.25s;
-
-}
-
-.review-card:hover{
-
-transform:translateY(-2px);
-
-border-color:#14b8a6;
-
-}
-
-.review-header{
-
-display:flex;
-
-justify-content:space-between;
-
-align-items:flex-start;
-
-margin-bottom:20px;
-
-}
-
-.review-header h3{
-
-margin:8px 0 0;
-
-color:white;
-
-}
-
-.review-rating{
-
-font-size:18px;
-
-}
-
-.review-meta{
-
-display:flex;
-
-flex-direction:column;
-
-gap:8px;
-
-text-align:right;
-
-color:#9ca3af;
-
-font-size:14px;
-
-}
-
-.review-body{
-
-color:#d1d5db;
-
-line-height:1.8;
-
-font-size:15px;
-
-margin-bottom:25px;
-
-white-space:pre-wrap;
-
-}
-
-.review-footer{
-
-display:flex;
-
-justify-content:space-between;
-
-align-items:center;
-
-flex-wrap:wrap;
-
-gap:20px;
-
-}
-
-.status{
-
-padding:8px 16px;
-
-border-radius:25px;
-
-font-size:13px;
-
-font-weight:600;
-
-}
-
-.status.analyzed{
-
-background:#14532d;
-
-color:#bbf7d0;
-
-}
-
-.status.pending{
-
-background:#78350f;
-
-color:#fde68a;
-
-}
-
-.actions{
-
-display:flex;
-
-gap:10px;
-
-flex-wrap:wrap;
-
-}
-
-.btn-danger{
-
-padding:10px 18px;
-
-border:none;
-
-border-radius:10px;
-
-background:#dc2626;
-
-color:white;
-
-cursor:pointer;
-
-font-weight:600;
-
-}
-
-.btn-danger:hover{
-
-background:#b91c1c;
-
-}
-
-.modal{
-display:none;
-position:fixed;
-left:0;
-top:0;
-width:100%;
-height:100%;
-background:rgba(0,0,0,.65);
-z-index:9999;
-justify-content:center;
-align-items:center;
-
-}
-
-.modal-content{
-width:700px;
-max-width:90%;
-background:#111827;
-border-radius:18px;
-padding:35px;
-border:1px solid #374151;
-color:white;
-position:relative;
-
-}
-
-.close-btn{
-position:absolute;
-right:25px;
-top:20px;
-font-size:30px;
-cursor:pointer;
-
-}
-
-.analysis-section{
-margin-bottom:25px;
-
-}
-
-.analysis-section h3{
-margin-bottom:10px;
-color:#9ca3af;
-
-}
-
-.sentiment-badge{
-display:inline-block;
-padding:8px 18px;
-border-radius:30px;
-background:#6C5CE7;
-font-weight:bold;
-
-}
-
-#modalReply{
-width:100%;
-height:170px;
-background:#1f2937;
-border:none;
-border-radius:12px;
-padding:15px;
-color:white;
-resize:none;
-font-size:15px;
-box-sizing:border-box;
-
-}
-
-</style>
-</head>
-
-<body>
-
-<nav>
-
-<a href="/" class="logo">
-    Review<span>Sense</span>
+{% extends "base_app.html" %}
+
+{% block title %}Review History - ReviewGrow{% endblock %}
+{% block nav_history %}active{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Workspace / Review history</span>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="/dashboard/{{ business_id }}" class="btn-ghost">
+    <i class="bi bi-speedometer2"></i>
+    Dashboard
 </a>
+{% endblock %}
 
-<div class="nav-links">
+{% block head %}
+<style>
+.review-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 1.5rem;
+    height: calc(100vh - var(--rs-topbar) - 8.75rem);
+    min-height: 560px;
+    overflow: hidden;
+    align-items: stretch;
+}
 
-    <a href="/dashboard/{{ business_id }}" class="btn-ghost">
-        Dashboard
-    </a>
+.review-filter-panel {
+    position: sticky;
+    top: 100px;
+    align-self: start;
+    height: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+}
 
-    <a href="/logout" class="btn-solid">
-        Logout
-    </a>
+.review-filter-scroll {
+    padding-right: .35rem;
+}
 
+.review-filter-panel::-webkit-scrollbar,
+.review-filter-scroll::-webkit-scrollbar {
+    width: .55rem;
+}
+
+.review-filter-panel::-webkit-scrollbar-track,
+.review-filter-scroll::-webkit-scrollbar-track {
+    background: var(--rs-surface-muted);
+    border-radius: 999px;
+}
+
+.review-filter-panel::-webkit-scrollbar-thumb,
+.review-filter-scroll::-webkit-scrollbar-thumb {
+    background: var(--rs-border-strong);
+    border-radius: 999px;
+}
+
+.review-filter-panel::-webkit-scrollbar-thumb:hover,
+.review-filter-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--rs-primary);
+}
+
+.filter-btn {
+    width: 100%;
+    justify-content: space-between;
+    margin-bottom: .5rem;
+    border-color: var(--rs-border);
+    background: var(--rs-surface);
+    color: var(--rs-muted);
+}
+
+.filter-btn.active,
+.filter-btn:hover {
+    border-color: var(--rs-primary);
+    background: var(--rs-primary-soft);
+    color: var(--rs-primary);
+}
+
+.review-results-panel {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.review-results-panel .rs-kpi-grid {
+    flex: 0 0 auto;
+}
+
+.review-list {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 1rem;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: .35rem;
+    padding-bottom: .25rem;
+    align-content: start;
+}
+
+.review-card {
+    padding: 1.25rem;
+}
+
+.review-body {
+    color: var(--rs-muted);
+    line-height: 1.75;
+    white-space: pre-wrap;
+}
+
+.review-rating {
+    color: #f59e0b;
+    letter-spacing: .08em;
+}
+
+.rating-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: .15rem;
+    color: var(--rs-warning);
+}
+
+.rating-stars i {
+    font-size: .95rem;
+    line-height: 1;
+}
+
+.modal,
+.confirm-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.modal-content {
+    width: min(720px, 100%);
+    padding: 1.5rem;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: var(--rs-muted);
+}
+
+#modalReply {
+    width: 100%;
+    min-height: 160px;
+    resize: vertical;
+}
+
+@media (max-width: 991.98px) {
+    .review-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .review-filter-panel {
+        position: static;
+        height: auto;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .review-filter-scroll {
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
+    }
+
+    .review-results-panel {
+        overflow: visible;
+    }
+
+    .review-list {
+        overflow: visible;
+        padding-right: 0;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">Review operations</p>
+        <h1 class="rs-page-title">Review History</h1>
+        <p class="rs-page-subtitle">Search, filter, analyze, and manage customer reviews for this business.</p>
+    </div>
 </div>
-
-</nav>
 
 <div class="review-layout">
-
-    <!-- LEFT SIDEBAR -->
-
-    <aside class="sidebar">
-
-        <h2>Review History</h2>
-        <br><br>
-        <div class="filter-group">
-
-            <label>Search Reviews</label>
-
-            <input
-                type="text"
-                id="searchInput"
-                placeholder="Enter here..."
-            >
-
+    <aside class="review-filter-panel rs-card">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h2 class="h6 fw-bold mb-0">Filters</h2>
+            <span class="badge-soft-primary">{{ reviews|length }}</span>
         </div>
 
-        <div class="filter-group">
-
-            <label>Status</label>
-
-            <button class="filter-btn status-filter active" data-status="all">
-    All
-</button>
-
-<button class="filter-btn status-filter" data-status="pending">
-    Pending
-</button>
-
-<button class="filter-btn status-filter" data-status="analyzed">
-    Analyzed
-</button>
-
+        <div class="review-filter-scroll">
+        <div class="mb-4">
+            <label class="form-label" for="searchInput">Search Reviews</label>
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input type="text" id="searchInput" class="form-control" placeholder="Review, reviewer, source">
+            </div>
         </div>
 
-        <div class="filter-group">
+        <div class="mb-4">
+            <p class="rs-nav-label ms-0">Status</p>
+            <button class="filter-btn status-filter active" data-status="all">All <span>{{ reviews|length }}</span></button>
+            <button class="filter-btn status-filter" data-status="pending">Pending <span>{{ pending_count }}</span></button>
+            <button class="filter-btn status-filter" data-status="analyzed">Analyzed <span>{{ analyzed_count }}</span></button>
+        </div>
 
-            <label>Rating</label>
+        <div class="mb-4">
+            <p class="rs-nav-label ms-0">Rating</p>
+            <button class="filter-btn rating-filter active" data-rating="all">
+                <span>All Ratings</span>
+            </button>
+            <button class="filter-btn rating-filter" data-rating="5" aria-label="5 star reviews">
+                <span class="rating-stars" aria-hidden="true">
+                    {% for i in range(5) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                </span>
+                <span>{{ rating_counts["5"] }}</span>
+            </button>
+            <button class="filter-btn rating-filter" data-rating="4" aria-label="4 star reviews">
+                <span class="rating-stars" aria-hidden="true">
+                    {% for i in range(4) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                </span>
+                <span>{{ rating_counts["4"] }}</span>
+            </button>
+            <button class="filter-btn rating-filter" data-rating="3" aria-label="3 star reviews">
+                <span class="rating-stars" aria-hidden="true">
+                    {% for i in range(3) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                </span>
+                <span>{{ rating_counts["3"] }}</span>
+            </button>
+            <button class="filter-btn rating-filter" data-rating="2" aria-label="2 star reviews">
+                <span class="rating-stars" aria-hidden="true">
+                    {% for i in range(2) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                </span>
+                <span>{{ rating_counts["2"] }}</span>
+            </button>
+            <button class="filter-btn rating-filter" data-rating="1" aria-label="1 star reviews">
+                <span class="rating-stars" aria-hidden="true">
+                    <i class="bi bi-star-fill"></i>
+                </span>
+                <span>{{ rating_counts["1"] }}</span>
+            </button>
+        </div>
 
-   <button class="filter-btn rating-filter active" data-rating="all">
-    All Ratings
-</button>
-
-<button class="filter-btn rating-filter" data-rating="5">
-    ★★★★★ ({{ rating_counts["5"] }})
-</button>
-
-<button class="filter-btn rating-filter" data-rating="4">
-    ★★★★☆ ({{ rating_counts["4"] }})
-</button>
-
-<button class="filter-btn rating-filter" data-rating="3">
-    ★★★☆☆ ({{ rating_counts["3"] }})
-</button>
-
-<button class="filter-btn rating-filter" data-rating="2">
-    ★★☆☆☆ ({{ rating_counts["2"] }})
-</button>
-
-<button class="filter-btn rating-filter" data-rating="1">
-    ★☆☆☆☆ ({{ rating_counts["1"] }})
-</button>
-
-</div>
-
-<div class="filter-group">
-
-    <label>Source</label>
-
-    <button
-        class="filter-btn source-filter active"
-        data-source="all">
-
-        All Sources ({{ reviews|length }})
-
-    </button>
-
-    {% for source, count in source_counts.items() %}
-
-    <button
-        class="filter-btn source-filter"
-        data-source="{{ source|lower }}">
-
-        {{ source }} ({{ count }})
-
-    </button>
-
-    {% endfor %}
-
-</div>
-
-
+        <div>
+            <p class="rs-nav-label ms-0">Source</p>
+            <button class="filter-btn source-filter active" data-source="all">All Sources <span>{{ reviews|length }}</span></button>
+            {% for source, count in source_counts.items() %}
+            <button class="filter-btn source-filter" data-source="{{ source|lower }}">{{ source }} <span>{{ count }}</span></button>
+            {% endfor %}
+        </div>
+        </div>
     </aside>
 
-    <!-- RIGHT CONTENT -->
-
-    <main class="content">
-
-        <div class="summary-bar">
-
-            <div class="summary-card">
-
-                <h3>Total Reviews</h3>
-
-                <p>{{ reviews|length }}</p>
-
+    <main class="review-results-panel">
+        <div class="rs-kpi-grid mb-4">
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-chat-square-text"></i></div>
+                <p class="rs-kpi-value">{{ reviews|length }}</p>
+                <p class="rs-kpi-label">Total Reviews</p>
             </div>
-
-            <div class="summary-card">
-
-                <h3>Pending</h3>
-
-                <p>{{ pending_count }}</p>
-
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon" style="background:#fffbeb;color:var(--rs-warning);"><i class="bi bi-hourglass-split"></i></div>
+                <p class="rs-kpi-value">{{ pending_count }}</p>
+                <p class="rs-kpi-label">Pending</p>
             </div>
-
-            <div class="summary-card">
-
-                <h3>Analyzed</h3>
-
-                <p>{{ analyzed_count }}</p>
-
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon" style="background:var(--rs-accent-soft);color:var(--rs-accent);"><i class="bi bi-check2-circle"></i></div>
+                <p class="rs-kpi-value">{{ analyzed_count }}</p>
+                <p class="rs-kpi-label">Analyzed</p>
             </div>
-
-        </div>
-
-<div class="review-list">
-
-{% for review in reviews %}
-
-<div
-    class="review-card"
-    data-review="{{ review.review_text|lower }}"
-    data-reviewer="{{ review.reviewer_name|lower }}"
-    data-source="{{ review.source|lower }}"
-    data-status="{{ review.analysis_status|lower }}"
-    data-rating="{{ review.rating|int }}"
->
-
-    <div class="review-header">
-
-        <div>
-
-            <div class="review-rating">
-
-                {% if review.rating %}
-
-                    {% for i in range(review.rating|int) %}
-                        ⭐
-                    {% endfor %}
-
-                {% else %}
-
-                    ⭐
-
-                {% endif %}
-
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-funnel"></i></div>
+                <p class="rs-kpi-value">{{ source_counts|length }}</p>
+                <p class="rs-kpi-label">Sources</p>
             </div>
-
-            <h3>
-
-                {{ review.reviewer_name }}
-
-            </h3>
-
         </div>
 
-        <div class="review-meta">
+        <div class="review-list">
+            {% for review in reviews %}
+            <article
+                class="review-card rs-card"
+                data-review="{{ review.review_text|lower }}"
+                data-reviewer="{{ review.reviewer_name|lower }}"
+                data-source="{{ review.source|lower }}"
+                data-status="{{ review.analysis_status|lower }}"
+                data-rating="{{ review.rating|int }}"
+            >
+                <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+                    <div>
+                        <div class="review-rating">
+                            {% if review.rating %}
+                                {% for i in range(review.rating|int) %}★{% endfor %}
+                            {% else %}
+                                No rating
+                            {% endif %}
+                        </div>
+                        <h2 class="h5 fw-bold mb-1">{{ review.reviewer_name }}</h2>
+                        <div class="d-flex flex-wrap gap-2 text-muted small">
+                            <span><i class="bi bi-globe2 me-1"></i>{{ review.source }}</span>
+                            <span><i class="bi bi-calendar3 me-1"></i>{{ review.review_date }}</span>
+                        </div>
+                    </div>
+                    <div>
+                        {% if review.analysis_status == "analyzed" %}
+                        <span class="status analyzed"><i class="bi bi-check-circle"></i>Analyzed</span>
+                        {% else %}
+                        <span class="status pending"><i class="bi bi-hourglass-split"></i>Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
 
-            <span>
+                <div class="review-body mb-4">{{ review.review_text }}</div>
 
-                {{ review.source }}
-
-            </span>
-
-            <span>
-
-                {{ review.review_date }}
-
-            </span>
-
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="text-muted small">Review ID #{{ review.id }}</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% if review.analysis_status == "pending" %}
+                        <button class="btn-solid analyze-btn" data-review-id="{{ review.id }}">
+                            <i class="bi bi-magic"></i>
+                            Analyze
+                        </button>
+                        {% else %}
+                        <button class="btn-ghost view-analysis" data-review-id="{{ review.id }}">
+                            <i class="bi bi-eye"></i>
+                            View Analysis
+                        </button>
+                        {% endif %}
+                        <button class="btn-danger" onclick="deleteReview({{ review.id }})">
+                            <i class="bi bi-trash"></i>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
         </div>
-
-    </div>
-
-    <div class="review-body">
-
-        {{ review.review_text }}
-
-    </div>
-
-    <div class="review-footer">
-
-        <div>
-
-            {% if review.analysis_status == "analyzed" %}
-
-                <span class="status analyzed">
-
-                    🟢 Analyzed
-
-                </span>
-
-            {% else %}
-
-                <span class="status pending">
-
-                    🟡 Pending
-
-                </span>
-
-            {% endif %}
-
-        </div>
-
-        <div class="actions">
-
-            {% if review.analysis_status == "pending" %}
-
-            <button
-            class="btn-solid analyze-btn"
-            data-review-id="{{ review.id }}">
-            Analyze
-           </button>
-
-            {% else %}
-
-                <button class="btn-ghost view-analysis"
-data-review-id="{{ review.id }}">
-
-                    View Analysis
-
-                </button>
-
-                <button class="btn-solid">
-
-                    AI Reply
-
-                </button>
-
-            {% endif %}
-
-            <button class="btn-danger">
-
-                Delete
-
-            </button>
-
-        </div>
-
-    </div>
-
-</div>
-
-{% endfor %}
-
-</div>
-
     </main>
-
 </div>
-
-<!-- AI Analysis Modal -->
 
 <div id="analysisModal" class="modal">
-
     <div class="modal-content">
-
         <span id="closeModal" class="close-btn">&times;</span>
+        <p class="rs-eyebrow">AI analysis</p>
+        <h2 class="h4 fw-bold mb-4">Review Analysis</h2>
 
-        <h2>AI Review Analysis</h2>
-
-        <div class="analysis-section">
-
-            <h3>Sentiment</h3>
-
-            <span id="modalSentiment" class="sentiment-badge">
-                --
-            </span>
-
+        <div class="mb-4">
+            <h3 class="h6 fw-bold">Sentiment</h3>
+            <span id="modalSentiment" class="sentiment-badge badge-soft-primary">--</span>
         </div>
 
-        <div class="analysis-section">
-
-            <h3>Summary</h3>
-
-            <p id="modalSummary"></p>
-
+        <div class="mb-4">
+            <h3 class="h6 fw-bold">Summary</h3>
+            <p id="modalSummary" class="text-muted mb-0"></p>
         </div>
 
-        <div class="analysis-section">
-
-            <h3>AI Reply</h3>
-
-            <textarea
-                id="modalReply"
-                readonly
-            ></textarea>
-
+        <div class="mb-4">
+            <h3 class="h6 fw-bold">AI Reply</h3>
+            <textarea id="modalReply" class="form-control" readonly></textarea>
         </div>
 
-        <button
-            id="copyReply"
-            class="btn-solid">
-
+        <button id="copyReply" class="btn-solid" data-loading="false">
+            <i class="bi bi-clipboard"></i>
             Copy Reply
-
         </button>
-
     </div>
-
 </div>
+
+<div id="confirmModal" class="confirm-modal">
+    <div class="confirm-box">
+        <h2 id="confirmTitle" class="h4 fw-bold">Delete Review</h2>
+        <p id="confirmMessage" class="text-muted">Are you sure you want to delete this review?</p>
+        <div class="d-flex justify-content-end gap-2">
+            <button class="cancel-btn" onclick="closeConfirmModal()">Cancel</button>
+            <button id="confirmActionBtn" class="delete-confirm-btn">Delete Review</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
+let reviewToDelete = null;
 
-const reviewCards=document.querySelectorAll(".review-card");
+const confirmModal = document.getElementById("confirmModal");
+const confirmActionBtn = document.getElementById("confirmActionBtn");
+const reviewCards = document.querySelectorAll(".review-card");
+const searchInput = document.getElementById("searchInput");
+const statusButtons = document.querySelectorAll(".status-filter");
+const ratingButtons = document.querySelectorAll(".rating-filter");
+const sourceButtons = document.querySelectorAll(".source-filter");
 
-const searchInput=document.getElementById("searchInput");
+let currentSearch = "";
+let currentStatus = "all";
+let currentRating = "all";
+let currentSource = "all";
 
-const statusButtons=document.querySelectorAll(".status-filter");
-
-const ratingButtons=document.querySelectorAll(".rating-filter");
-
-const sourceButtons=document.querySelectorAll(".source-filter");
-
-let currentSearch="";
-let currentStatus="all";
-let currentRating="all";
-let currentSource="all";
-
-searchInput.addEventListener("keyup",function(){
-
-    currentSearch=this.value.toLowerCase();
-
+searchInput.addEventListener("keyup", function () {
+    currentSearch = this.value.toLowerCase();
     applyFilters();
-
 });
 
-statusButtons.forEach(button=>{
-
-    button.onclick=function(){
-
-        statusButtons.forEach(btn=>btn.classList.remove("active"));
-
+statusButtons.forEach(button => {
+    button.onclick = function () {
+        statusButtons.forEach(btn => btn.classList.remove("active"));
         this.classList.add("active");
-
-        currentStatus=this.dataset.status;
-
+        currentStatus = this.dataset.status;
         applyFilters();
-
-    }
-
+    };
 });
 
-ratingButtons.forEach(button=>{
-
-    button.onclick=function(){
-
-        ratingButtons.forEach(btn=>btn.classList.remove("active"));
-
+ratingButtons.forEach(button => {
+    button.onclick = function () {
+        ratingButtons.forEach(btn => btn.classList.remove("active"));
         this.classList.add("active");
-
-        currentRating=this.dataset.rating;
-
+        currentRating = this.dataset.rating;
         applyFilters();
-
-    }
-
+    };
 });
 
-sourceButtons.forEach(button=>{
-
-    button.onclick=function(){
-
-        sourceButtons.forEach(btn=>btn.classList.remove("active"));
-
+sourceButtons.forEach(button => {
+    button.onclick = function () {
+        sourceButtons.forEach(btn => btn.classList.remove("active"));
         this.classList.add("active");
-
-        currentSource=this.dataset.source;
-
+        currentSource = this.dataset.source;
         applyFilters();
-
-    }
-
+    };
 });
 
-function applyFilters(){
+function applyFilters() {
+    reviewCards.forEach(card => {
+        const review = card.dataset.review || "";
+        const reviewer = card.dataset.reviewer || "";
+        const source = card.dataset.source || "";
+        const status = card.dataset.status || "";
+        const rating = card.dataset.rating || "";
 
-    reviewCards.forEach(card=>{
+        const searchMatch = review.includes(currentSearch) || reviewer.includes(currentSearch) || source.includes(currentSearch);
+        const statusMatch = currentStatus === "all" || status === currentStatus;
+        const ratingMatch = currentRating === "all" || rating === currentRating;
+        const sourceMatch = currentSource === "all" || source === currentSource;
 
-        const review=card.dataset.review||"";
-        const reviewer=card.dataset.reviewer||"";
-        const source=card.dataset.source||"";
-        const status=card.dataset.status||"";
-        const rating=card.dataset.rating||"";
-
-        const searchMatch=
-
-            review.includes(currentSearch)
-
-            ||
-
-            reviewer.includes(currentSearch)
-
-            ||
-
-            source.includes(currentSearch);
-
-        const statusMatch=
-
-            currentStatus==="all"
-
-            ||
-
-            status===currentStatus;
-
-        const ratingMatch=
-
-            currentRating==="all"
-
-            ||
-
-            rating===currentRating;
-
-        const sourceMatch=
-
-            currentSource==="all"
-
-            ||
-
-            source===currentSource;
-
-        if(
-
-            searchMatch
-
-            &&
-
-            statusMatch
-
-            &&
-
-            ratingMatch
-
-            &&
-
-            sourceMatch
-
-        ){
-
-            card.style.display="block";
-
-        }
-
-        else{
-
-            card.style.display="none";
-
-        }
-
+        card.style.display = searchMatch && statusMatch && ratingMatch && sourceMatch ? "block" : "none";
     });
-
 }
 
 document.querySelectorAll(".analyze-btn").forEach(button => {
-
     button.addEventListener("click", async function () {
-
         const reviewId = this.dataset.reviewId;
-
         this.disabled = true;
-        this.innerText = "Analyzing...";
+        this.innerHTML = "<span class='spinner-border spinner-border-sm'></span><span>Queueing...</span>";
 
         try {
-
-            const response = await fetch(
-                `/reviews/analyze/${reviewId}`,
-                {
-                    method: "POST"
-                }
-            );
-
+            const response = await fetch(`/reviews/analyze/${reviewId}`, { method: "POST" });
             const data = await response.json();
 
-            console.log(data);
-            document.getElementById("modalSentiment").textContent =
-data.sentiment;
+            if (data.job_id) {
+                window.location.href = `/dashboard/{{ business_id }}?job=${data.job_id}`;
+                return;
+            }
 
-document.getElementById("modalSummary").textContent =
-data.summary;
-
-document.getElementById("modalReply").value =
-data.reply;
-
-document.getElementById("analysisModal").style.display="flex";
-
+            alert(data.message || "Analysis job could not be created.");
         } catch (err) {
-
             alert("Something went wrong.");
-
         }
 
         this.disabled = false;
-        this.innerText = "Analyze";
-
+        this.innerHTML = "<i class='bi bi-magic'></i> Analyze";
     });
-
 });
-
-// ===============================
-// AI Analysis Modal
-// ===============================
 
 const modal = document.getElementById("analysisModal");
+const modalSummary = document.getElementById("modalSummary");
+const modalSentiment = document.getElementById("modalSentiment");
+const modalReply = document.getElementById("modalReply");
+const closeModal = document.getElementById("closeModal");
+const copyReply = document.getElementById("copyReply");
 
-const modalSummary =
-document.getElementById("modalSummary");
+document.querySelectorAll(".view-analysis[data-review-id]").forEach(button => {
+    button.addEventListener("click", async function () {
+        const reviewId = this.dataset.reviewId;
+        const response = await fetch(`/reviews/analysis/${reviewId}`);
+        const data = await response.json();
 
-const modalSentiment =
-document.getElementById("modalSentiment");
+        modalSummary.textContent = data.summary;
+        modalSentiment.textContent = data.sentiment;
+        modalReply.value = data.ai_reply;
 
-const modalReply =
-document.getElementById("modalReply");
-
-const closeModal =
-document.getElementById("closeModal");
-
-const copyReply =
-document.getElementById("copyReply");
-
-document.querySelectorAll(".view-analysis").forEach(button=>{
-
-    button.addEventListener("click", async function(){
-
-        const reviewId=this.dataset.reviewId;
-
-        const response=await fetch(
-            `/reviews/analysis/${reviewId}`
-        );
-
-        const data=await response.json();
-
-        modalSummary.textContent=data.summary;
-
-        modalSentiment.textContent=data.sentiment;
-
-        modalReply.value=data.ai_reply;
-
-        if(data.sentiment==="Positive"){
-
-            modalSentiment.style.background="#166534";
-
+        modalSentiment.className = "sentiment-badge ";
+        if (data.sentiment === "Positive") {
+            modalSentiment.className += "badge-soft-success";
+        } else if (data.sentiment === "Negative") {
+            modalSentiment.className += "badge-soft-danger";
+        } else {
+            modalSentiment.className += "badge-soft-warning";
         }
 
-        else if(data.sentiment==="Negative"){
-
-            modalSentiment.style.background="#991b1b";
-
-        }
-
-        else{
-
-            modalSentiment.style.background="#92400e";
-
-        }
-
-        modal.style.display="flex";
-
+        modal.style.display = "flex";
     });
-
 });
 
-closeModal.onclick=function(){
+closeModal.onclick = function () {
+    modal.style.display = "none";
+};
 
-    modal.style.display="none";
+window.onclick = function (event) {
+    if (event.target === modal) {
+        modal.style.display = "none";
+    }
+    if (event.target === confirmModal) {
+        closeConfirmModal();
+    }
+};
 
+copyReply.onclick = function () {
+    navigator.clipboard.writeText(modalReply.value);
+    copyReply.innerHTML = "<i class='bi bi-check2'></i> Copied";
+    setTimeout(() => {
+        copyReply.innerHTML = "<i class='bi bi-clipboard'></i> Copy Reply";
+    }, 1500);
+};
+
+function deleteReview(reviewId) {
+    reviewToDelete = reviewId;
+    confirmModal.style.display = "flex";
 }
 
-window.onclick=function(event){
+function closeConfirmModal() {
+    confirmModal.style.display = "none";
+    reviewToDelete = null;
+}
 
-    if(event.target===modal){
-
-        modal.style.display="none";
-
+confirmActionBtn.onclick = async function () {
+    if (!reviewToDelete) {
+        return;
     }
 
-}
+    try {
+        const response = await fetch(`/reviews/delete/${reviewToDelete}`, { method: "POST" });
+        const data = await response.json();
 
-copyReply.onclick=function(){
-
-    navigator.clipboard.writeText(
-
-        modalReply.value
-
-    );
-
-    copyReply.innerText="Copied!";
-
-    setTimeout(()=>{
-
-        copyReply.innerText="Copy Reply";
-
-    },1500);
-
-}
-
+        if (data.success) {
+            closeConfirmModal();
+            location.reload();
+        } else {
+            alert(data.message);
+        }
+    } catch (error) {
+        console.error(error);
+        alert("Failed to delete review.");
+    }
+};
 </script>
-
-</body>
-
-</html>
+{% endblock %}

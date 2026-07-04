@@ -40,5 +40,24 @@ services:
     depends_on:
       - mysql
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    volumes:
+      - ./uploads:/app/uploads
+
+    container_name: reputation_worker
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    command: ["python", "worker.py"]
+
+    depends_on:
+      - mysql
+
 volumes:
   mysql_data:

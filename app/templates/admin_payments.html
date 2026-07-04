@@ -1,0 +1,73 @@
+{% extends "base_app.html" %}
+
+{% block title %}Admin Payments{% endblock %}
+{% block nav_admin_payments %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <div>
+        <p class="rs-eyebrow">Admin</p>
+        <h1 class="rs-page-title">Payments</h1>
+        <p class="rs-page-subtitle">Verify manual UPI payment references and activate subscriptions.</p>
+    </div>
+    <a href="/admin/dashboard" class="btn-ghost">
+        <i class="bi bi-speedometer2"></i>
+        Admin dashboard
+    </a>
+</div>
+
+<div class="rs-card">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Amount</th>
+                    <th>Transaction ID</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Notes</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in payments %}
+                <tr>
+                    <td>{{ payment.id }}</td>
+                    <td>
+                        <div class="fw-semibold">{{ payment.user_name }}</div>
+                        <div class="small text-muted">{{ payment.user_email }}</div>
+                    </td>
+                    <td>{{ payment.currency }} {{ "%.2f"|format(payment.amount) }}</td>
+                    <td>{{ payment.transaction_id }}</td>
+                    <td>
+                        <span class="badge-soft-primary">{{ payment.payment_status }}</span>
+                    </td>
+                    <td>{{ payment.created_at }}</td>
+                    <td>{{ payment.notes or "-" }}</td>
+                    <td class="text-end">
+                        {% if payment.payment_status == "pending" %}
+                        <div class="d-flex justify-content-end gap-2">
+                            <form method="POST" action="/admin/payments/{{ payment.id }}/approve">
+                                <button type="submit" class="btn-solid">Approve</button>
+                            </form>
+                            <form method="POST" action="/admin/payments/{{ payment.id }}/reject">
+                                <button type="submit" class="btn-ghost">Reject</button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <span class="text-muted small">No action</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-5">No payments found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

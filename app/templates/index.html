@@ -1,121 +1,263 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ReviewSense - Your Business Reputation Manager</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='reviewsense.css') }}">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
-</head>
+{% extends "base_public.html" %}
 
-<body class="bg-zinc-950 text-white font-sans">
+{% block title %}ReviewGrow - AI Reputation Management{% endblock %}
 
-    <!-- Original Navbar (Unchanged) -->
-    <nav>
-        <a href="/" class="logo">
-            Review<span>Sense</span>
-        </a>
-
-        <div class="nav-links">
-            <a href="/login-page" class="btn-solid">Login</a>
-            <a href="/register-page" class="btn-solid">Register</a>
-        </div>
-    </nav>
-
-    <!-- Hero Section - Updated -->
-    <div style="min-height:calc(100vh - 64px); display:flex; justify-content:center; align-items:center; padding:40px; position:relative; overflow:hidden;">
-        <div class="absolute inset-0 bg-[radial-gradient(at_center,#4f46e510_0%,transparent_70%)]"></div>
-        
-        <div style="max-width:800px; text-align:center; position:relative; z-index:10;">
-            <h1 style="color:white; font-size:56px; margin-bottom:20px; line-height:1.1;">
-                Your business reputation,<br>
-                <span style="background: linear-gradient(to right, #a78bfa, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-                    always under control.
+{% block content %}
+<section class="py-5">
+    <div class="rs-public-container">
+        <div class="row align-items-center g-5 py-5">
+            <div class="col-lg-7">
+                <span class="badge-soft-primary mb-3">
+                    <i class="bi bi-stars"></i>
+                    AI reputation management
                 </span>
-            </h1>
-
-            <p style="color:#666B7E; font-size:20px; max-width:650px; margin:auto; line-height:1.8;">
-                Analyze customer reviews, uncover insights, and respond with confidence — all in one intelligent platform.
-            </p>
+                <h1 class="display-4 fw-bold mb-4">
+                    Understand every customer review before it becomes a trend.
+                </h1>
+                <p class="lead text-muted mb-4">
+                    ReviewGrow helps businesses upload reviews, detect sentiment, generate executive summaries, and craft professional replies with AI.
+                </p>
+                <div class="d-flex flex-column flex-sm-row gap-3">
+                    <a href="/pricing" class="btn-solid">
+                        Subscribe Now
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                    <a href="/login-page" class="btn-ghost">
+                        Login
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="rs-card rs-card-lg shadow-sm">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <p class="rs-eyebrow mb-1">Live reputation score</p>
+                            <h2 class="h4 fw-bold mb-0">Business health</h2>
+                        </div>
+                        <span class="badge-soft-success">Excellent</span>
+                    </div>
+                    <div class="display-3 fw-bold text-primary mb-2">87%</div>
+                    <div class="progress mb-4">
+                        <div class="progress-bar" style="width:87%"></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <div class="p-3 rounded-4 bg-light">
+                                <div class="fw-bold">248</div>
+                                <div class="small text-muted">Reviews</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 rounded-4 bg-light">
+                                <div class="fw-bold text-success">74%</div>
+                                <div class="small text-muted">Positive</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 rounded-4 bg-light">
+                                <div class="fw-bold text-primary">12</div>
+                                <div class="small text-muted">Actions</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-
-    <!-- Features Section - Updated Cards -->
-    <section class="py-24 bg-zinc-900">
-        <div class="max-w-6xl mx-auto px-6">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl font-semibold mb-4 text-white">Everything you need to manage your reputation</h2>
-                <p class="text-zinc-400 text-lg">Powerful tools. Simple interface.</p>
+</section>
+<section class="py-5">
+    <div class="rs-public-container">
+        <div class="text-center mb-5">
+            <p class="rs-eyebrow">Our services</p>
+            <h2 class="fw-bold">Everything You Need to Manage Your Online Reputation</h2>
+            <p class="text-muted mb-0 mx-auto" style="max-width:760px;">Powerful AI tools designed to help businesses understand customer feedback, respond faster, and improve their reputation.</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi bi-google"></i></div>
+                    <h3 class="h6 fw-bold">Google Business Profile Integration</h3>
+                    <p class="text-muted mb-0">Securely connect your Google Business Profile and automatically sync customer reviews into ReviewGrow.</p>
+                </div>
             </div>
-
-            <div class="grid md:grid-cols-3 gap-8">
-                <div class="card">
-                    <div class="h-14 w-14 bg-violet-500/10 text-violet-400 rounded-2xl flex items-center justify-center mb-8 text-3xl">
-                        📊
-                    </div>
-                    <h3 class="text-2xl font-semibold mb-4">Sentiment Analysis</h3>
-                    <p class="text-zinc-400 leading-relaxed">
-                        Instantly understand how customers feel — positive, negative, or neutral — with accurate AI-powered sentiment detection.
-                    </p>
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                    <h3 class="h6 fw-bold">AI Review Analysis</h3>
+                    <p class="text-muted mb-0">Analyze customer sentiment, discover common complaints, praises, and actionable insights using AI.</p>
                 </div>
-
-                <div class="card">
-                    <div class="h-14 w-14 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center mb-8 text-3xl">
-                        📈
-                    </div>
-                    <h3 class="text-2xl font-semibold mb-4">Trend Detection</h3>
-                    <p class="text-zinc-400 leading-relaxed">
-                        Discover recurring themes in your reviews. Know what you're doing right and what needs immediate attention.
-                    </p>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi bi-chat-dots"></i></div>
+                    <h3 class="h6 fw-bold">AI Review Reply Generator</h3>
+                    <p class="text-muted mb-0">Generate professional and personalized replies for customer reviews in seconds.</p>
                 </div>
-
-                <div class="card">
-                    <div class="h-14 w-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mb-8 text-3xl">
-                        💬
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi bi-speedometer2"></i></div>
+                    <h3 class="h6 fw-bold">Live Review Dashboard</h3>
+                    <p class="text-muted mb-0">Monitor all incoming reviews from one centralized dashboard.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi bi-activity"></i></div>
+                    <h3 class="h6 fw-bold">Performance Insights</h3>
+                    <p class="text-muted mb-0">Track customer satisfaction trends and identify opportunities for business improvement.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
+                    <h3 class="h6 fw-bold">Excel Upload</h3>
+                    <p class="text-muted mb-0">Upload existing customer reviews for instant AI analysis.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi bi-file-earmark-pdf"></i></div>
+                    <h3 class="h6 fw-bold">PDF Reputation Reports</h3>
+                    <p class="text-muted mb-0">Generate professional AI-powered reputation reports for your business.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="rs-card rs-service-card h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="rs-kpi-icon"><i class="bi bi-whatsapp"></i></div>
+                        <span class="badge-soft-primary">Coming Soon</span>
                     </div>
-                    <h3 class="text-2xl font-semibold mb-4">Smart Responses</h3>
-                    <p class="text-zinc-400 leading-relaxed">
-                        Generate professional, empathetic, on-brand replies in seconds. Maintain great relationships at scale.
-                    </p>
+                    <h3 class="h6 fw-bold">WhatsApp Notifications</h3>
+                    <p class="text-muted mb-0">Receive instant notifications whenever new reviews are received.</p>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <footer style="border-top:1px solid rgba(255,255,255,0.07);padding:18px 5%;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-        <span style="font-size:13px;color:#ffffff;font-weight:600;">&copy; <script>document.write(new Date().getFullYear())</script> ReviewSense. All rights reserved.</span>
-        <div style="display:flex;gap:20px;">
-            <a href="mailto:dharaprasath52@gmail.com" style="font-size:13px;color:#ffffff;font-weight:600;text-decoration:none;">Contact</a>
+<section class="py-5 bg-white border-top border-bottom">
+    <div class="rs-public-container">
+        <div class="text-center mb-5">
+            <p class="rs-eyebrow">Workflow</p>
+            <h2 class="fw-bold">How ReviewGrow Works</h2>
         </div>
-    </footer>
+        <div class="rs-timeline">
+            {% for step, title in [
+                ("Step 1", "Create Account"),
+                ("Step 2", "Add or Connect Business"),
+                ("Step 3", "Import Google Reviews or Upload Excel"),
+                ("Step 4", "AI Analyzes Reviews"),
+                ("Step 5", "Generate Reports & AI Replies"),
+                ("Step 6", "Improve Your Online Reputation")
+            ] %}
+            <div class="rs-timeline-item">
+                <span class="badge-soft-primary">{{ step }}</span>
+                <h3 class="h6 fw-bold mb-0">{{ title }}</h3>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
 
-    <style>
-        .logo span {
-            color: #6C5CE7;
-        }
-        .nav-links {
-            display: flex;
-            gap: 15px;
-        }
-        .btn-solid {
-            padding: 10px 24px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        .card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 24px;
-            padding: 40px 32px;
-            transition: all 0.4s;
-        }
-        .card:hover {
-            transform: translateY(-8px);
-            border-color: #6C5CE7;
-        }
-    </style>
-</body>
-</html>
+<section class="py-5">
+    <div class="rs-public-container">
+        <div class="text-center mb-5">
+            <p class="rs-eyebrow">Who is it for</p>
+            <h2 class="fw-bold">Built For Businesses That Care About Customer Experience</h2>
+        </div>
+        <div class="rs-audience-grid">
+            {% for business_type, icon in [
+                ("Hotels", "bi-building"),
+                ("Restaurants", "bi-cup-hot"),
+                ("Cafés", "bi-cup"),
+                ("Homestays", "bi-house-heart"),
+                ("Salons", "bi-scissors"),
+                ("Clinics", "bi-heart-pulse"),
+                ("Local Businesses", "bi-shop")
+            ] %}
+            <div class="rs-card rs-audience-card">
+                <i class="bi {{ icon }}"></i>
+                <span>{{ business_type }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="py-5 bg-white border-top border-bottom">
+    <div class="rs-public-container">
+        <div class="text-center mb-5">
+            <p class="rs-eyebrow">Subscription plan</p>
+            <h2 class="fw-bold">Simple Pricing</h2>
+            <p class="text-muted mb-0">One plan. Everything included.</p>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <div class="rs-card rs-card-lg rs-pricing-card">
+                    <h3 class="h4 fw-bold mb-2">ReviewGrow Starter</h3>
+                    <div class="display-5 fw-bold text-primary mb-4">₹2,999<span class="h6 text-muted">/month</span></div>
+                    <div class="rs-pricing-list mb-4">
+                        {% for item in [
+                            "Google Review Integration",
+                            "AI Review Analysis",
+                            "AI Reply Generator",
+                            "Live Dashboard",
+                            "Performance Insights",
+                            "Excel Upload",
+                            "PDF Reports"
+                        ] %}
+                        <div><i class="bi bi-check-circle-fill"></i><span>{{ item }}</span></div>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex flex-column flex-sm-row gap-3">
+                        <a href="/pricing" class="btn-solid flex-fill">Subscribe Now</a>
+                        <a href="mailto:dharaprasath52@gmail.com" class="btn-ghost flex-fill">Contact Sales</a>
+                    </div>
+                </div>
+                <p class="text-center text-muted mt-4 mb-0">No hidden fees. No complicated pricing. One subscription for everything.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="rs-public-container">
+        <div class="text-center mb-5">
+            <p class="rs-eyebrow">Why choose ReviewGrow</p>
+            <h2 class="fw-bold">Built to Help Teams Act Faster</h2>
+        </div>
+        <div class="row g-4">
+            {% for benefit, icon in [
+                ("Save Time", "bi-clock-history"),
+                ("Reply Faster", "bi-lightning-charge"),
+                ("Improve Ratings", "bi-star"),
+                ("Understand Customer Sentiment", "bi-emoji-smile"),
+                ("Professional Reports", "bi-file-earmark-bar-graph"),
+                ("Business Growth", "bi-graph-up-arrow")
+            ] %}
+            <div class="col-md-6 col-lg-4">
+                <div class="rs-card rs-benefit-card h-100">
+                    <div class="rs-kpi-icon"><i class="bi {{ icon }}"></i></div>
+                    <h3 class="h5 fw-bold mb-0">{{ benefit }}</h3>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="rs-public-container">
+        <div class="rs-card rs-card-lg rs-final-cta text-center">
+            <p class="rs-eyebrow">Start today</p>
+            <h2 class="display-6 fw-bold mb-3">Ready to Transform Your Customer Reviews?</h2>
+            <p class="lead text-muted mx-auto mb-4" style="max-width:720px;">Join businesses using AI to understand customer feedback and build stronger online reputations.</p>
+            <div class="d-flex flex-column flex-sm-row justify-content-center gap-3">
+                <a href="/pricing" class="btn-solid">Subscribe Now</a>
+                <a href="/login-page" class="btn-ghost">Login</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

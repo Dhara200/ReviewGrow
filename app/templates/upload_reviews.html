@@ -1,205 +1,71 @@
-<!DOCTYPE html>
+{% extends "base_app.html" %}
 
-<html>
-<head>
+{% block title %}Upload Reviews - ReviewGrow{% endblock %}
+{% block nav_upload %}active{% endblock %}
 
-<title>Upload Reviews - ReviewSense</title>
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Workspace / {{ business.business_name }} / Upload reviews</span>
+{% endblock %}
 
-<link
-    rel="stylesheet"
-    href="{{ url_for('static', filename='reviewsense.css') }}"
->
-
-<style>
-
-    .page-container{
-        max-width:900px;
-        margin:auto;
-        padding:40px 20px;
-    }
-
-    .upload-card{
-        background:var(--surface);
-        border:1px solid #6C5CE7;
-        border-radius:14px;
-        padding:30px;
-    }
-
-    .upload-card h1{
-        color:white;
-        margin-bottom:10px;
-    }
-
-    .upload-card p{
-        color:var(--muted);
-    }
-
-    .business-info{
-        margin-top:25px;
-        margin-bottom:25px;
-        padding:20px;
-        background:rgba(108,92,231,.08);
-        border:1px solid rgba(108,92,231,.25);
-        border-radius:12px;
-    }
-
-    .business-info strong{
-        color:white;
-    }
-
-    input[type="file"]{
-        width:100%;
-        margin-top:20px;
-        margin-bottom:20px;
-        padding:15px;
-        border-radius:10px;
-        border:1px solid var(--border);
-        background:var(--surface2);
-        color:white;
-    }
-
-    .info-box{
-        margin-top:30px;
-        padding:20px;
-        border-radius:12px;
-        background:rgba(108,92,231,.08);
-        border:1px solid rgba(108,92,231,.25);
-    }
-
-    .info-box strong{
-        color:white;
-    }
-
-    .info-box ul{
-        margin-top:10px;
-        margin-left:20px;
-        color:var(--text);
-    }
-
-</style>
-
-</head>
-
-<body>
-
-<nav>
-
-<a href="/" class="logo">
-    Review<span>Sense</span>
-</a>
-
-<div class="nav-links">
-
-    <a
-        href="/my-businesses"
-        class="btn-ghost"
-    >
-        My Businesses
-    </a>
-
-    <a
-        href="/review-assistant"
-        class="btn-ghost"
-    >
-        Review Assistant
-    </a>
-
-    <a
-        href="/logout"
-        class="btn-solid"
-    >
-        Logout
-    </a>
-
-</div>
-
-</nav>
-
-<div class="page-container">
-
-<div class="upload-card">
-
-    <h1>
-        Upload Reviews
-    </h1>
-
-    <p>
-        Upload customer reviews in CSV format for AI analysis.
-    </p>
-
-    <div class="business-info">
-
-        <p>
-
-            Business:
-            <strong>
-                {{ business.business_name }}
-            </strong>
-
-        </p>
-
-        <br>
-
-        <p>
-
-            Type:
-            <strong>
-                {{ business.business_type }}
-            </strong>
-
-        </p>
-
+{% block content %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">Review import</p>
+        <h1 class="rs-page-title">Upload reviews</h1>
+        <p class="rs-page-subtitle">Import Excel reviews for {{ business.business_name }} and generate an AI reputation report.</p>
     </div>
+    <a href="/dashboard/{{ business_id }}" class="btn-ghost">
+        <i class="bi bi-speedometer2"></i>
+        Dashboard
+    </a>
+</div>
 
-    <form
-        method="POST"
-        enctype="multipart/form-data"
-        action="/reviews/upload-ui"
-    >
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="rs-card rs-card-lg">
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <div class="rs-kpi-icon mb-0"><i class="bi bi-cloud-arrow-up"></i></div>
+                <div>
+                    <h2 class="h5 fw-bold mb-1">Review file</h2>
+                    <p class="text-muted mb-0">Supported formats: XLSX, XLS.</p>
+                </div>
+            </div>
 
-        <input
-            type="hidden"
-            name="business_id"
-            value="{{ business_id }}"
+            <form method="POST" enctype="multipart/form-data" action="/reviews/upload-ui">
+                <input type="hidden" name="business_id" value="{{ business_id }}">
 
-        >
+                <div class="field">
+                    <label for="file">Choose review file</label>
+                    <input id="file" class="form-control" type="file" name="file" accept=".xlsx,.xls" data-excel-upload required>
+                    <div class="invalid-feedback">Please upload only Excel files with .xlsx or .xls extension.</div>
+                    <div class="form-hint">ReviewGrow will parse the file, store valid reviews, and create a fresh AI dashboard report.</div>
+                </div>
 
-        <input
-            type="file"
-            name="file"
-            accept=".csv"
-            required
-        >
-
-        <button
-            type="submit"
-            class="btn-submit"
-        >
-            Upload Reviews
-        </button>
-
-    </form>
-
-    <div class="info-box">
-
-        <strong>
-            Required CSV Columns
-        </strong>
-
-        <ul>
-            <li>source</li>
-            <li>rating</li>
-            <li>review_title</li>
-            <li>review_text</li>
-            <li>reviewer_name</li>
-            <li>review_date</li>
-        </ul>
-
+                <button type="submit" class="btn-submit mt-2">
+                    <i class="bi bi-upload"></i>
+                    Upload reviews
+                </button>
+            </form>
+        </div>
     </div>
+    <div class="col-lg-5">
+        <div class="rs-card rs-card-lg mb-4">
+            <p class="rs-eyebrow">Business</p>
+            <h2 class="h4 fw-bold mb-1">{{ business.business_name }}</h2>
+            <p class="text-muted mb-0">{{ business.business_type }}</p>
+        </div>
 
+        <div class="rs-card rs-card-lg">
+            <h2 class="h5 fw-bold mb-3">Required columns</h2>
+            <div class="row g-2">
+                {% for column in ["source", "rating", "review_title", "review_text", "reviewer_name", "review_date"] %}
+                <div class="col-sm-6">
+                    <span class="badge-soft-primary w-100 justify-content-center">{{ column }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-muted small mt-3 mb-0">Column aliases are supported by the existing parser for common names like stars, text, comment, customer_name, and date.</p>
+        </div>
+    </div>
 </div>
-
-</div>
-
-</body>
-</html>
+{% endblock %}

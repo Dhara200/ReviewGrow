@@ -1,888 +1,164 @@
-<!DOCTYPE html>
-
-<html>
-<head>
-
-<title>Review Assistant - ReviewSense</title>
-
-<link
-    rel="stylesheet"
-    href="{{ url_for('static', filename='reviewsense.css') }}"
->
-
-<style>
-.result-card{
-    margin-top:25px;
-    background:var(--surface);
-    border:1px solid #6C5CE7;
-    border-radius:14px;
-    padding:30px;
-    width:100%;
-    box-sizing:border-box;
-}
-
-.result-card li{
-margin-bottom:8px;
-}
-
-.result-card p{
-color:var(--text);
-line-height:1.8;
-}
-
-    .page-container{
-        max-width:900px;
-        margin:auto;
-        padding:40px 20px;
-    }
-
-    .assistant-card{
-        background:var(--surface);
-        border:1px solid #6C5CE7;
-        border-radius:14px;
-        padding:30px;
-    }
-
-    .assistant-card h1{
-        color:white;
-        margin-bottom:10px;
-    }
-
-    .assistant-card p{
-        color:var(--muted);
-        margin-bottom:25px;
-    }
-
-    textarea{
-        width:100%;
-        min-height:220px;
-        background:var(--surface2);
-        border:1px solid var(--border);
-        border-radius:10px;
-        padding:15px;
-        color:white;
-        font-size:15px;
-        resize:vertical;
-        outline:none;
-        box-sizing:border-box;
-    }
-
-    textarea:focus{
-        border-color:#6C5CE7;
-    }
-
-    .button-row{
-        display:flex;
-        gap:15px;
-        margin-top:20px;
-        flex-wrap:wrap;
-    }
-
-    .analyze-btn{
-        background:#2563eb;
-        color:white;
-        border:none;
-        padding:12px 20px;
-        border-radius:10px;
-        cursor:pointer;
-        font-weight:600;
-    }
-
-    .reply-btn{
-        background:#10b981;
-        color:white;
-        border:none;
-        padding:12px 20px;
-        border-radius:10px;
-        cursor:pointer;
-        font-weight:600;
-    }
-
-    .analyze-btn:hover,
-    .reply-btn:hover{
-        opacity:.9;
-    }
-
-    .result-card{
-        margin-top:25px;
-        background:var(--surface);
-        border:1px solid #6C5CE7;
-        border-radius:14px;
-        padding:25px;
-    }
-
-    .result-card h2{
-        color:white;
-        margin-bottom:15px;
-    }
-
-    .result-card pre{
-        color:var(--text);
-        white-space:pre-wrap;
-        word-wrap:break-word;
-        font-family:inherit;
-        line-height:1.7;
-    }
-
-    .copy-btn{
-margin-top:20px;
-
-background:#10b981;
-
-color:white;
-
-border:none;
-
-padding:12px 18px;
-
-border-radius:10px;
-
-cursor:pointer;
-
-font-weight:600;
-}
-
-.copy-btn:hover{
-background:#34d399;
-}
-
-.result-card{
-margin-top:25px;
-background:var(--surface);
-border:1px solid #6C5CE7;
-border-radius:14px;
-padding:30px;
-
-}
-
-.result-card h2{
-color:white;
-margin-bottom:20px;
-
-}
-
-.result-card pre{
-white-space:pre-wrap;
-word-wrap:break-word;
-color:var(--text);
-line-height:2;
-font-size:16px;
-font-family:'Inter',sans-serif;
-
-}
-
-.sentiment-box{
-
-```
-background:var(--surface2);
-
-border:1px solid var(--border);
-
-border-radius:12px;
-
-padding:20px;
-
-margin-bottom:25px;
-
-
-}
-
-.sentiment-label{
-
-font-size:22px;
-
-font-weight:700;
-
-margin-bottom:12px;
-
-}
-
-.sentiment-positive{
-color:#22c55e;
-}
-
-.sentiment-mixed{
-color:#f59e0b;
-}
-
-.sentiment-negative{
-color:#ef4444;
-}
-
-.progress{
-
-width:100%;
-
-height:14px;
-
-background:#1e293b;
-
-border-radius:100px;
-
-overflow:hidden;
-
-margin-top:12px;
-
-
-}
-
-.progress-bar{
-
-height:100%;
-
-background:#f59e0b;
-
-width:70%;
-}
-
-.analysis-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:20px;
-    margin-top:20px;
-}
-
-.analysis-section{
-    background:var(--surface2);
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:20px;
-    min-height:150px;
-}
-
-.analysis-section h3{
-    color:white;
-    margin-bottom:12px;
-}
-
-.analysis-section p,
-.analysis-section li{
-    color:var(--text);
-    line-height:1.8;
-}
-
-.analysis-section ul{
-    margin-left:20px;
-}
-
-.sentiment-pill{
-    display:inline-flex;
-    align-items:center;
-    padding:10px 20px;
-    border-radius:999px;
-    font-weight:700;
-    font-size:18px;
-}
-
-.sentiment-positive{
-    background:rgba(34,197,94,.15);
-    color:#22c55e;
-}
-
-.sentiment-negative{
-    background:rgba(239,68,68,.15);
-    color:#ef4444;
-}
-
-.sentiment-mixed{
-    background:rgba(245,158,11,.15);
-    color:#f59e0b;
-}
-
-.progress{
-    width:100%;
-    height:16px;
-    background:#1e293b;
-    border-radius:999px;
-    overflow:hidden;
-    margin-top:20px;
-}
-
-.progress-bar{
-    height:100%;
-}
-
-.positive-bar{
-    width:90%;
-    background:#22c55e;
-}
-
-.mixed-bar{
-    width:60%;
-    background:#f59e0b;
-}
-
-.negative-bar{
-    width:30%;
-    background:#ef4444;
-}
-
-/* =======================================================
-   PREMIUM SAAS BACKGROUND
-======================================================= */
-
-body{
-    overflow-x:hidden;
-    position:relative;
-}
-
-.bg-wrapper{
-    position:fixed;
-    inset:0;
-    z-index:-1;
-    pointer-events:none;
-    overflow:hidden;
-}
-
-.glow{
-    position:absolute;
-    border-radius:50%;
-    filter:blur(120px);
-    opacity:.18;
-}
-
-.glow1{
-    width:420px;
-    height:420px;
-    background:#00d4ff;
-    top:-120px;
-    left:-100px;
-}
-
-.glow2{
-    width:350px;
-    height:350px;
-    background:#6C5CE7;
-    right:-100px;
-    bottom:-100px;
-}
-
-.floating-card{
-
-    position:absolute;
-
-    background:rgba(25,35,55,.35);
-
-    backdrop-filter:blur(10px);
-
-    border:1px solid rgba(108,92,231,.25);
-
-    border-radius:18px;
-
-    color:#15d4d4;
-
-    animation:float 8s ease-in-out infinite;
-
-    box-shadow:0 20px 40px rgba(0,0,0,.35);
-}
-
-@keyframes float{
-
-0%{
-transform:translateY(0px);
-}
-
-50%{
-transform:translateY(-12px);
-}
-
-100%{
-transform:translateY(0px);
-}
-
-}
-
-/* Review Card */
-
-.review-card{
-
-left:40px;
-
-top:280px;
-
-width:180px;
-
-height:110px;
-
-padding:20px;
-
-font-size:24px;
-
-opacity:.22;
-}
-
-.review-lines{
-
-margin-top:12px;
-
-height:8px;
-
-background:#3b82f6;
-
-border-radius:20px;
-
-box-shadow:
-0 18px 0 #334155,
-0 36px 0 #334155,
-0 54px 0 #334155;
-}
-
-/* Gauge */
-
-.gauge-card{
-
-right:60px;
-
-top:140px;
-
-width:150px;
-
-height:170px;
-
-display:flex;
-
-flex-direction:column;
-
-align-items:center;
-
-justify-content:center;
-
-opacity:.28;
-}
-
-.gauge-circle{
-
-width:90px;
-
-height:90px;
-
-border-radius:50%;
-
-border:10px solid #0ea5e9;
-
-border-top-color:#14b8a6;
-
-transform:rotate(40deg);
-}
-
-.gauge-score{
-
-margin-top:10px;
-
-font-size:34px;
-
-font-weight:bold;
-
-color:#14d4d4;
-}
-
-/* PDF */
-
-.pdf-card{
-
-right:70px;
-
-top:340px;
-
-width:90px;
-
-height:110px;
-
-display:flex;
-
-flex-direction:column;
-
-justify-content:center;
-
-align-items:center;
-
-font-size:34px;
-
-opacity:.22;
-}
-
-.pdf-card span{
-
-font-size:22px;
-
-font-weight:bold;
-}
-
-/* Google */
-
-.google-card{
-
-left:90px;
-
-bottom:130px;
-
-width:80px;
-
-height:80px;
-
-display:flex;
-
-align-items:center;
-
-justify-content:center;
-
-font-size:48px;
-
-font-weight:bold;
-
-background:linear-gradient(
-45deg,
-#4285F4,
-#34A853,
-#FBBC05,
-#EA4335
-);
-
--webkit-background-clip:text;
-
--webkit-text-fill-color:transparent;
-
-opacity:.28;
-}
-
-/* Chat */
-
-.chat-card{
-
-left:140px;
-
-top:150px;
-
-width:70px;
-
-height:70px;
-
-display:flex;
-
-justify-content:center;
-
-align-items:center;
-
-font-size:34px;
-
-opacity:.28;
-}
-
-/* Chart */
-
-.chart-card{
-
-right:70px;
-
-bottom:120px;
-
-width:160px;
-
-height:110px;
-
-display:flex;
-
-justify-content:center;
-
-align-items:center;
-
-font-size:55px;
-
-opacity:.18;
-}
-
-</style>
-
-
-</head>
-
-<body>
-<!-- ========= BACKGROUND DECORATIONS ========= -->
-
-<div class="bg-wrapper">
-
-    <div class="floating-card review-card">
-        ★★★★★
-        <div class="review-lines"></div>
+{% extends "base_app.html" %}
+
+{% block title %}Review Assistant - ReviewGrow{% endblock %}
+{% block nav_assistant %}active{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Workspace / Review assistant</span>
+{% endblock %}
+
+{% block content %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">AI assistant</p>
+        <h1 class="rs-page-title">Review Assistant</h1>
+        <p class="rs-page-subtitle">Analyze a single customer review or generate a polished response for your team to use.</p>
     </div>
-
-    <div class="floating-card gauge-card">
-        <div class="gauge-circle"></div>
-        <div class="gauge-score">4.7</div>
-    </div>
-
-    <div class="floating-card pdf-card">
-        📄
-        <span>PDF</span>
-    </div>
-
-    <div class="floating-card google-card">
-        G
-    </div>
-
-    <div class="floating-card chat-card">
-        💬
-    </div>
-
-    <div class="floating-card chart-card">
-        📊
-    </div>
-
-    <div class="glow glow1"></div>
-    <div class="glow glow2"></div>
-
-</div>
-<nav>
-
-<a href="/" class="logo">
-    Review<span>Sense</span>
-</a>
-
-<div class="nav-links">
-
-    <a
-        href="/my-businesses"
-        class="btn-ghost"
-    >
+    <a href="/my-businesses" class="btn-ghost">
+        <i class="bi bi-building"></i>
         My Businesses
     </a>
-
-    <a
-        href="/logout"
-        class="btn-solid"
-    >
-        Logout
-    </a>
-
 </div>
 
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="rs-card rs-card-lg">
+            <form method="POST">
+                <div class="field">
+                    <label for="review_text">Customer review</label>
+                    <textarea id="review_text" name="review_text" class="form-control" rows="10" placeholder="Paste a customer review here..." required></textarea>
+                    <div class="form-hint">Use real customer wording for the most useful sentiment and reply output.</div>
+                </div>
 
-</nav>
-
-<div class="page-container">
-
-<div class="assistant-card">
-
-    <h1>
-        Review Assistant
-    </h1>
-
-    <p>
-        Analyze customer reviews and generate professional AI-powered replies.
-    </p>
-
-    <form method="POST">
-
-        <textarea
-            name="review_text"
-            placeholder="Paste a customer review here..."
-            required
-        ></textarea>
-
-        <div class="button-row">
-
-            <button
-                type="submit"
-                formaction="/review-assistant/analyze"
-                class="analyze-btn"
-            >
-                📊 Analyze Review
-            </button>
-
-            <button
-                type="submit"
-                formaction="/review-assistant/reply"
-                class="reply-btn"
-            >
-                🤖 Generate Reply
-            </button>
-
+                <div class="d-flex flex-column flex-sm-row gap-2 mt-3">
+                    <button type="submit" formaction="/review-assistant/analyze" class="analyze-btn">
+                        <i class="bi bi-graph-up"></i>
+                        Analyze Review
+                    </button>
+                    <button type="submit" formaction="/review-assistant/reply" class="reply-btn">
+                        <i class="bi bi-chat-dots"></i>
+                        Generate Reply
+                    </button>
+                </div>
+            </form>
         </div>
-
-    </form>
-
+    </div>
+    <div class="col-lg-5">
+        <div class="rs-card rs-card-lg h-100">
+            <div class="rs-kpi-icon"><i class="bi bi-magic"></i></div>
+            <h2 class="h5 fw-bold">AI response workflow</h2>
+            <p class="text-muted">Use analysis for internal triage and reply generation for public-facing response drafts.</p>
+            <div class="d-grid gap-3 mt-4">
+                <div class="p-3 rounded-4 bg-light">
+                    <strong>Analyze</strong>
+                    <p class="text-muted small mb-0">Sentiment, positives, issues, and short summary.</p>
+                </div>
+                <div class="p-3 rounded-4 bg-light">
+                    <strong>Reply</strong>
+                    <p class="text-muted small mb-0">Professional response text ready to copy.</p>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% if result %}
-
-<div class="result-card">
-
-    <h2>Result</h2>
-
-    <div class="sentiment-box" style="color:white;margin-bottom:15px;">
-
-        <strong>Sentiment:</strong>
+<div class="rs-card rs-card-lg mt-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <p class="rs-eyebrow">Generated reply</p>
+            <h2 class="h4 fw-bold mb-0">Suggested response</h2>
+        </div>
+        <span class="{% if sentiment|lower == 'positive' %}badge-soft-success{% elif sentiment|lower == 'negative' %}badge-soft-danger{% else %}badge-soft-warning{% endif %}">
             {{ sentiment }}
-
-
+        </span>
     </div>
 
-    <h3 style="color:white;margin-bottom:15px;">
-        Suggested Reply
-    </h3>
-
-    <div
-        id="replyContent"
-        style="
-            background:var(--surface2);
-            padding:20px;
-            border-radius:12px;
-            line-height:1.8;
-            color:var(--text);
-        "
-    >
+    <div id="replyContent" class="p-4 rounded-4 bg-light lh-lg text-muted">
         {{ reply }}
     </div>
 
-    <button
-        id="copyBtn"
-        class="copy-btn"
-        onclick="copyReply()"
-    >
-        📋 Copy Reply
+    <button id="copyBtn" class="copy-btn mt-3" onclick="copyReply()" data-loading="false">
+        <i class="bi bi-clipboard"></i>
+        Copy Reply
     </button>
-
 </div>
-
 {% endif %}
 
 {% if analysis_result %}
-
-<div class="result-card">
-
-    <h2>📊 Review Analysis</h2>
-
-    <div class="analysis-grid">
-
-        <div class="analysis-section">
-
-            <h3>Sentiment</h3>
-
-            <div class="sentiment-pill
-{% if sentiment|lower == 'positive' %}
-    sentiment-positive
-{% elif sentiment|lower == 'negative' %}
-    sentiment-negative
-{% else %}
-    sentiment-mixed
-{% endif %}
-">
-    {{ sentiment }}
-</div>
-
-<div style="margin-top:10px;color:var(--muted);">
-
-{% if sentiment|lower == 'positive' %}
-    Score: 90 / 100
-
-{% elif sentiment|lower == 'negative' %}
-    Score: 30 / 100
-
-{% else %}
-    Score: 65 / 100
-
-{% endif %}
-
-</div>
-
-            <div class="progress">
-
-                {% if sentiment|lower == 'positive' %}
-                    <div class="progress-bar positive-bar"></div>
-
-                {% elif sentiment|lower == 'negative' %}
-                    <div class="progress-bar negative-bar"></div>
-
-                {% else %}
-                    <div class="progress-bar mixed-bar"></div>
-                {% endif %}
-
-            </div>
-
+<div class="rs-card rs-card-lg mt-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <p class="rs-eyebrow">Review analysis</p>
+            <h2 class="h4 fw-bold mb-0">AI findings</h2>
         </div>
-
-        <div class="analysis-section">
-
-            <h3>✅ Top Positives</h3>
-
-            {% if positives %}
-            <ul>
-                {% for item in positives %}
-                <li>{{ item }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p>No major positives detected.</p>
-            {% endif %}
-
-        </div>
-
-        <div class="analysis-section">
-
-            <h3>⚠️ Top Issues</h3>
-
-            {% if issues %}
-            <ul>
-                {% for item in issues %}
-                <li>{{ item }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p>No major issues detected.</p>
-            {% endif %}
-
-        </div>
-
-<div class="analysis-section" style="grid-column:1 / -1;">
-
-    <h3>📝 Summary</h3>
-
-    <p>{{ summary }}</p>
-
-</div>
-
+        <span class="{% if sentiment|lower == 'positive' %}badge-soft-success{% elif sentiment|lower == 'negative' %}badge-soft-danger{% else %}badge-soft-warning{% endif %}">
+            {{ sentiment }}
+        </span>
     </div>
 
-
-{% endif %}
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="p-4 rounded-4 bg-light h-100">
+                <h3 class="h6 fw-bold mb-3"><i class="bi bi-check-circle text-success me-2"></i>Top Positives</h3>
+                {% if positives %}
+                <ul class="mb-0 text-muted">
+                    {% for item in positives %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No major positives detected.</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="p-4 rounded-4 bg-light h-100">
+                <h3 class="h6 fw-bold mb-3"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Top Issues</h3>
+                {% if issues %}
+                <ul class="mb-0 text-muted">
+                    {% for item in issues %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No major issues detected.</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-12">
+            <div class="p-4 rounded-4 bg-light">
+                <h3 class="h6 fw-bold mb-3"><i class="bi bi-card-text text-primary me-2"></i>Summary</h3>
+                <p class="text-muted mb-0">{{ summary }}</p>
+            </div>
+        </div>
+    </div>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
 <script>
-
 async function copyReply() {
-
     const replyText = document.getElementById("replyContent").innerText;
     const button = document.getElementById("copyBtn");
 
     try {
-
         await navigator.clipboard.writeText(replyText);
-
-        button.innerHTML = "✅ Copied";
+        button.innerHTML = "<i class='bi bi-check2'></i> Copied";
         button.disabled = true;
 
         setTimeout(() => {
-
-            button.innerHTML = "📋 Copy Reply";
+            button.innerHTML = "<i class='bi bi-clipboard'></i> Copy Reply";
             button.disabled = false;
-
         }, 2000);
-
     } catch (err) {
-
-        button.innerHTML = "❌ Failed";
+        button.innerHTML = "<i class='bi bi-x-circle'></i> Failed";
 
         setTimeout(() => {
-
-            button.innerHTML = "📋 Copy Reply";
-
+            button.innerHTML = "<i class='bi bi-clipboard'></i> Copy Reply";
         }, 2000);
-
     }
-
 }
-
 </script>
-
-
-</body>
-</html>
+{% endblock %}

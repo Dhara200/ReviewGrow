@@ -1,0 +1,479 @@
+{% extends "base_app.html" %}
+
+{% block title %}Live Dashboard - ReviewGrow{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block head %}
+<style>
+.live-hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 2fr);
+    gap: 1.5rem;
+    align-items: stretch;
+    margin-bottom: 1.5rem;
+}
+
+.live-hero-copy {
+    min-width: 0;
+}
+
+.live-overview-card {
+    min-height: 100%;
+}
+
+.live-dashboard-row {
+    align-items: flex-start;
+}
+
+.live-feed-card {
+    margin-top: .25rem;
+}
+
+.live-dashboard-row .rs-card:not(.position-sticky),
+.live-overview-card {
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.live-dashboard-row .rs-card:not(.position-sticky):hover,
+.live-overview-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(37, 99, 235, .28);
+    box-shadow: 0 16px 36px rgba(15, 23, 42, .08);
+}
+
+.live-performance-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(130px, 1fr)) auto;
+    gap: .75rem;
+    align-items: end;
+}
+
+.live-performance-section {
+    margin-top: .25rem;
+}
+
+@media (max-width: 991.98px) {
+    .live-hero-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .live-performance-form {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% macro metric_value(value) -%}
+    {% if value is not none %}
+        {{ value }}
+    {% else %}
+        <span class="text-muted">Not available</span>
+    {% endif %}
+{%- endmacro %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Workspace / {{ business.business_name if business else "Business" }} / Live Dashboard</span>
+{% endblock %}
+
+{% block topbar_actions %}
+{% if connection and active_tab == "reviews" and not needs_location %}
+<form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews" class="d-inline">
+    <button type="submit" class="btn-solid">
+        <i class="bi bi-arrow-repeat"></i>
+        Sync Reviews
+    </button>
+</form>
+{% elif connection and active_tab == "performance" and not needs_location %}
+<form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="d-inline">
+    <input type="hidden" name="start_date" value="{{ performance_start }}">
+    <input type="hidden" name="end_date" value="{{ performance_end }}">
+    <button type="submit" class="btn-solid">
+        <i class="bi bi-activity"></i>
+        Sync Performance
+    </button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if connection and active_tab in ["reviews", "performance"] %}
+<div class="live-hero-grid">
+    <div class="rs-page-header mb-0">
+        <div class="live-hero-copy">
+            <p class="rs-eyebrow">Google Business Profile</p>
+            <h1 class="rs-page-title">{{ business.business_name if business else "Live Dashboard" }}</h1>
+            <p class="rs-page-subtitle">Live Google reviews and Business Profile performance intelligence for your connected location.</p>
+        </div>
+        <a href="/my-businesses" class="btn-ghost">
+            <i class="bi bi-arrow-left"></i>
+            Businesses
+        </a>
+    </div>
+
+    <div class="rs-card rs-card-lg live-overview-card">
+        {% if active_tab == "performance" %}
+        <div class="row g-4 align-items-center h-100">
+            <div class="col-xl-5">
+                <p class="rs-eyebrow">Performance Analysis</p>
+                <h2 class="h4 fw-bold mb-1">Google Business Profile performance</h2>
+                <p class="text-muted mb-0">
+                    Last synced:
+                    {% if performance and performance.last_synced_at %}
+                        {{ performance.last_synced_at }}
+                    {% else %}
+                        Not synced yet
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-xl-7">
+                {% if needs_location %}
+                <div class="text-xl-end">
+                    <a href="/businesses/{{ business_id }}/google/select-location" class="btn-solid">
+                        <i class="bi bi-geo-alt"></i>
+                        Select Location
+                    </a>
+                </div>
+                {% else %}
+                <form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="live-performance-form">
+                    <div>
+                        <label class="form-label small fw-bold" for="hero_start_date">Start</label>
+                        <input id="hero_start_date" class="form-control" type="date" name="start_date" value="{{ performance_start }}" required>
+                    </div>
+                    <div>
+                        <label class="form-label small fw-bold" for="hero_end_date">End</label>
+                        <input id="hero_end_date" class="form-control" type="date" name="end_date" value="{{ performance_end }}" required>
+                    </div>
+                    <button type="submit" class="btn-solid">
+                        <i class="bi bi-arrow-repeat"></i>
+                        Sync Performance
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="row g-4 align-items-center h-100">
+            <div class="col-lg-8">
+                <p class="rs-eyebrow">Live Reviews</p>
+                <h2 class="h4 fw-bold mb-1">{{ connection.google_location_name or "Location not selected" }}</h2>
+                <p class="text-muted mb-0">
+                    Last sync:
+                    {% if connection.last_sync_at %}
+                        {{ connection.last_sync_at }}
+                    {% else %}
+                        Not synced yet
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-lg-4 text-lg-end">
+                {% if needs_location %}
+                <a href="/businesses/{{ business_id }}/google/select-location" class="btn-solid">
+                    <i class="bi bi-geo-alt"></i>
+                    Select Location
+                </a>
+                {% else %}
+                <form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews">
+                    <button type="submit" class="btn-solid">
+                        <i class="bi bi-arrow-repeat"></i>
+                        Sync Reviews
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">Google Business Profile</p>
+        <h1 class="rs-page-title">{{ business.business_name if business else "Live Dashboard" }}</h1>
+        <p class="rs-page-subtitle">Live Google reviews and Business Profile performance intelligence for your connected location.</p>
+    </div>
+    <a href="/my-businesses" class="btn-ghost">
+        <i class="bi bi-arrow-left"></i>
+        Businesses
+    </a>
+</div>
+{% endif %}
+
+{% if not connection %}
+<div class="rs-card rs-card-lg text-center py-5">
+    <div class="rs-kpi-icon mx-auto"><i class="bi bi-google"></i></div>
+    <h2 class="h4 fw-bold">Google Business Profile is not connected</h2>
+    <p class="text-muted mb-4">Connect Google Business Profile to sync reviews and performance metrics.</p>
+    <a href="/auth/google/start/{{ business_id }}" class="btn-solid">
+        <i class="bi bi-google"></i>
+        Connect Google Business Profile
+    </a>
+</div>
+{% else %}
+{% set total_reviews = stats.total_reviews or 0 %}
+{% set average_rating = stats.average_rating or 0 %}
+{% set positive_reviews = stats.positive_reviews or 0 %}
+{% set neutral_reviews = stats.neutral_reviews or 0 %}
+{% set negative_reviews = stats.negative_reviews or 0 %}
+{% set perf = performance.summary if performance else {} %}
+
+<div class="row g-4 live-dashboard-row">
+    <div class="col-lg-3">
+        <div class="rs-card rs-card-lg position-sticky" style="top: calc(var(--rs-topbar) + 1rem);">
+            <span class="badge-soft-success mb-3">
+                <i class="bi bi-check-circle"></i>
+                Connected
+            </span>
+            <h2 class="h6 fw-bold mb-1">
+                {{ connection.google_location_name or "Location not selected" }}
+            </h2>
+            <p class="text-muted small mb-4">
+                {% if connection.google_account_email %}
+                    Google account: {{ connection.google_account_email }}<br>
+                {% endif %}
+                Last review sync:
+                {% if connection.last_sync_at %}
+                    {{ connection.last_sync_at }}
+                {% else %}
+                    Not synced yet
+                {% endif %}
+            </p>
+
+            {% if needs_location %}
+            <a href="/businesses/{{ business_id }}/google/select-location" class="btn-solid w-100 mb-3">
+                <i class="bi bi-geo-alt"></i>
+                Select Location
+            </a>
+            {% endif %}
+
+            <div class="d-grid gap-2">
+                <a href="/businesses/{{ business_id }}/live-dashboard?tab=reviews" class="rs-nav-link {% if active_tab == 'reviews' %}active{% endif %}">
+                    <i class="bi bi-chat-square-text"></i>
+                    Live Reviews
+                </a>
+                <a href="/businesses/{{ business_id }}/live-dashboard?tab=performance" class="rs-nav-link {% if active_tab == 'performance' %}active{% endif %}">
+                    <i class="bi bi-activity"></i>
+                    Performance Analysis
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-9">
+        {% if active_tab == "performance" %}
+        <div class="rs-kpi-grid mb-4">
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-eye"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.business_profile_views) }}</p>
+                <p class="rs-kpi-label">Business profile views</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-search"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.search_views) }}</p>
+                <p class="rs-kpi-label">Views from Search</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-map"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.maps_views) }}</p>
+                <p class="rs-kpi-label">Views from Maps</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon" style="background:var(--rs-accent-soft);color:var(--rs-accent);"><i class="bi bi-globe2"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.website_clicks) }}</p>
+                <p class="rs-kpi-label">Website clicks</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-telephone"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.phone_calls) }}</p>
+                <p class="rs-kpi-label">Phone calls</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-signpost-2"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.direction_requests) }}</p>
+                <p class="rs-kpi-label">Direction requests</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-calendar-check"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.bookings) }}</p>
+                <p class="rs-kpi-label">Bookings</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-chat-dots"></i></div>
+                <p class="rs-kpi-value">{{ metric_value(perf.messages) }}</p>
+                <p class="rs-kpi-label">Messages</p>
+            </div>
+        </div>
+        {% else %}
+        <div class="rs-kpi-grid mb-4">
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-chat-square-text"></i></div>
+                <p class="rs-kpi-value">{{ total_reviews }}</p>
+                <p class="rs-kpi-label">Total Google reviews</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon"><i class="bi bi-star"></i></div>
+                <p class="rs-kpi-value">{{ "%.1f"|format(average_rating) }}</p>
+                <p class="rs-kpi-label">Average rating</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon" style="background:var(--rs-accent-soft);color:var(--rs-accent);"><i class="bi bi-emoji-smile"></i></div>
+                <p class="rs-kpi-value">{{ positive_reviews }}</p>
+                <p class="rs-kpi-label">Positive reviews</p>
+            </div>
+            <div class="rs-card rs-kpi">
+                <div class="rs-kpi-icon" style="background:#fef2f2;color:var(--rs-danger);"><i class="bi bi-emoji-frown"></i></div>
+                <p class="rs-kpi-value">{{ negative_reviews }}</p>
+                <p class="rs-kpi-label">Negative reviews</p>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="rs-card rs-card-lg h-100">
+                    <p class="rs-eyebrow">AI sentiment summary</p>
+                    <h2 class="h5 fw-bold">Google review signal</h2>
+                    <p class="text-muted mb-0">
+                        ReviewGrow has analyzed {{ positive_reviews + neutral_reviews + negative_reviews }} Google reviews:
+                        {{ positive_reviews }} positive, {{ neutral_reviews }} neutral, and {{ negative_reviews }} negative.
+                    </p>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="rs-card rs-card-lg h-100">
+                    <p class="rs-eyebrow">AI suggestions</p>
+                    {% if negative_reviews %}
+                    <p class="text-muted mb-0">Prioritize recent negative Google reviews, look for repeat issues, and use the Review Assistant before publishing replies.</p>
+                    {% else %}
+                    <p class="text-muted mb-0">Maintain response consistency, thank happy customers, and continue syncing reviews regularly.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% endif %}
+    </div>
+    {% if active_tab == "performance" %}
+    <div class="col-12">
+        <div class="rs-card rs-card-lg live-performance-section mb-4">
+            <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+                <div>
+                    <p class="rs-eyebrow">Chart data</p>
+                    <h2 class="h5 fw-bold mb-0">Performance trend</h2>
+                </div>
+                <span class="badge-soft-primary">{{ performance_start }} to {{ performance_end }}</span>
+            </div>
+            <script type="application/json" id="performanceChartData">
+                {{ (performance.chart_data if performance else [])|tojson }}
+            </script>
+            <p class="text-muted mb-0">Chart-ready JSON is embedded for this period and the trend table below uses the same data.</p>
+        </div>
+
+        <div class="rs-card rs-card-lg live-performance-section">
+            <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+                <div>
+                    <p class="rs-eyebrow">Trend table</p>
+                    <h2 class="h5 fw-bold mb-0">Daily performance</h2>
+                </div>
+            </div>
+            {% if performance and performance.trend_rows %}
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Search</th>
+                            <th>Maps</th>
+                            <th>Website</th>
+                            <th>Calls</th>
+                            <th>Directions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in performance.trend_rows %}
+                        <tr>
+                            <td class="fw-semibold">{{ row.metric_date }}</td>
+                            <td>{{ metric_value(row.search_views) }}</td>
+                            <td>{{ metric_value(row.maps_views) }}</td>
+                            <td>{{ metric_value(row.website_clicks) }}</td>
+                            <td>{{ metric_value(row.phone_calls) }}</td>
+                            <td>{{ metric_value(row.direction_requests) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No performance data synced yet. Choose a date range and click Sync Performance.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% if active_tab == "reviews" %}
+    <div class="col-12">
+        <div class="rs-card rs-card-lg live-feed-card">
+            <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+                <div>
+                    <p class="rs-eyebrow">Latest Google reviews</p>
+                    <h2 class="h5 fw-bold mb-0">Review feed</h2>
+                </div>
+                {% if needs_location %}
+                <a href="/businesses/{{ business_id }}/google/select-location" class="btn-ghost">
+                    <i class="bi bi-geo-alt"></i>
+                    Select Location
+                </a>
+                {% else %}
+                <form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews">
+                    <button type="submit" class="btn-ghost">
+                        <i class="bi bi-arrow-repeat"></i>
+                        Analyze / Sync again
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+            {% if reviews %}
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Reviewer</th>
+                            <th>Rating</th>
+                            <th>Review</th>
+                            <th>Sentiment</th>
+                            <th>Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for review in reviews %}
+                        <tr>
+                            <td class="fw-semibold">{{ review.reviewer_name }}</td>
+                            <td>{{ review.rating or "-" }}</td>
+                            <td style="min-width:280px;">{{ review.review_text }}</td>
+                            <td>
+                                {% if review.sentiment == "Positive" %}
+                                <span class="badge-soft-success">Positive</span>
+                                {% elif review.sentiment == "Negative" %}
+                                <span class="badge-soft-danger">Negative</span>
+                                {% elif review.sentiment == "Neutral" %}
+                                <span class="badge-soft-warning">Neutral</span>
+                                {% else %}
+                                <span class="badge-soft-primary">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ review.review_updated_at or review.review_created_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No Google reviews synced yet. Click Sync Reviews to import the latest reviews.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

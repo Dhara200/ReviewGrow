@@ -1,12 +1,8 @@
-import json
-import re
-import google.generativeai as genai
-from app.config import Config
+from app.services.ai_service import AIService, _extract_json
 
 
-genai.configure(api_key=Config.GEMINI_API_KEY)
-
-model = genai.GenerativeModel("gemini-2.5-flash")
+_ai_service = AIService()
+model = _ai_service.model
 
 
 def analyze_reviews(review_texts):
@@ -16,8 +12,8 @@ def analyze_reviews(review_texts):
     prompt = f"""
 Analyze these customer reviews.
 
-
 Provide:
+
 1. Summary
 2. Top praises
 3. Top complaints
@@ -30,20 +26,10 @@ Format:
 
 {{
     "summary": "...",
-    "top_praises": [
-        "...",
-        "..."
-    ],
-    "top_complaints": [
-        "...",
-        "..."
-    ],
-    "recommendations": [
-        "...",
-        "...",
-        "..."
-    ],
-    "sentiment_score": 0-100
+    "top_praises": ["..."],
+    "top_complaints": ["..."],
+    "recommendations": ["..."],
+    "sentiment_score": 85
 }}
 
 Reviews:
@@ -51,29 +37,24 @@ Reviews:
 {combined_reviews}
 """
 
-    response = model.generate_content(prompt)
+    result = _ai_service.generate_json(prompt, "business_report")
+    data = result.data
 
-    response_text = response.text.strip()
+    return {
+        "summary": data.get("summary", ""),
+        "top_praises": data.get("top_praises", []),
+        "top_complaints": data.get("top_complaints", []),
+        "recommendations": data.get("recommendations", []),
+        "sentiment_score": data.get("sentiment_score", 0)
+    }
 
-    match = re.search(
-        r"\{.*\}",
-        response_text,
-        re.DOTALL
-    )
-
-    if not match:
-        raise Exception(
-            f"No JSON found in Gemini response: {response_text}"
-        )
-
-    return json.loads(match.group())
 def analyze_review_and_save(
     cursor,
     review_id,
     review_text
 ):
 
-    analysis = analyze_review(review_text)
+    analysis = analyze_single_review(review_text)
 
     cursor.execute(
         """
@@ -96,10 +77,10 @@ def analyze_review_and_save(
 
     return analysis
 
-def analyze_review(review_text):
+def analyze_single_review(review_text):
 
     prompt = f"""
-Analyze the following customer review.
+Analyze this customer review.
 
 Return ONLY valid JSON.
 
@@ -116,57 +97,11 @@ Review:
 {review_text}
 """
 
-    response = model.generate_content(prompt)
+    result = _ai_service.generate_json(prompt, "single_review_analysis")
+    data = result.data
 
-    response_text = response.text.strip()
-
-    match = re.search(
-        r"\{.*\}",
-        response_text,
-        re.DOTALL
-    )
-
-    if not match:
-        raise Exception(
-            f"No JSON found in Gemini response: {response_text}"
-        )
-
-    return json.loads(match.group())
-
-def analyze_single_review(review_text):
-
-    prompt = f"""
-Analyze this customer review.
-
-Return ONLY valid JSON.
-
-Format:
-
-{{
-    "sentiment": "Positive | Neutral | Negative",
-    "summary": "...",
-    "reply": "..."
-}}
-
-Review:
-
-{review_text}
-"""
-
-    response = model.generate_content(prompt)
-
-    response_text = response.text.strip()
-
-    match = re.search(
-        r"\{.*\}",
-        response_text,
-        re.DOTALL
-    )
-
-    if not match:
-
-        raise Exception(
-            f"No JSON found in Gemini response: {response_text}"
-        )
-
-    return json.loads(match.group())
+    return {
+        "summary": data.get("summary", ""),
+        "sentiment": data.get("sentiment", "Neutral"),
+        "ai_reply": data.get("ai_reply", "")
+    }

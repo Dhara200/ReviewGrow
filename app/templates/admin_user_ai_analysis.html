@@ -1,0 +1,159 @@
+{% extends "base_app.html" %}
+
+{% block title %}User AI Analysis - ReviewGrow{% endblock %}
+{% block nav_admin_ai_analysis %}active{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Admin / AI Analysis / {{ user.name }}</span>
+{% endblock %}
+
+{% block content %}
+{% macro status_badge(status) -%}
+    {% set normalized = (status or "")|lower %}
+    <span class="{% if normalized in ['completed', 'success', 'active'] %}badge-soft-success{% elif normalized in ['pending', 'processing'] %}badge-soft-warning{% elif normalized in ['failed', 'rejected'] %}badge-soft-danger{% else %}badge-soft-primary{% endif %}">
+        {{ status or "No jobs" }}
+    </span>
+{%- endmacro %}
+
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">User AI Analysis</p>
+        <h1 class="rs-page-title">{{ user.name }}</h1>
+        <p class="rs-page-subtitle">{{ user.email }} - {{ user.role }} account created {{ user.created_at }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/admin/ai-analysis?month={{ filters.month }}" class="btn-ghost">
+            <i class="bi bi-arrow-left"></i>
+            AI Analysis
+        </a>
+        <a href="/admin/users/{{ user.id }}" class="btn-ghost">
+            <i class="bi bi-person"></i>
+            User profile
+        </a>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg mb-4">
+    <form method="GET" action="/admin/users/{{ user.id }}/ai-analysis" class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label" for="month">Month</label>
+            <input id="month" class="form-control" type="month" name="month" value="{{ filters.month }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="business_id">Business</label>
+            <select id="business_id" class="form-select" name="business_id">
+                <option value="">All businesses</option>
+                {% for business in options.businesses %}
+                    {% if business.user_id == user.id %}
+                    <option value="{{ business.id }}" {% if filters.business_id == business.id %}selected{% endif %}>
+                        {{ business.business_name }}
+                    </option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="provider">Provider</label>
+            <select id="provider" class="form-select" name="provider">
+                <option value="">All providers</option>
+                {% for provider in options.providers %}
+                <option value="{{ provider }}" {% if filters.provider == provider %}selected{% endif %}>{{ provider }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="model">Model</label>
+            <select id="model" class="form-select" name="model">
+                <option value="">All models</option>
+                {% for model in options.models %}
+                <option value="{{ model }}" {% if filters.model == model %}selected{% endif %}>{{ model }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 d-flex flex-wrap gap-2">
+            <button type="submit" class="btn-solid">
+                <i class="bi bi-funnel"></i>
+                Apply filters
+            </button>
+            <a href="/admin/users/{{ user.id }}/ai-analysis" class="btn-ghost">
+                <i class="bi bi-x-circle"></i>
+                Clear
+            </a>
+        </div>
+    </form>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="rs-card h-100">
+            <p class="rs-eyebrow">User information</p>
+            <h2 class="h5 fw-bold mb-3">{{ user.name }}</h2>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Email</span>
+                <span class="fw-semibold text-end">{{ user.email }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3 mb-2">
+                <span class="text-muted">Role</span>
+                <span class="fw-semibold text-end">{{ user.role }}</span>
+            </div>
+            <div class="d-flex justify-content-between gap-3">
+                <span class="text-muted">Joined</span>
+                <span class="fw-semibold text-end">{{ user.created_at }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="rs-card h-100">
+            <p class="rs-eyebrow">Businesses owned</p>
+            <h2 class="h5 fw-bold mb-3">{{ businesses|length }} businesses in this view</h2>
+            <p class="text-muted mb-0">Business-level AI usage below is filtered to {{ filters.month }} and includes provider/model filters when selected.</p>
+        </div>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg">
+    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+        <div>
+            <p class="rs-eyebrow">Business analysis</p>
+            <h2 class="h5 fw-bold mb-0">AI usage per business</h2>
+        </div>
+        <span class="badge-soft-primary">{{ filters.month }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Business Name</th>
+                    <th>Business Type</th>
+                    <th>Current Month Requests</th>
+                    <th>Current Month Tokens</th>
+                    <th>Current Month Cost</th>
+                    <th>Reviews Analyzed</th>
+                    <th>Failed Requests</th>
+                    <th>Latest Job Status</th>
+                    <th>Last Analysis Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for business in businesses %}
+                <tr>
+                    <td class="fw-semibold">{{ business.business_name }}</td>
+                    <td><span class="badge-soft-primary">{{ business.business_type or "-" }}</span></td>
+                    <td>{{ business.current_month_requests or 0 }}</td>
+                    <td>{{ business.current_month_tokens or 0 }}</td>
+                    <td>${{ "%.4f"|format(business.current_month_estimated_cost or 0) }}</td>
+                    <td>{{ business.reviews_analyzed or 0 }}</td>
+                    <td>{{ business.failed_requests or 0 }}</td>
+                    <td>{{ status_badge(business.latest_job_status) }}</td>
+                    <td>{{ business.last_analysis_date or "-" }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-5">No businesses or AI usage found for these filters.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
