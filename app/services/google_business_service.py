@@ -13,6 +13,12 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 ACCOUNT_MANAGEMENT_BASE_URL = "https://mybusinessaccountmanagement.googleapis.com/v1"
 BUSINESS_INFORMATION_BASE_URL = "https://mybusinessbusinessinformation.googleapis.com/v1"
 REVIEWS_BASE_URL = "https://mybusiness.googleapis.com/v4"
+REQUIRED_GOOGLE_OAUTH_SCOPES = [
+    "openid",
+    "email",
+    "profile",
+    "https://www.googleapis.com/auth/business.manage"
+]
 logger = logging.getLogger(__name__)
 
 
@@ -102,7 +108,14 @@ def _retry_after_seconds(response):
 
 
 def _scope_value():
-    return Config.GOOGLE_SCOPES or "https://www.googleapis.com/auth/business.manage"
+    configured_scopes = (Config.GOOGLE_SCOPES or "").split()
+    scopes = []
+
+    for scope in [*REQUIRED_GOOGLE_OAUTH_SCOPES, *configured_scopes]:
+        if scope and scope not in scopes:
+            scopes.append(scope)
+
+    return " ".join(scopes)
 
 
 def is_google_configured():
@@ -165,7 +178,7 @@ def exchange_code_for_tokens(code):
     return data
 
 
-def fetch_google_account_email(access_token):
+def fetch_google_account_profile(access_token):
     response = requests.get(
         "https://www.googleapis.com/oauth2/v3/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
@@ -173,10 +186,27 @@ def fetch_google_account_email(access_token):
     )
 
     if not response.ok:
-        return None
+        logger.warning(
+            "Google OAuth userinfo request failed: status=%s",
+            response.status_code
+        )
+        return {}
 
     data = response.json()
-    return data.get("email")
+    logger.info(
+        "Google OAuth userinfo returned keys: %s",
+        sorted(data.keys())
+    )
+
+    return {
+        "email": data.get("email"),
+        "email_verified": data.get("email_verified"),
+        "google_oauth_account_id": data.get("sub")
+    }
+
+
+def fetch_google_account_email(access_token):
+    return fetch_google_account_profile(access_token).get("email")
 
 
 def refresh_access_token(refresh_token):
@@ -257,6 +287,34 @@ def api_get(access_token, url, params=None):
             body
         )
         raise GoogleBusinessError(_api_error_message(response))
+
+    return response.json()
+
+
+def api_put(access_token, url, payload=None):
+    response = requests.put(
+        url,
+        json=payload or {},
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=30
+    )
+
+    if response.status_code == 429:
+        raise GoogleQuotaError(_quota_error_message(response))
+
+    if not response.ok:
+        error, body = _google_error_payload(response)
+        logger.warning(
+            "Google Business Profile API PUT failed: status=%s google_status=%s url=%s error=%s",
+            response.status_code,
+            error.get("status"),
+            _safe_url(response.url),
+            body
+        )
+        raise GoogleBusinessError(_api_error_message(response))
+
+    if not response.text:
+        return {}
 
     return response.json()
 
@@ -370,3 +428,12 @@ def list_reviews(access_token, account_id, location_id):
             break
 
     return reviews
+
+
+def post_review_reply(access_token, account_id, location_id, google_review_id, reply_text):
+    parent = review_parent(account_id, location_id)
+    return api_put(
+        access_token,
+        f"{REVIEWS_BASE_URL}/{parent}/reviews/{google_review_id}/reply",
+        payload={"comment": reply_text}
+    )

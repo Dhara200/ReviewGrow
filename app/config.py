@@ -17,7 +17,7 @@ class Config:
     GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
     GOOGLE_SCOPES = os.getenv(
         "GOOGLE_SCOPES",
-        "https://www.googleapis.com/auth/business.manage"
+        "openid email profile https://www.googleapis.com/auth/business.manage"
     )
 
     UPI_ID = os.getenv("UPI_ID", "dharaprasath52@okhdfcbank")

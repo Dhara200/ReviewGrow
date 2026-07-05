@@ -93,10 +93,11 @@ def upload_reviews_ui():
                     review_text,
                     reviewer_name,
                     review_date,
+                    source_platform,
                     analysis_status
                 )
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s)
+                (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     business_id,
@@ -106,6 +107,7 @@ def upload_reviews_ui():
                     review["review_text"],
                     review["reviewer_name"],
                     review["review_date"],
+                    review["source"],
                     "pending"
                 )
             )

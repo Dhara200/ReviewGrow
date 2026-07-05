@@ -223,6 +223,25 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
         if not job:
             return
 
+        cursor.execute(
+            """
+            SELECT
+                business_name,
+                business_type,
+                city,
+                state,
+                country,
+                use_reviewer_name,
+                reply_tone,
+                max_reply_words,
+                auto_generate_replies_for_new_reviews
+            FROM businesses
+            WHERE id=%s
+            """,
+            (job["business_id"],)
+        )
+        business = cursor.fetchone() or {}
+
         while True:
             review_filter = """
                 r.business_id=%s
@@ -238,6 +257,7 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
                     r.id,
                     r.source,
                     r.rating,
+                    r.reviewer_name,
                     r.review_text
                 FROM reviews r
                 WHERE {review_filter}
@@ -252,9 +272,20 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
                 break
 
             try:
-                result = ai_service.analyze_review_batch(reviews)
+                result = ai_service.analyze_review_batch(
+                    reviews,
+                    business=business,
+                    settings=business
+                )
                 log_ai_usage(cursor, job["user_id"], job["business_id"], result)
-                _save_batch_results(cursor, reviews, result.data.get("reviews", []))
+                _save_batch_results(
+                    cursor,
+                    reviews,
+                    result.data.get("reviews", []),
+                    auto_generate_replies=bool(
+                        business.get("auto_generate_replies_for_new_reviews", True)
+                    )
+                )
                 conn.commit()
             except AIServiceError as error:
                 failed_result = error.result or AIResult(
@@ -308,7 +339,7 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
         conn.close()
 
 
-def _save_batch_results(cursor, reviews, analysis_rows):
+def _save_batch_results(cursor, reviews, analysis_rows, auto_generate_replies=True):
     rows_by_id = {
         int(row.get("review_id")): row
         for row in analysis_rows
@@ -329,6 +360,7 @@ def _save_batch_results(cursor, reviews, analysis_rows):
             )
             continue
 
+        suggested_reply = row.get("suggested_reply", "") if auto_generate_replies else None
         cursor.execute(
             """
             UPDATE reviews
@@ -339,6 +371,9 @@ def _save_batch_results(cursor, reviews, analysis_rows):
                 summary=%s,
                 suggested_reply=%s,
                 ai_reply=%s,
+                reply_status='pending',
+                reply_generated_at=CASE WHEN %s THEN NOW() ELSE reply_generated_at END,
+                reply_error_message=NULL,
                 confidence_score=%s,
                 analysis_status='analyzed',
                 analysis_error=NULL,
@@ -350,8 +385,9 @@ def _save_batch_results(cursor, reviews, analysis_rows):
                 row.get("category", "other"),
                 row.get("theme", ""),
                 row.get("summary", ""),
-                row.get("suggested_reply", ""),
-                row.get("suggested_reply", ""),
+                suggested_reply,
+                suggested_reply,
+                auto_generate_replies,
                 row.get("confidence_score", 0),
                 review["id"],
             )

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from flask import Flask
 from app.services.database_service import get_connection, ensure_mvp_schema
 from app.routes.auth import auth_bp
@@ -30,6 +32,31 @@ try:
 except Exception as e:
     print(f"Schema check skipped: {e}")
 
+
+def get_landing_hero_images():
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".avif"}
+    image_root = Path(app.root_path) / "static" / "images"
+    candidates = []
+
+    for folder in (image_root / "landing", image_root):
+        if not folder.exists():
+            continue
+
+        for image_path in sorted(folder.iterdir()):
+            if not image_path.is_file():
+                continue
+            if image_path.suffix.lower() not in allowed_extensions:
+                continue
+            if image_path.name.lower().startswith("logo"):
+                continue
+
+            candidates.append(image_path.relative_to(image_root.parent).as_posix())
+
+        if candidates:
+            break
+
+    return candidates[:4]
+
 @app.route("/")
 def home():
     if "user_id" in session:
@@ -39,7 +66,8 @@ def home():
         )
 
     return render_template(
-        "index.html"
+        "index.html",
+        landing_hero_images=get_landing_hero_images()
     )
 
 

@@ -114,7 +114,8 @@ def my_businesses():
             SELECT
                 b.*,
                 gbc.is_connected AS google_is_connected,
-                gbc.google_location_name
+                gbc.google_location_name,
+                COALESCE(gbc.google_email, gbc.google_account_email) AS google_email
             FROM businesses b
             LEFT JOIN google_business_connections gbc
                 ON gbc.business_id = b.id

@@ -12,6 +12,12 @@
         <p class="rs-eyebrow">Google Business Profile</p>
         <h1 class="rs-page-title">Select a location</h1>
         <p class="rs-page-subtitle">Choose which Google Business Profile location should be connected to this ReviewGrow business.</p>
+        {% if admin_override_active %}
+        <span class="badge-soft-warning mt-3">
+            <i class="bi bi-shield-check"></i>
+            Admin Override Active
+        </span>
+        {% endif %}
     </div>
 </div>
 

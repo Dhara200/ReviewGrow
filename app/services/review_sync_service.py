@@ -35,12 +35,22 @@ def _review_text(review):
 
 def _reviewer_name(review):
     reviewer = review.get("reviewer") or {}
-    return reviewer.get("displayName") or "Google User"
+    return (reviewer.get("displayName") or "").strip()
 
 
 def _rating_value(review):
     value = review.get("starRating")
     return STAR_RATING_MAP.get(value)
+
+
+def _google_review_id(review):
+    review_id = review.get("reviewId")
+
+    if review_id:
+        return review_id
+
+    name = review.get("name") or ""
+    return name.rstrip("/").split("/")[-1] if name else None
 
 
 def sync_google_reviews(cursor, connection):
@@ -60,9 +70,10 @@ def sync_google_reviews(cursor, connection):
     updated_count = 0
 
     for review in google_reviews:
-        external_review_id = review.get("reviewId") or review.get("name")
+        google_review_id = _google_review_id(review)
+        external_review_id = google_review_id
 
-        if not external_review_id:
+        if not google_review_id:
             continue
 
         rating = _rating_value(review)
@@ -76,12 +87,18 @@ def sync_google_reviews(cursor, connection):
             SELECT id, review_text, rating, review_updated_at
             FROM reviews
             WHERE business_id=%s
-            AND source='google'
-            AND external_review_id=%s
-            AND google_location_id=%s
+            AND (
+                google_review_id=%s
+                OR (
+                    google_review_id IS NULL
+                    AND external_review_id=%s
+                    AND google_location_id=%s
+                )
+            )
             """,
             (
                 connection["business_id"],
+                google_review_id,
                 external_review_id,
                 google_location_id
             )
@@ -90,35 +107,110 @@ def sync_google_reviews(cursor, connection):
         existing = cursor.fetchone()
 
         if existing:
-            cursor.execute(
-                """
-                UPDATE reviews
-                SET
-                    rating=%s,
-                    review_rating=%s,
-                    review_text=%s,
-                    reviewer_name=%s,
-                    review_date=%s,
-                    review_created_at=%s,
-                    review_updated_at=%s,
-                    google_location_id=%s,
-                    analysis_status='pending'
-                WHERE id=%s
-                """,
-                (
-                    rating,
-                    rating,
-                    text,
-                    reviewer_name,
-                    create_time,
-                    create_time,
-                    update_time,
-                    google_location_id,
-                    existing["id"]
+            text_changed = (existing.get("review_text") or "") != (text or "")
+            rating_changed = str(existing.get("rating") or "") != str(rating or "")
+
+            if text_changed:
+                cursor.execute(
+                    """
+                    UPDATE reviews
+                    SET
+                        rating=%s,
+                        review_rating=%s,
+                        review_text=%s,
+                        reviewer_name=%s,
+                        review_date=%s,
+                        review_created_at=%s,
+                        review_updated_at=%s,
+                        external_review_id=%s,
+                        google_review_id=%s,
+                        google_location_id=%s,
+                        source='google',
+                        source_platform='google',
+                        analysis_status='pending',
+                        suggested_reply=NULL,
+                        ai_reply=NULL,
+                        reply_status='pending',
+                        reply_generated_at=NULL,
+                        reply_posted_at=NULL,
+                        reply_error_message=NULL
+                    WHERE id=%s
+                    """,
+                    (
+                        rating,
+                        rating,
+                        text,
+                        reviewer_name,
+                        create_time,
+                        create_time,
+                        update_time,
+                        external_review_id,
+                        google_review_id,
+                        google_location_id,
+                        existing["id"]
+                    )
                 )
-            )
+                updated_count += 1
+            elif rating_changed:
+                cursor.execute(
+                    """
+                    UPDATE reviews
+                    SET
+                        rating=%s,
+                        review_rating=%s,
+                        reviewer_name=%s,
+                        review_date=%s,
+                        review_created_at=%s,
+                        review_updated_at=%s,
+                        external_review_id=%s,
+                        google_review_id=%s,
+                        google_location_id=%s,
+                        source='google',
+                        source_platform='google'
+                    WHERE id=%s
+                    """,
+                    (
+                        rating,
+                        rating,
+                        reviewer_name,
+                        create_time,
+                        create_time,
+                        update_time,
+                        external_review_id,
+                        google_review_id,
+                        google_location_id,
+                        existing["id"]
+                    )
+                )
+                updated_count += 1
+            else:
+                cursor.execute(
+                    """
+                    UPDATE reviews
+                    SET
+                        reviewer_name=%s,
+                        review_date=%s,
+                        review_created_at=%s,
+                        review_updated_at=%s,
+                        external_review_id=%s,
+                        google_review_id=%s,
+                        google_location_id=%s,
+                        source='google',
+                        source_platform='google'
+                    WHERE id=%s
+                    """,
+                    (
+                        reviewer_name,
+                        create_time,
+                        create_time,
+                        update_time,
+                        external_review_id,
+                        google_review_id,
+                        google_location_id,
+                        existing["id"]
+                    )
+                )
             review_id = existing["id"]
-            updated_count += 1
         else:
             cursor.execute(
                 """
@@ -135,11 +227,14 @@ def sync_google_reviews(cursor, connection):
                     review_created_at,
                     review_updated_at,
                     external_review_id,
+                    google_review_id,
                     google_location_id,
+                    source_platform,
+                    reply_status,
                     analysis_status
                 )
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     connection["business_id"],
@@ -153,7 +248,10 @@ def sync_google_reviews(cursor, connection):
                     create_time,
                     update_time,
                     external_review_id,
+                    google_review_id,
                     google_location_id,
+                    "google",
+                    "pending",
                     "pending"
                 )
             )

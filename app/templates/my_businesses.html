@@ -95,10 +95,26 @@
                     Review assistant
                 </a>
                 {% if business.google_is_connected %}
+                {% if business.google_email %}
+                <div class="text-muted small">
+                    <i class="bi bi-google"></i>
+                    Connected as {{ business.google_email }}
+                </div>
+                {% endif %}
                 <a href="/business/{{ business.id }}/live-dashboard" class="btn-ghost">
                     <i class="bi bi-broadcast"></i>
                     Live Dashboard
                 </a>
+                <a href="/auth/google/start/{{ business.id }}?reconnect=1" class="btn-ghost">
+                    <i class="bi bi-arrow-repeat"></i>
+                    Reconnect Google Account
+                </a>
+                <form method="POST" action="/businesses/{{ business.id }}/google/disconnect" class="d-grid">
+                    <button type="submit" class="btn-ghost">
+                        <i class="bi bi-x-circle"></i>
+                        Disconnect Google Account
+                    </button>
+                </form>
                 {% else %}
                 <a href="/auth/google/start/{{ business.id }}" class="btn-ghost">
                     <i class="bi bi-google"></i>

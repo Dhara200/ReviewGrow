@@ -224,6 +224,51 @@ def ensure_mvp_schema():
     _add_column_if_missing(
         cursor,
         "reviews",
+        "google_review_id",
+        "VARCHAR(255)"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
+        "source_platform",
+        "VARCHAR(50) NOT NULL DEFAULT 'google'"
+    )
+    cursor.execute(
+        """
+        UPDATE reviews
+        SET source_platform=source
+        WHERE source_platform='google'
+        AND source IS NOT NULL
+        AND source <> ''
+        """
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
+        "reply_status",
+        "ENUM('pending','approved','posted','failed') DEFAULT 'pending'"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
+        "reply_generated_at",
+        "DATETIME"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
+        "reply_posted_at",
+        "DATETIME"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
+        "reply_error_message",
+        "TEXT"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
         "confidence_score",
         "DECIMAL(5,4)"
     )
@@ -275,6 +320,70 @@ def ensure_mvp_schema():
         "idx_reviews_business_google_location",
         "INDEX idx_reviews_business_google_location (business_id, google_location_id)"
     )
+    _add_index_if_missing(
+        cursor,
+        "reviews",
+        "idx_reviews_google_review_id",
+        "INDEX idx_reviews_google_review_id (google_review_id)"
+    )
+    _add_column_if_missing(
+        cursor,
+        "businesses",
+        "use_reviewer_name",
+        "BOOLEAN DEFAULT TRUE"
+    )
+    _add_column_if_missing(
+        cursor,
+        "businesses",
+        "reply_tone",
+        "VARCHAR(30) DEFAULT 'professional'"
+    )
+    _add_column_if_missing(
+        cursor,
+        "businesses",
+        "max_reply_words",
+        "INT DEFAULT 120"
+    )
+    _add_column_if_missing(
+        cursor,
+        "businesses",
+        "auto_generate_replies_for_new_reviews",
+        "BOOLEAN DEFAULT TRUE"
+    )
+    _add_column_if_missing(
+        cursor,
+        "businesses",
+        "auto_post_replies",
+        "BOOLEAN DEFAULT FALSE"
+    )
+    _create_table_if_missing(
+        cursor,
+        "google_review_reply_logs",
+        """
+        CREATE TABLE google_review_reply_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            review_id INT NOT NULL,
+            business_id INT NOT NULL,
+            user_id INT NOT NULL,
+            google_review_id VARCHAR(255),
+            reply_text TEXT NOT NULL,
+            status ENUM('posted','failed') NOT NULL,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_reply_logs_review_id (review_id),
+            INDEX idx_reply_logs_business_id (business_id),
+            FOREIGN KEY (review_id)
+                REFERENCES reviews(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (business_id)
+                REFERENCES businesses(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
     _create_table_if_missing(
         cursor,
         "google_business_connections",
@@ -287,6 +396,8 @@ def ensure_mvp_schema():
             google_location_id VARCHAR(255),
             google_location_name VARCHAR(255),
             google_account_email VARCHAR(255),
+            google_email VARCHAR(255),
+            google_oauth_account_id VARCHAR(255),
             access_token TEXT,
             refresh_token TEXT,
             token_expiry DATETIME,
@@ -294,6 +405,8 @@ def ensure_mvp_schema():
             scopes TEXT,
             connection_status VARCHAR(50) DEFAULT 'connected',
             is_connected BOOLEAN DEFAULT FALSE,
+            connected_at DATETIME,
+            disconnected_at DATETIME,
             last_sync_at DATETIME,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -318,6 +431,18 @@ def ensure_mvp_schema():
     _add_column_if_missing(
         cursor,
         "google_business_connections",
+        "google_email",
+        "VARCHAR(255)"
+    )
+    _add_column_if_missing(
+        cursor,
+        "google_business_connections",
+        "google_oauth_account_id",
+        "VARCHAR(255)"
+    )
+    _add_column_if_missing(
+        cursor,
+        "google_business_connections",
         "scopes",
         "TEXT"
     )
@@ -327,11 +452,70 @@ def ensure_mvp_schema():
         "connection_status",
         "VARCHAR(50) DEFAULT 'connected'"
     )
+    _add_column_if_missing(
+        cursor,
+        "google_business_connections",
+        "connected_at",
+        "DATETIME"
+    )
+    _add_column_if_missing(
+        cursor,
+        "google_business_connections",
+        "disconnected_at",
+        "DATETIME"
+    )
     _add_index_if_missing(
         cursor,
         "google_business_connections",
         "unique_business_connection",
         "UNIQUE KEY unique_business_connection (user_id, business_id)"
+    )
+    _create_table_if_missing(
+        cursor,
+        "google_oauth_attempt_logs",
+        """
+        CREATE TABLE google_oauth_attempt_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            business_id INT,
+            registered_email VARCHAR(255),
+            google_email VARCHAR(255),
+            status VARCHAR(50) NOT NULL,
+            message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_google_oauth_attempt_user (user_id),
+            INDEX idx_google_oauth_attempt_business (business_id),
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (business_id)
+                REFERENCES businesses(id)
+                ON DELETE SET NULL
+        )
+        """
+    )
+    _create_table_if_missing(
+        cursor,
+        "admin_gbp_override_logs",
+        """
+        CREATE TABLE admin_gbp_override_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            admin_user_id INT NOT NULL,
+            business_id INT NULL,
+            connected_google_email VARCHAR(255) NOT NULL,
+            action VARCHAR(80) NOT NULL DEFAULT 'ADMIN_GBP_OVERRIDE',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_admin_gbp_override_admin (admin_user_id),
+            INDEX idx_admin_gbp_override_business (business_id),
+            INDEX idx_admin_gbp_override_action (action),
+            FOREIGN KEY (admin_user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (business_id)
+                REFERENCES businesses(id)
+                ON DELETE SET NULL
+        )
+        """
     )
     _create_table_if_missing(
         cursor,

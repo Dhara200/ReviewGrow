@@ -5,37 +5,66 @@
 
 {% block head %}
 <style>
+.live-hero-card {
+    margin-bottom: 1.5rem;
+}
+
 .live-hero-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 2fr);
-    gap: 1.5rem;
-    align-items: stretch;
-    margin-bottom: 1.5rem;
+    grid-template-columns: minmax(280px, .45fr) minmax(0, 1fr);
+    gap: 2rem;
+    align-items: center;
+}
+
+.rs-content {
+    width: 100%;
+    max-width: none;
 }
 
 .live-hero-copy {
     min-width: 0;
 }
 
-.live-overview-card {
-    min-height: 100%;
+.live-hero-status {
+    min-width: 0;
+}
+
+.live-hero-status .row {
+    align-items: center;
 }
 
 .live-dashboard-row {
     align-items: flex-start;
 }
 
+.live-side-col,
+.live-main-col {
+    min-width: 0;
+}
+
 .live-feed-card {
     margin-top: .25rem;
 }
 
+.live-feed-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .5rem;
+}
+
+.live-feed-actions .btn-ghost[disabled] {
+    pointer-events: none;
+    opacity: .55;
+}
+
 .live-dashboard-row .rs-card:not(.position-sticky),
-.live-overview-card {
+.live-hero-card {
     transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 
 .live-dashboard-row .rs-card:not(.position-sticky):hover,
-.live-overview-card:hover {
+.live-hero-card:hover {
     transform: translateY(-2px);
     border-color: rgba(37, 99, 235, .28);
     box-shadow: 0 16px 36px rgba(15, 23, 42, .08);
@@ -52,6 +81,32 @@
     margin-top: .25rem;
 }
 
+.gbp-reply-box {
+    display: grid;
+    gap: .75rem;
+    min-width: 320px;
+}
+
+.gbp-reply-text {
+    min-height: 96px;
+    resize: vertical;
+}
+
+.gbp-reply-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.gbp-reply-status {
+    width: fit-content;
+}
+
+.reply-settings-grid {
+    display: grid;
+    gap: 1rem;
+}
+
 @media (max-width: 991.98px) {
     .live-hero-grid {
         grid-template-columns: 1fr;
@@ -61,6 +116,10 @@
 @media (max-width: 767.98px) {
     .live-performance-form {
         grid-template-columns: 1fr;
+    }
+
+    .live-hero-card {
+        padding: 1.25rem;
     }
 }
 </style>
@@ -98,22 +157,150 @@
 {% endif %}
 {% endblock %}
 
+{% block scripts %}
+<script>
+(() => {
+    async function postJson(url, payload = {}) {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.message || "Request failed. Please try again.");
+        }
+
+        return data;
+    }
+
+    function setStatus(box, status) {
+        const statusNode = box.querySelector("[data-reply-status]");
+        if (!statusNode) {
+            return;
+        }
+
+        const labels = {
+            pending: ["Pending approval", "badge-soft-warning"],
+            approved: ["Approved", "badge-soft-primary"],
+            posted: ["Posted", "badge-soft-success"],
+            failed: ["Failed", "badge-soft-danger"]
+        };
+        const [label, className] = labels[status] || labels.pending;
+        statusNode.className = `${className} gbp-reply-status`;
+        statusNode.textContent = label;
+
+        const postButton = box.querySelector("[data-post-reply]");
+        if (postButton) {
+            postButton.disabled = status !== "approved";
+        }
+    }
+
+    function setError(box, message) {
+        const error = box.querySelector("[data-reply-error]");
+        if (!error) {
+            return;
+        }
+        error.textContent = message || "";
+        error.classList.toggle("d-none", !message);
+    }
+
+    function setLoading(button, isLoading, loadingText) {
+        if (!button) {
+            return;
+        }
+        if (isLoading) {
+            button.dataset.originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm"></span><span>${loadingText}</span>`;
+            return;
+        }
+        button.disabled = false;
+        button.innerHTML = button.dataset.originalHtml || button.innerHTML;
+    }
+
+    document.querySelectorAll("[data-reply-review-id]").forEach((box) => {
+        const reviewId = box.dataset.replyReviewId;
+        const textarea = box.querySelector("[data-suggested-reply]");
+
+        box.querySelector("[data-regenerate-reply]")?.addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            setError(box, "");
+            setLoading(button, true, "Generating...");
+            try {
+                const data = await postJson(`/reviews/${reviewId}/reply/regenerate`);
+                textarea.value = data.suggested_reply || "";
+                setStatus(box, data.reply_status || "pending");
+            } catch (error) {
+                setError(box, error.message);
+            } finally {
+                setLoading(button, false);
+            }
+        });
+
+        box.querySelector("[data-approve-reply]")?.addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            setError(box, "");
+            setLoading(button, true, "Approving...");
+            try {
+                const data = await postJson(`/reviews/${reviewId}/reply/approve`, {
+                    suggested_reply: textarea.value
+                });
+                textarea.value = data.suggested_reply || textarea.value;
+                setStatus(box, "approved");
+            } catch (error) {
+                setError(box, error.message);
+            } finally {
+                setLoading(button, false);
+            }
+        });
+
+        box.querySelector("[data-copy-reply]")?.addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            await navigator.clipboard.writeText(textarea.value || "");
+            const original = button.innerHTML;
+            button.innerHTML = '<i class="bi bi-check2"></i> Copied';
+            window.setTimeout(() => {
+                button.innerHTML = original;
+            }, 1400);
+        });
+
+        box.querySelector("[data-post-reply]")?.addEventListener("click", async (event) => {
+            const button = event.currentTarget;
+            let finalStatus = "approved";
+            setError(box, "");
+            setLoading(button, true, "Posting...");
+            try {
+                const data = await postJson(`/reviews/${reviewId}/reply/post`);
+                finalStatus = data.reply_status || "posted";
+            } catch (error) {
+                finalStatus = "failed";
+                setError(box, error.message);
+            } finally {
+                setLoading(button, false);
+                setStatus(box, finalStatus);
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}
+
 {% block content %}
 {% if connection and active_tab in ["reviews", "performance"] %}
-<div class="live-hero-grid">
-    <div class="rs-page-header mb-0">
+<div class="rs-card rs-card-lg live-hero-card">
+    <div class="live-hero-grid">
         <div class="live-hero-copy">
             <p class="rs-eyebrow">Google Business Profile</p>
             <h1 class="rs-page-title">{{ business.business_name if business else "Live Dashboard" }}</h1>
             <p class="rs-page-subtitle">Live Google reviews and Business Profile performance intelligence for your connected location.</p>
         </div>
-        <a href="/my-businesses" class="btn-ghost">
-            <i class="bi bi-arrow-left"></i>
-            Businesses
-        </a>
-    </div>
 
-    <div class="rs-card rs-card-lg live-overview-card">
+        <div class="live-hero-status">
         {% if active_tab == "performance" %}
         <div class="row g-4 align-items-center h-100">
             <div class="col-xl-5">
@@ -185,19 +372,16 @@
             </div>
         </div>
         {% endif %}
+        </div>
     </div>
 </div>
 {% else %}
-<div class="rs-page-header">
-    <div>
+<div class="rs-card rs-card-lg live-hero-card">
+    <div class="live-hero-copy">
         <p class="rs-eyebrow">Google Business Profile</p>
         <h1 class="rs-page-title">{{ business.business_name if business else "Live Dashboard" }}</h1>
         <p class="rs-page-subtitle">Live Google reviews and Business Profile performance intelligence for your connected location.</p>
     </div>
-    <a href="/my-businesses" class="btn-ghost">
-        <i class="bi bi-arrow-left"></i>
-        Businesses
-    </a>
 </div>
 {% endif %}
 
@@ -220,18 +404,24 @@
 {% set perf = performance.summary if performance else {} %}
 
 <div class="row g-4 live-dashboard-row">
-    <div class="col-lg-3">
+    <div class="col-xl-3 col-lg-4 live-side-col">
         <div class="rs-card rs-card-lg position-sticky" style="top: calc(var(--rs-topbar) + 1rem);">
             <span class="badge-soft-success mb-3">
                 <i class="bi bi-check-circle"></i>
                 Connected
             </span>
+            {% if admin_override_active %}
+            <span class="badge-soft-warning mb-3">
+                <i class="bi bi-shield-check"></i>
+                Admin Override Active
+            </span>
+            {% endif %}
             <h2 class="h6 fw-bold mb-1">
                 {{ connection.google_location_name or "Location not selected" }}
             </h2>
             <p class="text-muted small mb-4">
-                {% if connection.google_account_email %}
-                    Google account: {{ connection.google_account_email }}<br>
+                {% if connection.google_email or connection.google_account_email %}
+                    Google account: {{ connection.google_email or connection.google_account_email }}<br>
                 {% endif %}
                 Last review sync:
                 {% if connection.last_sync_at %}
@@ -258,10 +448,23 @@
                     Performance Analysis
                 </a>
             </div>
+            <div class="d-grid gap-2 mt-3 pt-3 border-top">
+                <a href="/auth/google/start/{{ business_id }}?reconnect=1" class="btn-ghost">
+                    <i class="bi bi-arrow-repeat"></i>
+                    Reconnect Google Account
+                </a>
+                <form method="POST" action="/businesses/{{ business_id }}/google/disconnect" class="d-grid">
+                    <button type="submit" class="btn-ghost">
+                        <i class="bi bi-x-circle"></i>
+                        Disconnect
+                    </button>
+                </form>
+            </div>
+
         </div>
     </div>
 
-    <div class="col-lg-9">
+    <div class="col-xl-9 col-lg-8 live-main-col">
         {% if active_tab == "performance" %}
         <div class="rs-kpi-grid mb-4">
             <div class="rs-card rs-kpi">
@@ -418,19 +621,30 @@
                     <p class="rs-eyebrow">Latest Google reviews</p>
                     <h2 class="h5 fw-bold mb-0">Review feed</h2>
                 </div>
-                {% if needs_location %}
-                <a href="/businesses/{{ business_id }}/google/select-location" class="btn-ghost">
-                    <i class="bi bi-geo-alt"></i>
-                    Select Location
-                </a>
-                {% else %}
-                <form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews">
-                    <button type="submit" class="btn-ghost">
-                        <i class="bi bi-arrow-repeat"></i>
-                        Analyze / Sync again
+                <div class="live-feed-actions">
+                    {% if business %}
+                    <button type="button" class="btn-ghost" data-bs-toggle="modal" data-bs-target="#replySettingsModal" title="Reply settings" aria-label="Reply settings">
+                        <i class="bi bi-sliders"></i>
                     </button>
-                </form>
-                {% endif %}
+                    {% endif %}
+                    {% if needs_location %}
+                    <a href="/businesses/{{ business_id }}/google/select-location" class="btn-ghost">
+                        <i class="bi bi-geo-alt"></i>
+                        Select Location
+                    </a>
+                    <button type="button" class="btn-ghost" disabled title="Select a Google location before syncing reviews">
+                        <i class="bi bi-arrow-repeat"></i>
+                        Sync Reviews
+                    </button>
+                    {% else %}
+                    <form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews">
+                        <button type="submit" class="btn-ghost">
+                            <i class="bi bi-arrow-repeat"></i>
+                            Sync Reviews
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
             </div>
 
             {% if reviews %}
@@ -442,6 +656,7 @@
                             <th>Rating</th>
                             <th>Review</th>
                             <th>Sentiment</th>
+                            <th>Suggested Reply</th>
                             <th>Updated</th>
                         </tr>
                     </thead>
@@ -462,6 +677,48 @@
                                 <span class="badge-soft-primary">Pending</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                <div class="gbp-reply-box" data-reply-review-id="{{ review.id }}">
+                                    {% if review.reply_status == "posted" %}
+                                    <span class="badge-soft-success gbp-reply-status" data-reply-status>Posted</span>
+                                    {% elif review.reply_status == "approved" %}
+                                    <span class="badge-soft-primary gbp-reply-status" data-reply-status>Approved</span>
+                                    {% elif review.reply_status == "failed" %}
+                                    <span class="badge-soft-danger gbp-reply-status" data-reply-status>Failed</span>
+                                    {% else %}
+                                    <span class="badge-soft-warning gbp-reply-status" data-reply-status>Pending approval</span>
+                                    {% endif %}
+
+                                    <textarea class="form-control gbp-reply-text" data-suggested-reply placeholder="Generate a suggested reply first.">{{ review.suggested_reply or review.ai_reply or "" }}</textarea>
+
+                                    {% if review.reply_error_message %}
+                                    <p class="text-danger small mb-0" data-reply-error>{{ review.reply_error_message }}</p>
+                                    {% else %}
+                                    <p class="text-danger small mb-0 d-none" data-reply-error></p>
+                                    {% endif %}
+
+                                    <div class="gbp-reply-actions">
+                                        <button type="button" class="btn-ghost" data-regenerate-reply>
+                                            <i class="bi bi-arrow-repeat"></i>
+                                            Regenerate
+                                        </button>
+                                        <button type="button" class="btn-solid" data-approve-reply>
+                                            <i class="bi bi-check2-circle"></i>
+                                            Approve
+                                        </button>
+                                        <button type="button" class="btn-ghost" data-copy-reply>
+                                            <i class="bi bi-clipboard"></i>
+                                            Copy
+                                        </button>
+                                        {% if can_post_replies %}
+                                        <button type="button" class="btn-ghost" data-post-reply {% if review.reply_status != "approved" %}disabled{% endif %}>
+                                            <i class="bi bi-send"></i>
+                                            Post to Google
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
                             <td>{{ review.review_updated_at or review.review_created_at }}</td>
                         </tr>
                         {% endfor %}
@@ -475,5 +732,59 @@
     </div>
     {% endif %}
 </div>
+{% if active_tab == "reviews" and business %}
+<div class="modal fade" id="replySettingsModal" tabindex="-1" aria-labelledby="replySettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="/businesses/{{ business_id }}/reply-settings">
+                <div class="modal-header">
+                    <div>
+                        <p class="rs-eyebrow mb-1">Reply settings</p>
+                        <h2 class="modal-title h5 fw-bold" id="replySettingsModalLabel">Review reply preferences</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="reply-settings-grid">
+                        <div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" id="modalUseReviewerName" name="use_reviewer_name" value="1" {% if business.use_reviewer_name is not sameas false %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="modalUseReviewerName">Use reviewer name</label>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" id="modalAutoGenerateReplies" name="auto_generate_replies_for_new_reviews" value="1" {% if business.auto_generate_replies_for_new_reviews is not sameas false %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="modalAutoGenerateReplies">Auto-generate replies</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="modalAutoPostReplies" name="auto_post_replies" value="1" {% if business.auto_post_replies %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="modalAutoPostReplies">Auto-post approved replies</label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold" for="modalReplyTone">Tone</label>
+                            <select id="modalReplyTone" class="form-select" name="reply_tone">
+                                {% for tone in ["professional", "friendly", "luxury", "casual"] %}
+                                <option value="{{ tone }}" {% if (business.reply_tone or "professional") == tone %}selected{% endif %}>{{ tone|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold" for="modalMaxReplyWords">Max words</label>
+                            <input id="modalMaxReplyWords" class="form-control" type="number" min="40" max="200" name="max_reply_words" value="{{ business.max_reply_words or 120 }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-solid">
+                        <i class="bi bi-sliders"></i>
+                        Save settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endif %}
 {% endblock %}

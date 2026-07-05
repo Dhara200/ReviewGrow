@@ -36,6 +36,11 @@ CREATE TABLE businesses (
     city VARCHAR(100),
     state VARCHAR(100),
     country VARCHAR(100),
+    use_reviewer_name BOOLEAN DEFAULT TRUE,
+    reply_tone VARCHAR(30) DEFAULT 'professional',
+    max_reply_words INT DEFAULT 120,
+    auto_generate_replies_for_new_reviews BOOLEAN DEFAULT TRUE,
+    auto_post_replies BOOLEAN DEFAULT FALSE,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -70,6 +75,12 @@ CREATE TABLE reviews (
     summary TEXT,
     ai_reply TEXT,
     suggested_reply TEXT,
+    google_review_id VARCHAR(255),
+    source_platform VARCHAR(50) NOT NULL DEFAULT 'google',
+    reply_status ENUM('pending','approved','posted','failed') DEFAULT 'pending',
+    reply_generated_at DATETIME,
+    reply_posted_at DATETIME,
+    reply_error_message TEXT,
     confidence_score DECIMAL(5,4),
     analysis_error TEXT,
     analyzed_at DATETIME,
@@ -82,9 +93,33 @@ CREATE TABLE reviews (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     INDEX idx_reviews_business_google_location (business_id, google_location_id),
+    INDEX idx_reviews_google_review_id (google_review_id),
 
     FOREIGN KEY (business_id)
         REFERENCES businesses(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE google_review_reply_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    review_id INT NOT NULL,
+    business_id INT NOT NULL,
+    user_id INT NOT NULL,
+    google_review_id VARCHAR(255),
+    reply_text TEXT NOT NULL,
+    status ENUM('posted','failed') NOT NULL,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_reply_logs_review_id (review_id),
+    INDEX idx_reply_logs_business_id (business_id),
+    FOREIGN KEY (review_id)
+        REFERENCES reviews(id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (business_id)
+        REFERENCES businesses(id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
         ON DELETE CASCADE
 );
 
