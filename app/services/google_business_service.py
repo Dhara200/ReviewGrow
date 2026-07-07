@@ -1,6 +1,7 @@
 import logging
 import time
 from datetime import datetime, timedelta
+from urllib.parse import quote
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
@@ -13,6 +14,7 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 ACCOUNT_MANAGEMENT_BASE_URL = "https://mybusinessaccountmanagement.googleapis.com/v1"
 BUSINESS_INFORMATION_BASE_URL = "https://mybusinessbusinessinformation.googleapis.com/v1"
 REVIEWS_BASE_URL = "https://mybusiness.googleapis.com/v4"
+MEDIA_UPLOAD_BASE_URL = "https://mybusiness.googleapis.com/upload/v1/media"
 REQUIRED_GOOGLE_OAUTH_SCOPES = [
     "openid",
     "email",
@@ -319,6 +321,67 @@ def api_put(access_token, url, payload=None):
     return response.json()
 
 
+def api_post(access_token, url, payload=None):
+    response = requests.post(
+        url,
+        json=payload or {},
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=30
+    )
+
+    if response.status_code == 429:
+        raise GoogleQuotaError(_quota_error_message(response))
+
+    if not response.ok:
+        error, body = _google_error_payload(response)
+        logger.warning(
+            "Google Business Profile API POST failed: status=%s google_status=%s url=%s error=%s",
+            response.status_code,
+            error.get("status"),
+            _safe_url(response.url),
+            body
+        )
+        raise GoogleBusinessError(_api_error_message(response))
+
+    if not response.text:
+        return {}
+
+    return response.json()
+
+
+def api_upload_media(access_token, resource_name, file_bytes, content_type):
+    encoded_resource_name = quote(resource_name, safe="")
+    response = requests.post(
+        f"{MEDIA_UPLOAD_BASE_URL}/{encoded_resource_name}",
+        params={"uploadType": "media"},
+        data=file_bytes,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": content_type
+        },
+        timeout=60
+    )
+
+    if response.status_code == 429:
+        raise GoogleQuotaError(_quota_error_message(response))
+
+    if not response.ok:
+        error, body = _google_error_payload(response)
+        logger.warning(
+            "Google Business Profile media upload failed: status=%s google_status=%s url=%s error=%s",
+            response.status_code,
+            error.get("status"),
+            _safe_url(response.url),
+            body
+        )
+        raise GoogleBusinessError(_api_error_message(response))
+
+    if not response.text:
+        return {}
+
+    return response.json()
+
+
 def list_accounts(access_token):
     accounts = []
     page_token = None
@@ -436,4 +499,37 @@ def post_review_reply(access_token, account_id, location_id, google_review_id, r
         access_token,
         f"{REVIEWS_BASE_URL}/{parent}/reviews/{google_review_id}/reply",
         payload={"comment": reply_text}
+    )
+
+
+def upload_location_photo(access_token, account_id, location_id, file_bytes, content_type, category):
+    parent = review_parent(account_id, location_id)
+    data_ref = api_post(
+        access_token,
+        f"{REVIEWS_BASE_URL}/{parent}/media:startUpload"
+    )
+    resource_name = data_ref.get("resourceName")
+
+    if not resource_name:
+        raise GoogleBusinessError("Google did not return a media upload reference.")
+
+    api_upload_media(
+        access_token,
+        resource_name,
+        file_bytes,
+        content_type
+    )
+
+    return api_post(
+        access_token,
+        f"{REVIEWS_BASE_URL}/{parent}/media",
+        payload={
+            "mediaFormat": "PHOTO",
+            "locationAssociation": {
+                "category": category
+            },
+            "dataRef": {
+                "resourceName": resource_name
+            }
+        }
     )

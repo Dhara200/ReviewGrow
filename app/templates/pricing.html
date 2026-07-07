@@ -57,24 +57,30 @@
 
         <div class="text-center pricing-page-header">
             <p class="rs-eyebrow">Pricing</p>
-            <h1 class="fw-bold">ReviewGrow Starter</h1>
+            <h1 class="fw-bold">ReviewGrow Premium</h1>
             <p class="lead text-muted mb-0">One paid subscription for all ReviewGrow app features.</p>
         </div>
 
         <div class="row justify-content-center g-4">
             <div class="col-lg-6">
                 <div class="rs-card rs-card-lg rs-pricing-card h-100">
-                    <h2 class="h4 fw-bold mb-2">ReviewGrow Starter</h2>
+                    <h2 class="h4 fw-bold mb-2">ReviewGrow Premium</h2>
                     <div class="display-5 fw-bold text-primary mb-4">₹{{ "%.0f"|format(subscription_price) }}<span class="h6 text-muted">/month</span></div>
                     <div class="rs-pricing-list mb-4">
                         {% for item in [
-                            "Google Review Integration",
-                            "AI Review Analysis",
-                            "AI Reply Generator",
-                            "Live Dashboard",
-                            "Performance Insights",
-                            "Excel Upload",
-                            "PDF Reports"
+                            "Connect Your Google Business Profile in few clicks",
+                            "Manage your Business locations centrally in our software",
+                            "Monitor Reviews in Real Time with UI rich live dashboard",
+                            "Analyse and Respond to your Reviews in Seconds",
+                            "Draft and send personalized and professional review responses",
+                            "Automate bulk Review Replies in single click",                            
+                            "Track your business Performance Insights",
+                            "Import Existing Reviews in Excel",
+                            "Download PDF health Reports",
+                            "Understand Customer Sentiments Instantly",
+                            "Negative review whatsapp alert to business owner - Coming soon",
+                            "Send review request to customer via whatsapp in seconds - Coming soon",
+                            "MakeMyTrip reviews integration for hotels and travels- coming soon"
                         ] %}
                         <div><i class="bi bi-check-circle-fill"></i><span>{{ item }}</span></div>
                         {% endfor %}

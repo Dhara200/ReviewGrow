@@ -187,6 +187,22 @@ a {
     margin-inline: auto;
 }
 
+.rs-public-nav-inner {
+    width: 100%;
+    max-width: none;
+    padding-inline: clamp(.75rem, 2vw, 1.75rem);
+}
+
+.rs-public-actions {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+}
+
+.rs-public-nav .rs-brand {
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
 .rs-landing-hero {
     position: relative;
     display: flex;
@@ -574,7 +590,7 @@ a {
 .rs-main {
     min-height: calc(100vh - var(--rs-topbar));
     margin-left: var(--rs-sidebar);
-    padding: calc(var(--rs-topbar) + 2rem) 2rem 2rem;
+    padding: var(--rs-topbar) 2rem 2rem;
     transition: margin-left .25s ease;
 }
 
@@ -1105,6 +1121,96 @@ td {
     line-height: 1.65;
 }
 
+.rs-problem-solution-section {
+    background:
+        linear-gradient(180deg, var(--rs-bg) 0%, var(--rs-surface-muted) 100%);
+}
+
+.rs-problem-card,
+.rs-solution-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.rs-problem-card::after,
+.rs-solution-card::after {
+    position: absolute;
+    top: -70px;
+    right: -70px;
+    width: 180px;
+    height: 180px;
+    border-radius: 999px;
+    content: "";
+    pointer-events: none;
+}
+
+.rs-problem-card::after {
+    background: rgba(239, 68, 68, .1);
+}
+
+.rs-solution-card::after {
+    background: var(--rs-accent-soft);
+}
+
+.rs-problem-card > *,
+.rs-solution-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.rs-problem-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.35rem;
+}
+
+.rs-problem-icon {
+    display: inline-grid;
+    flex: 0 0 auto;
+    width: 3rem;
+    height: 3rem;
+    place-items: center;
+    border-radius: 1rem;
+    font-size: 1.35rem;
+}
+
+.rs-problem-icon-danger {
+    background: #fef2f2;
+    color: var(--rs-danger);
+}
+
+.rs-problem-icon-success {
+    background: var(--rs-accent-soft);
+    color: var(--rs-accent);
+}
+
+.rs-insight-list {
+    display: grid;
+    gap: .85rem;
+}
+
+.rs-insight-list div {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .85rem .95rem;
+    border: 1px solid var(--rs-border);
+    border-radius: 8px;
+    background: var(--rs-surface-muted);
+    color: var(--rs-muted);
+    font-weight: 650;
+    line-height: 1.55;
+}
+
+.rs-problem-card .rs-insight-list i {
+    color: var(--rs-danger);
+}
+
+.rs-solution-card .rs-insight-list i {
+    color: var(--rs-accent);
+}
+
 .rs-timeline {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -1257,7 +1363,7 @@ td {
     }
 
     .rs-main {
-        padding: calc(var(--rs-topbar) + 1.25rem) 1.25rem 1.25rem;
+        padding: var(--rs-topbar) 1.25rem 1.25rem;
     }
 
     .rs-page-header {
@@ -1314,9 +1420,43 @@ td {
         border-radius: 1rem;
     }
 
+    .rs-public-nav-inner {
+        padding-inline: .5rem;
+    }
+
+    .rs-public-nav .rs-brand {
+        gap: .45rem;
+    }
+
+    .rs-public-nav .rs-brand-text {
+        display: none;
+    }
+
+    .rs-public-actions {
+        gap: .3rem !important;
+    }
+
+    .rs-public-actions .rs-pricing-nav-link {
+        display: none;
+    }
+
+    .rs-public-actions .btn-solid,
+    .rs-public-actions .btn-ghost {
+        min-height: 2.3rem;
+        padding: .55rem .6rem;
+        border-radius: .65rem;
+        font-size: .82rem;
+    }
+
+    .rs-public-actions .theme-toggle {
+        width: 2.3rem;
+        height: 2.3rem;
+        border-radius: .65rem;
+    }
+
     .brand-logo {
-        height: 42px;
-        max-width: 148px;
+        height: 40px;
+        max-width: 128px;
     }
 
     .auth-logo {
@@ -1329,7 +1469,7 @@ td {
     }
 
     .rs-main {
-        padding: calc(var(--rs-topbar) + 1rem) 1rem 1rem;
+        padding: var(--rs-topbar) 1rem 1rem;
     }
 
     .rs-card,
@@ -1344,6 +1484,26 @@ td {
 
     .rs-benefit-card {
         align-items: flex-start;
+    }
+}
+
+@media (max-width: 420px) {
+    .rs-public-actions .btn-solid,
+    .rs-public-actions .btn-ghost {
+        padding-inline: .5rem;
+        font-size: .78rem;
+    }
+}
+
+@media (max-width: 340px) {
+    .rs-public-actions .btn-solid,
+    .rs-public-actions .btn-ghost {
+        padding-inline: .42rem;
+        font-size: .74rem;
+    }
+
+    .brand-logo {
+        height: 36px;
     }
 }
 

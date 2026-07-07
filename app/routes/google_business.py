@@ -11,6 +11,7 @@ from flask import (
     session
 )
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from werkzeug.utils import secure_filename
 
 from app.config import Config
 from app.services.database_service import get_connection, user_owns_business
@@ -22,7 +23,8 @@ from app.services.google_business_service import (
     fetch_google_account_profile,
     list_all_locations,
     post_review_reply,
-    refresh_access_token
+    refresh_access_token,
+    upload_location_photo
 )
 from app.services.google_performance_service import (
     load_performance_data,
@@ -44,6 +46,14 @@ from app.services.token_crypto_service import decrypt_token, encrypt_token
 google_business_bp = Blueprint("google_business", __name__)
 REVIEW_SYNC_COOLDOWN_SECONDS = 120
 LOCATION_CACHE_SECONDS = 600
+PHOTO_MAX_BYTES = 5 * 1024 * 1024
+PHOTO_CONTENT_TYPES = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp"
+}
+PHOTO_CATEGORIES = {"LOGO", "COVER", "ADDITIONAL"}
 
 
 def _serializer():
@@ -428,6 +438,142 @@ def _connection_has_location(connection):
         and connection.get("google_account_id")
         and connection.get("google_location_id")
     )
+
+
+def _load_business_for_owner(business_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if session.get("role") == "admin":
+        cursor.execute(
+            """
+            SELECT id, user_id, business_name, business_type, city, state, country
+            FROM businesses
+            WHERE id=%s
+            LIMIT 1
+            """,
+            (business_id,)
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, user_id, business_name, business_type, city, state, country
+            FROM businesses
+            WHERE id=%s
+            AND user_id=%s
+            LIMIT 1
+            """,
+            (business_id, session["user_id"])
+        )
+
+    business = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return business
+
+
+def _load_recent_photo_uploads(business_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    query = """
+        SELECT
+            category,
+            original_filename,
+            status,
+            google_media_name,
+            google_url,
+            thumbnail_url,
+            error_message,
+            created_at
+        FROM google_business_media_uploads
+        WHERE business_id=%s
+    """
+    params = [business_id]
+
+    if session.get("role") != "admin":
+        query += " AND user_id=%s"
+        params.append(session["user_id"])
+
+    query += " ORDER BY created_at DESC LIMIT 10"
+    cursor.execute(query, tuple(params))
+    uploads = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return uploads
+
+
+def _log_photo_upload(
+    business_id,
+    connection,
+    category,
+    filename,
+    content_type,
+    file_size,
+    status,
+    media_item=None,
+    error_message=None
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO google_business_media_uploads
+        (
+            user_id,
+            business_id,
+            google_connection_id,
+            google_account_id,
+            google_location_id,
+            google_media_name,
+            category,
+            original_filename,
+            content_type,
+            file_size_bytes,
+            status,
+            google_url,
+            thumbnail_url,
+            error_message
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            session["user_id"],
+            business_id,
+            connection.get("id") if connection else None,
+            connection.get("google_account_id") if connection else None,
+            connection.get("google_location_id") if connection else None,
+            (media_item or {}).get("name"),
+            category,
+            filename,
+            content_type,
+            file_size,
+            status,
+            (media_item or {}).get("googleUrl"),
+            (media_item or {}).get("thumbnailUrl"),
+            error_message[:1000] if error_message else None
+        )
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def _photo_content_type(filename):
+    extension = (filename or "").rsplit(".", 1)[-1].lower()
+    return PHOTO_CONTENT_TYPES.get(extension)
+
+
+def _has_valid_image_signature(file_bytes, content_type):
+    if content_type == "image/jpeg":
+        return file_bytes.startswith(b"\xff\xd8")
+
+    if content_type == "image/png":
+        return file_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+
+    if content_type == "image/webp":
+        return file_bytes.startswith(b"RIFF") and file_bytes[8:12] == b"WEBP"
+
+    return False
 
 
 def _can_post_replies(connection):
@@ -1171,6 +1317,134 @@ def sync_google_business_reviews(business_id):
         flash("Google review sync failed. Please try again.", "danger")
 
     return redirect(f"/businesses/{business_id}/live-dashboard")
+
+
+@google_business_bp.route("/businesses/<int:business_id>/photos", methods=["GET", "POST"])
+@subscription_required
+def google_business_photos(business_id):
+    guard = _business_guard(business_id)
+
+    if guard:
+        return guard
+
+    business = _load_business_for_owner(business_id)
+
+    if not business:
+        return "Access denied", 403
+
+    connection = _get_connection_row(business_id, connected_only=True)
+    is_connected = bool(connection and _connection_has_location(connection))
+    needs_location = bool(connection and not _connection_has_location(connection))
+
+    if request.method == "POST":
+        if not connection:
+            flash("Connect this business to Google Business Profile before uploading photos.", "warning")
+            return redirect(f"/businesses/{business_id}/photos")
+
+        try:
+            connection = _valid_connection_token(connection)
+            connection, location_response = _resolve_missing_location(
+                business_id,
+                connection
+            )
+
+            if location_response:
+                return location_response
+
+            category = (request.form.get("category") or "").upper()
+
+            if category not in PHOTO_CATEGORIES:
+                flash("Choose a valid photo category.", "danger")
+                return redirect(f"/businesses/{business_id}/photos")
+
+            photo = request.files.get("photo")
+
+            if not photo or not photo.filename:
+                flash("Please choose a photo to upload.", "danger")
+                return redirect(f"/businesses/{business_id}/photos")
+
+            original_filename = secure_filename(photo.filename)
+            content_type = _photo_content_type(original_filename)
+
+            if not content_type:
+                flash("Please upload only JPG, JPEG, PNG, or WEBP images.", "danger")
+                return redirect(f"/businesses/{business_id}/photos")
+
+            file_bytes = photo.read()
+            file_size = len(file_bytes)
+
+            if file_size == 0:
+                flash("The selected image is empty.", "danger")
+                return redirect(f"/businesses/{business_id}/photos")
+
+            if file_size > PHOTO_MAX_BYTES:
+                flash("Image is too large. Please upload a photo under 5MB.", "danger")
+                return redirect(f"/businesses/{business_id}/photos")
+
+            if not _has_valid_image_signature(file_bytes, content_type):
+                flash("The selected file does not look like a valid image.", "danger")
+                return redirect(f"/businesses/{business_id}/photos")
+
+            try:
+                media_item = upload_location_photo(
+                    connection["access_token"],
+                    connection["google_account_id"],
+                    connection["google_location_id"],
+                    file_bytes,
+                    content_type,
+                    category
+                )
+                _log_photo_upload(
+                    business_id,
+                    connection,
+                    category,
+                    original_filename,
+                    content_type,
+                    file_size,
+                    "success",
+                    media_item=media_item
+                )
+                flash("Photo uploaded to Google Business Profile successfully.", "success")
+            except GoogleBusinessError as error:
+                _log_photo_upload(
+                    business_id,
+                    connection,
+                    category,
+                    original_filename,
+                    content_type,
+                    file_size,
+                    "failed",
+                    error_message=str(error)
+                )
+                raise
+        except GoogleQuotaError as e:
+            flash(str(e), "warning")
+        except GoogleBusinessError as e:
+            flash(str(e), "danger")
+        except Exception:
+            current_app.logger.exception("Google Business Profile photo upload failed")
+            flash("Photo upload failed. Please try again.", "danger")
+
+        return redirect(f"/businesses/{business_id}/photos")
+
+    uploads = []
+
+    try:
+        uploads = _load_recent_photo_uploads(business_id)
+    except Exception:
+        current_app.logger.exception("Failed to load Google Business Profile photo upload history")
+
+    return render_template(
+        "business_photos.html",
+        business=business,
+        business_id=business_id,
+        connection=connection,
+        is_connected=is_connected,
+        needs_location=needs_location,
+        photo_categories=sorted(PHOTO_CATEGORIES),
+        max_photo_mb=PHOTO_MAX_BYTES // (1024 * 1024),
+        uploads=uploads
+    )
 
 
 @google_business_bp.route("/businesses/<int:business_id>/reply-settings", methods=["POST"])

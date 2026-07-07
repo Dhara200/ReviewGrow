@@ -1,0 +1,283 @@
+{% extends "base_app.html" %}
+
+{% block title %}Upload Photos - ReviewGrow{% endblock %}
+{% block nav_businesses %}active{% endblock %}
+{% block nav_photos %}active{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">Workspace / {{ business.business_name }} / Photos</span>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="/my-businesses" class="btn-ghost">
+    <i class="bi bi-arrow-left"></i>
+    Businesses
+</a>
+{% endblock %}
+
+{% block head %}
+<style>
+.photo-upload-dropzone {
+    position: relative;
+    display: grid;
+    min-height: 220px;
+    place-items: center;
+    padding: 1.5rem;
+    border: 2px dashed var(--rs-border-strong);
+    border-radius: var(--rs-radius);
+    background: var(--rs-surface-muted);
+    text-align: center;
+    transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.photo-upload-dropzone.is-dragover {
+    border-color: var(--rs-primary);
+    background: var(--rs-primary-soft);
+    transform: translateY(-1px);
+}
+
+.photo-upload-dropzone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.photo-upload-preview {
+    display: none;
+    overflow: hidden;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius);
+    background: var(--rs-surface);
+}
+
+.photo-upload-preview img {
+    display: block;
+    width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    background: var(--rs-surface-muted);
+}
+
+.photo-upload-preview.is-visible {
+    display: block;
+}
+
+.photo-category-option {
+    display: flex;
+    gap: .75rem;
+    align-items: flex-start;
+    padding: 1rem;
+    border: 1px solid var(--rs-border);
+    border-radius: 8px;
+    background: var(--rs-surface);
+}
+
+.photo-category-option .form-check-input {
+    margin-top: .2rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">Google Business Profile Photos</p>
+        <h1 class="rs-page-title">{{ business.business_name }}</h1>
+        <p class="rs-page-subtitle">Upload logo, cover, or additional photos directly to the connected Google Business Profile location.</p>
+    </div>
+</div>
+
+{% if not is_connected %}
+<div class="rs-card rs-card-lg text-center py-5">
+    <div class="rs-kpi-icon mx-auto"><i class="bi bi-google"></i></div>
+    <h2 class="h4 fw-bold">Google Business Profile is not connected</h2>
+    <p class="text-muted mb-4">Connect this business to Google Business Profile before uploading photos.</p>
+    {% if needs_location %}
+    <a href="/businesses/{{ business_id }}/google/select-location" class="btn-solid">
+        <i class="bi bi-geo-alt"></i>
+        Select Google location
+    </a>
+    {% else %}
+    <a href="/auth/google/start/{{ business_id }}" class="btn-solid">
+        <i class="bi bi-google"></i>
+        Connect Google Business Profile
+    </a>
+    {% endif %}
+</div>
+{% else %}
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="rs-card rs-card-lg">
+            <div class="d-flex align-items-start gap-3 mb-4">
+                <div class="rs-kpi-icon mb-0"><i class="bi bi-image"></i></div>
+                <div>
+                    <h2 class="h4 fw-bold mb-1">Upload a business photo</h2>
+                    <p class="text-muted mb-0">Accepted formats: JPG, JPEG, PNG, WEBP. Maximum size: {{ max_photo_mb }}MB.</p>
+                </div>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" action="/businesses/{{ business_id }}/photos" data-photo-upload-form>
+                <div class="field">
+                    <label for="photo">Photo</label>
+                    <div class="photo-upload-dropzone" data-photo-dropzone>
+                        <input id="photo" class="form-control" type="file" name="photo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-photo-input required>
+                        <div>
+                            <div class="rs-kpi-icon mx-auto"><i class="bi bi-cloud-arrow-up"></i></div>
+                            <h3 class="h5 fw-bold mb-2">Drag and drop an image here</h3>
+                            <p class="text-muted mb-0">or click to choose a file from your device.</p>
+                        </div>
+                    </div>
+                    <div class="invalid-feedback">Please upload only JPG, JPEG, PNG, or WEBP images up to {{ max_photo_mb }}MB.</div>
+                </div>
+
+                <div class="photo-upload-preview mb-4" data-photo-preview>
+                    <img src="" alt="Selected photo preview" data-photo-preview-image>
+                    <div class="p-3">
+                        <p class="fw-bold mb-1" data-photo-preview-name></p>
+                        <p class="text-muted small mb-0" data-photo-preview-size></p>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Photo category</label>
+                    <div class="row g-3">
+                        {% for category in photo_categories %}
+                        <div class="col-md-4">
+                            <label class="photo-category-option h-100">
+                                <input class="form-check-input" type="radio" name="category" value="{{ category }}" {% if category == "ADDITIONAL" %}checked{% endif %}>
+                                <span>
+                                    <span class="fw-bold d-block">{{ category|title }}</span>
+                                    <span class="text-muted small">
+                                        {% if category == "LOGO" %}
+                                            Brand logo for the profile.
+                                        {% elif category == "COVER" %}
+                                            Main cover photo for the business.
+                                        {% else %}
+                                            General business photo.
+                                        {% endif %}
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-solid">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    Upload Photo
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="rs-card rs-card-lg mb-4">
+            <p class="rs-eyebrow">Connected location</p>
+            <h2 class="h5 fw-bold mb-2">{{ connection.google_location_name or business.business_name }}</h2>
+            <p class="text-muted mb-0">
+                Google account: {{ connection.google_email or connection.google_account_email or "Connected" }}
+            </p>
+        </div>
+
+        <div class="rs-card rs-card-lg">
+            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                <div>
+                    <p class="rs-eyebrow mb-1">Recent uploads</p>
+                    <h2 class="h5 fw-bold mb-0">Photo history</h2>
+                </div>
+            </div>
+            {% if uploads %}
+            <div class="rs-pricing-list">
+                {% for upload in uploads %}
+                <div>
+                    <i class="bi {% if upload.status == 'success' %}bi-check-circle-fill{% else %}bi-exclamation-circle{% endif %}"></i>
+                    <span>
+                        <strong>{{ upload.category|title }}</strong>
+                        {% if upload.original_filename %} - {{ upload.original_filename }}{% endif %}
+                        <span class="d-block small text-muted">
+                            {{ upload.status|title }}
+                            {% if upload.error_message %}: {{ upload.error_message }}{% endif %}
+                        </span>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No photo uploads yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+    const input = document.querySelector("[data-photo-input]");
+    const dropzone = document.querySelector("[data-photo-dropzone]");
+    const preview = document.querySelector("[data-photo-preview]");
+    const previewImage = document.querySelector("[data-photo-preview-image]");
+    const previewName = document.querySelector("[data-photo-preview-name]");
+    const previewSize = document.querySelector("[data-photo-preview-size]");
+    const maxBytes = {{ max_photo_mb }} * 1024 * 1024;
+    const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+    if (!input || !dropzone || !preview || !previewImage) {
+        return;
+    }
+
+    const showPreview = (file) => {
+        if (!file) {
+            preview.classList.remove("is-visible");
+            previewImage.removeAttribute("src");
+            return;
+        }
+
+        const isValid = allowedTypes.has(file.type) && file.size <= maxBytes;
+        input.classList.toggle("is-invalid", !isValid);
+        input.setCustomValidity(isValid ? "" : "Please upload only JPG, JPEG, PNG, or WEBP images up to {{ max_photo_mb }}MB.");
+
+        if (!isValid) {
+            preview.classList.remove("is-visible");
+            previewImage.removeAttribute("src");
+            return;
+        }
+
+        previewImage.src = URL.createObjectURL(file);
+        previewName.textContent = file.name;
+        previewSize.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+        preview.classList.add("is-visible");
+    };
+
+    input.addEventListener("change", () => {
+        showPreview(input.files[0]);
+    });
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.add("is-dragover");
+        });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.remove("is-dragover");
+        });
+    });
+
+    dropzone.addEventListener("drop", (event) => {
+        if (!event.dataTransfer.files.length) {
+            return;
+        }
+
+        input.files = event.dataTransfer.files;
+        showPreview(input.files[0]);
+    });
+})();
+</script>
+{% endblock %}

@@ -73,6 +73,67 @@
         </div>
     </div>
 </section>
+
+<section class="rs-problem-solution-section py-5">
+    <div class="rs-public-container">
+        <div class="text-center mb-5">
+            <p class="rs-eyebrow">The daily review challenge</p>
+            <h2 class="fw-bold">Stay Ahead of Every Customer Review</h2>
+            <p class="text-muted mb-0 mx-auto" style="max-width:760px;">When reviews arrive from busy guests, patients, and customers, ReviewGrow helps owners respond faster and spot what needs attention.</p>
+        </div>
+
+        <div class="row g-4 align-items-stretch">
+            <div class="col-lg-6">
+                <div class="rs-card rs-card-lg rs-problem-card h-100">
+                    <div class="rs-problem-card-header">
+                        <div class="rs-problem-icon rs-problem-icon-danger">
+                            <i class="bi bi-exclamation-triangle"></i>
+                        </div>
+                        <div>
+                            <p class="rs-eyebrow mb-1">The Problem</p>
+                            <h3 class="h4 fw-bold mb-0">Managing 100s of Reviews Every Day Is Hard</h3>
+                        </div>
+                    </div>
+                    <div class="rs-insight-list">
+                        <div><i class="bi bi-x-circle"></i><span>Owners miss negative reviews when they are busy.</span></div>
+                        <div><i class="bi bi-x-circle"></i><span>Staff cannot reply to every review quickly.</span></div>
+                        <div><i class="bi bi-x-circle"></i><span>Repeated complaints are hard to identify manually.</span></div>
+                        <div><i class="bi bi-x-circle"></i><span>Late replies can damage customer trust.</span></div>
+                        <div><i class="bi bi-x-circle"></i><span>Owners do not get clear insights from scattered reviews.</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="rs-card rs-card-lg rs-solution-card h-100">
+                    <div class="rs-problem-card-header">
+                        <div class="rs-problem-icon rs-problem-icon-success">
+                            <i class="bi bi-stars"></i>
+                        </div>
+                        <div>
+                            <p class="rs-eyebrow mb-1">Our Solution</p>
+                            <h3 class="h4 fw-bold mb-0">We, ReviewGrow will Handle this for You</h3>
+                        </div>
+                    </div>
+                    <div class="rs-insight-list">
+                        <div><i class="bi bi-check-circle-fill"></i><span>Automatically collects and organizes reviews.</span></div>
+                        <div><i class="bi bi-check-circle-fill"></i><span>Detects positive, negative, and urgent feedback.</span></div>
+                        <div><i class="bi bi-check-circle-fill"></i><span>Generates professional AI reply suggestions.</span></div>
+                        <div><i class="bi bi-check-circle-fill"></i><span>Shows complaint trends and customer sentiment.</span></div>
+                        <div><i class="bi bi-check-circle-fill"></i><span>Helps owners save time and improve online reputation.</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="#how-it-works" class="btn-solid">
+                See How It Works
+                <i class="bi bi-arrow-down"></i>
+            </a>
+        </div>
+    </div>
+</section>
+
 <section class="py-5">
     <div class="rs-public-container">
         <div class="text-center mb-5">
@@ -144,7 +205,7 @@
     </div>
 </section>
 
-<section class="py-5 bg-white border-top border-bottom">
+<section id="how-it-works" class="py-5 bg-white border-top border-bottom">
     <div class="rs-public-container">
         <div class="text-center mb-5">
             <p class="rs-eyebrow">Workflow</p>
@@ -203,17 +264,23 @@
         <div class="row justify-content-center">
             <div class="col-lg-6">
                 <div class="rs-card rs-card-lg rs-pricing-card">
-                    <h3 class="h4 fw-bold mb-2">ReviewGrow Starter</h3>
+                    <h3 class="h4 fw-bold mb-2">ReviewGrow Premium</h3>
                     <div class="display-5 fw-bold text-primary mb-4">₹2,999<span class="h6 text-muted">/month</span></div>
                     <div class="rs-pricing-list mb-4">
                         {% for item in [
-                            "Google Review Integration",
-                            "AI Review Analysis",
-                            "AI Reply Generator",
-                            "Live Dashboard",
-                            "Performance Insights",
-                            "Excel Upload",
-                            "PDF Reports"
+                            "Connect Your Google Business Profile in few clicks",
+                            "Manage your Business locations centrally in our software",
+                            "Monitor Reviews in Real Time with UI rich live dashboard",
+                            "Analyse and Respond to your Reviews in Seconds",
+                            "Draft and send personalized and professional review responses",
+                            "Automate bulk Review Replies in single click",                            
+                            "Track your business Performance Insights",
+                            "Import Existing Reviews in Excel",
+                            "Download PDF health Reports",
+                            "Understand Customer Sentiments Instantly",
+                            "Negative review whatsapp alert to business owner - Coming soon",
+                            "Send review request to customer via whatsapp in seconds - Coming soon",
+                            "MakeMyTrip reviews integration for hotels and travels- coming soon"
                         ] %}
                         <div><i class="bi bi-check-circle-fill"></i><span>{{ item }}</span></div>
                         {% endfor %}

@@ -431,13 +431,6 @@
                 {% endif %}
             </p>
 
-            {% if needs_location %}
-            <a href="/businesses/{{ business_id }}/google/select-location" class="btn-solid w-100 mb-3">
-                <i class="bi bi-geo-alt"></i>
-                Select Location
-            </a>
-            {% endif %}
-
             <div class="d-grid gap-2">
                 <a href="/businesses/{{ business_id }}/live-dashboard?tab=reviews" class="rs-nav-link {% if active_tab == 'reviews' %}active{% endif %}">
                     <i class="bi bi-chat-square-text"></i>
@@ -615,10 +608,6 @@
                     </button>
                     {% endif %}
                     {% if needs_location %}
-                    <a href="/businesses/{{ business_id }}/google/select-location" class="btn-ghost">
-                        <i class="bi bi-geo-alt"></i>
-                        Select Location
-                    </a>
                     <button type="button" class="btn-ghost" disabled title="Select a Google location before syncing reviews">
                         <i class="bi bi-arrow-repeat"></i>
                         Sync Reviews

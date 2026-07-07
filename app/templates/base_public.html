@@ -21,14 +21,14 @@
 </head>
 <body>
     <nav class="rs-public-nav">
-        <div class="rs-public-container h-100 d-flex align-items-center justify-content-between">
+        <div class="rs-public-container rs-public-nav-inner h-100 d-flex align-items-center justify-content-between">
             <a href="/" class="rs-brand">
                 <img src="{{ url_for('static', filename='images/logo.png') }}" class="brand-logo" alt="ReviewGrow Logo">
                 <span class="rs-brand-text">Review<span>Grow</span></span>
             </a>
-            <div class="d-flex align-items-center gap-2">
+            <div class="rs-public-actions d-flex align-items-center gap-2">
                 {% block public_nav %}
-                <a href="/pricing" class="btn-ghost">Pricing</a>
+                <a href="/pricing" class="btn-ghost rs-pricing-nav-link">Pricing</a>
                 <a href="/login-page" class="btn-ghost">Login</a>
                 <a href="/register-page" class="btn-solid">Register</a>
                 {% endblock %}
