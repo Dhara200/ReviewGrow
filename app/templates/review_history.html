@@ -303,6 +303,7 @@
                 data-source="{{ review.source|lower }}"
                 data-status="{{ review.analysis_status|lower }}"
                 data-rating="{{ review.rating|int }}"
+                data-review-id="{{ review.id }}"
             >
                 <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
                     <div>
@@ -494,28 +495,40 @@ const modalReply = document.getElementById("modalReply");
 const closeModal = document.getElementById("closeModal");
 const copyReply = document.getElementById("copyReply");
 
+async function openReviewAnalysis(reviewId) {
+    const response = await fetch(`/reviews/analysis/${reviewId}`);
+    const data = await response.json();
+
+    modalSummary.textContent = data.summary || "Analysis summary is not available yet.";
+    modalSentiment.textContent = data.sentiment || "Pending";
+    modalReply.value = data.ai_reply || "";
+
+    modalSentiment.className = "sentiment-badge ";
+    if (data.sentiment === "Positive") {
+        modalSentiment.className += "badge-soft-success";
+    } else if (data.sentiment === "Negative") {
+        modalSentiment.className += "badge-soft-danger";
+    } else {
+        modalSentiment.className += "badge-soft-warning";
+    }
+
+    modal.style.display = "flex";
+}
+
 document.querySelectorAll(".view-analysis[data-review-id]").forEach(button => {
-    button.addEventListener("click", async function () {
-        const reviewId = this.dataset.reviewId;
-        const response = await fetch(`/reviews/analysis/${reviewId}`);
-        const data = await response.json();
-
-        modalSummary.textContent = data.summary;
-        modalSentiment.textContent = data.sentiment;
-        modalReply.value = data.ai_reply;
-
-        modalSentiment.className = "sentiment-badge ";
-        if (data.sentiment === "Positive") {
-            modalSentiment.className += "badge-soft-success";
-        } else if (data.sentiment === "Negative") {
-            modalSentiment.className += "badge-soft-danger";
-        } else {
-            modalSentiment.className += "badge-soft-warning";
-        }
-
-        modal.style.display = "flex";
+    button.addEventListener("click", function () {
+        openReviewAnalysis(this.dataset.reviewId);
     });
 });
+
+const requestedReviewId = new URLSearchParams(window.location.search).get("open_review");
+if (requestedReviewId) {
+    const reviewCard = document.querySelector(`.review-card[data-review-id="${requestedReviewId}"]`);
+    if (reviewCard) {
+        reviewCard.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => openReviewAnalysis(requestedReviewId), 350);
+    }
+}
 
 closeModal.onclick = function () {
     modal.style.display = "none";

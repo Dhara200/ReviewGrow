@@ -265,7 +265,10 @@
             <div class="col-lg-6">
                 <div class="rs-card rs-card-lg rs-pricing-card">
                     <h3 class="h4 fw-bold mb-2">ReviewGrow Premium</h3>
-                    <div class="display-5 fw-bold text-primary mb-4">₹2,999<span class="h6 text-muted">/month</span></div>
+                    <div class="rs-marketing-price mb-4">
+                        <span class="rs-marketing-price-original">₹{{ "{:,.0f}".format(original_subscription_price) }}</span>
+                        <span class="display-5 fw-bold text-primary">₹{{ "{:,.0f}".format(subscription_price) }}<span class="h6 text-muted">/month</span></span>
+                    </div>
                     <div class="rs-pricing-list mb-4">
                         {% for item in [
                             "Connect Your Google Business Profile in few clicks",

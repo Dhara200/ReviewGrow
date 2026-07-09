@@ -98,6 +98,26 @@ def _add_index_if_missing(cursor, table_name, index_name, definition):
     )
 
 
+def _modify_column_if_needed(cursor, table_name, column_name, definition):
+    cursor.execute(
+        """
+        SELECT column_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema=%s
+        AND table_name=%s
+        AND column_name=%s
+        """,
+        (Config.DB_NAME, table_name, column_name)
+    )
+    column = cursor.fetchone()
+    if not column:
+        return
+
+    cursor.execute(
+        f"ALTER TABLE {table_name} MODIFY COLUMN {column_name} {definition}"
+    )
+
+
 def ensure_mvp_schema():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -182,6 +202,12 @@ def ensure_mvp_schema():
     _add_column_if_missing(
         cursor,
         "reviews",
+        "source",
+        "VARCHAR(100) NOT NULL DEFAULT 'excel'"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
         "sentiment",
         "VARCHAR(50)"
     )
@@ -258,6 +284,18 @@ def ensure_mvp_schema():
         cursor,
         "reviews",
         "reply_posted_at",
+        "DATETIME"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
+        "reply_text",
+        "TEXT"
+    )
+    _add_column_if_missing(
+        cursor,
+        "reviews",
+        "replied_at",
         "DATETIME"
     )
     _add_column_if_missing(
@@ -689,6 +727,202 @@ def ensure_mvp_schema():
             FOREIGN KEY (business_id)
                 REFERENCES businesses(id)
                 ON DELETE SET NULL
+        )
+        """
+    )
+    _create_table_if_missing(
+        cursor,
+        "review_topics",
+        """
+        CREATE TABLE review_topics (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            review_id INT NOT NULL,
+            business_id INT NOT NULL,
+            topic VARCHAR(120) NOT NULL,
+            sentiment ENUM('positive','neutral','negative') NOT NULL DEFAULT 'neutral',
+            confidence DECIMAL(5,4) DEFAULT 0.0000,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_review_topic (review_id, topic),
+            INDEX idx_review_topics_business_sentiment (business_id, sentiment),
+            INDEX idx_review_topics_topic (topic),
+            FOREIGN KEY (review_id)
+                REFERENCES reviews(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (business_id)
+                REFERENCES businesses(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    _create_table_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        """
+        CREATE TABLE ai_consultant_reports (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            business_id INT NOT NULL,
+            overall_score DECIMAL(4,2) DEFAULT 0.00,
+            health_status VARCHAR(50) NOT NULL,
+            executive_summary TEXT,
+            strengths JSON,
+            weaknesses JSON,
+            positive_topics JSON,
+            negative_topics JSON,
+            priority_actions JSON,
+            risks JSON,
+            opportunities JSON,
+            next_steps JSON,
+            raw_ai_response JSON,
+            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ai_consultant_business_generated (business_id, generated_at),
+            FOREIGN KEY (business_id)
+                REFERENCES businesses(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "review_source",
+        "VARCHAR(50) NULL"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "report_status",
+        "ENUM('up_to_date','outdated') NOT NULL DEFAULT 'up_to_date'"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "outdated_at",
+        "DATETIME NULL"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "daily_briefing",
+        "TEXT"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "ai_alerts",
+        "JSON"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "action_plan",
+        "JSON"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "emotion_breakdown",
+        "JSON"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "trend_summary",
+        "JSON"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "latest_attention_reviews",
+        "JSON"
+    )
+    _add_column_if_missing(
+        cursor,
+        "ai_consultant_reports",
+        "last_review_synced_at",
+        "DATETIME NULL"
+    )
+    _create_table_if_missing(
+        cursor,
+        "consultant_actions",
+        """
+        CREATE TABLE consultant_actions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            business_id INT NOT NULL,
+            report_id INT NULL,
+            topic VARCHAR(120) NOT NULL,
+            issue_title VARCHAR(255) NOT NULL,
+            recommendation TEXT,
+            reason TEXT,
+            priority VARCHAR(30) DEFAULT 'Medium',
+            estimated_impact VARCHAR(50),
+            status ENUM('open','in_progress','completed','ignored','verified') DEFAULT 'open',
+            owner_note TEXT,
+            first_detected_at DATETIME,
+            last_detected_at DATETIME,
+            resolved_at DATETIME NULL,
+            started_at DATETIME NULL,
+            completed_at DATETIME NULL,
+            ignored_at DATETIME NULL,
+            last_detected_review_date DATETIME NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_consultant_action_topic_issue (business_id, topic, issue_title),
+            INDEX idx_consultant_actions_business_status (business_id, status),
+            INDEX idx_consultant_actions_detected (business_id, last_detected_at),
+            FOREIGN KEY (business_id)
+                REFERENCES businesses(id)
+                ON DELETE CASCADE
+        )
+        """
+    )
+    _add_column_if_missing(cursor, "consultant_actions", "report_id", "INT NULL")
+    _add_column_if_missing(cursor, "consultant_actions", "reason", "TEXT")
+    _add_column_if_missing(cursor, "consultant_actions", "estimated_impact", "VARCHAR(50)")
+    _add_column_if_missing(cursor, "consultant_actions", "started_at", "DATETIME NULL")
+    _add_column_if_missing(cursor, "consultant_actions", "completed_at", "DATETIME NULL")
+    _add_column_if_missing(cursor, "consultant_actions", "ignored_at", "DATETIME NULL")
+    _add_column_if_missing(cursor, "consultant_actions", "last_detected_review_date", "DATETIME NULL")
+    if _table_exists(cursor, "consultant_actions"):
+        cursor.execute(
+            """
+            UPDATE consultant_actions
+            SET status='in_progress'
+            WHERE status='planned'
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE consultant_actions
+            SET status='completed',
+                completed_at=COALESCE(completed_at, resolved_at, updated_at)
+            WHERE status='resolved'
+            """
+        )
+    _modify_column_if_needed(
+        cursor,
+        "consultant_actions",
+        "status",
+        "ENUM('open','in_progress','completed','ignored','verified') DEFAULT 'open'"
+    )
+    _create_table_if_missing(
+        cursor,
+        "consultant_action_events",
+        """
+        CREATE TABLE consultant_action_events (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            action_id INT NOT NULL,
+            business_id INT NOT NULL,
+            event_type VARCHAR(80) NOT NULL,
+            event_note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_consultant_action_events_action (action_id, created_at),
+            FOREIGN KEY (action_id)
+                REFERENCES consultant_actions(id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (business_id)
+                REFERENCES businesses(id)
+                ON DELETE CASCADE
         )
         """
     )

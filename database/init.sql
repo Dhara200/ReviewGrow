@@ -80,6 +80,8 @@ CREATE TABLE reviews (
     reply_status ENUM('pending','approved','posted','failed') DEFAULT 'pending',
     reply_generated_at DATETIME,
     reply_posted_at DATETIME,
+    reply_text TEXT,
+    replied_at DATETIME,
     reply_error_message TEXT,
     confidence_score DECIMAL(5,4),
     analysis_error TEXT,
@@ -299,6 +301,103 @@ CREATE TABLE reports (
 
     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
+    FOREIGN KEY (business_id)
+        REFERENCES businesses(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE review_topics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    review_id INT NOT NULL,
+    business_id INT NOT NULL,
+    topic VARCHAR(120) NOT NULL,
+    sentiment ENUM('positive','neutral','negative') NOT NULL DEFAULT 'neutral',
+    confidence DECIMAL(5,4) DEFAULT 0.0000,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_review_topic (review_id, topic),
+    INDEX idx_review_topics_business_sentiment (business_id, sentiment),
+    INDEX idx_review_topics_topic (topic),
+    FOREIGN KEY (review_id)
+        REFERENCES reviews(id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (business_id)
+        REFERENCES businesses(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE ai_consultant_reports (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    business_id INT NOT NULL,
+    overall_score DECIMAL(4,2) DEFAULT 0.00,
+    health_status VARCHAR(50) NOT NULL,
+    executive_summary TEXT,
+    strengths JSON,
+    weaknesses JSON,
+    positive_topics JSON,
+    negative_topics JSON,
+    priority_actions JSON,
+    risks JSON,
+    opportunities JSON,
+    next_steps JSON,
+    raw_ai_response JSON,
+    report_status ENUM('up_to_date','outdated') NOT NULL DEFAULT 'up_to_date',
+    outdated_at DATETIME NULL,
+    daily_briefing TEXT,
+    ai_alerts JSON,
+    action_plan JSON,
+    emotion_breakdown JSON,
+    trend_summary JSON,
+    latest_attention_reviews JSON,
+    last_review_synced_at DATETIME NULL,
+    review_source VARCHAR(50) NULL,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ai_consultant_business_generated (business_id, generated_at),
+    FOREIGN KEY (business_id)
+        REFERENCES businesses(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE consultant_actions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    business_id INT NOT NULL,
+    report_id INT NULL,
+    topic VARCHAR(120) NOT NULL,
+    issue_title VARCHAR(255) NOT NULL,
+    recommendation TEXT,
+    reason TEXT,
+    priority VARCHAR(30) DEFAULT 'Medium',
+    estimated_impact VARCHAR(50),
+    status ENUM('open','in_progress','completed','ignored','verified') DEFAULT 'open',
+    owner_note TEXT,
+    first_detected_at DATETIME,
+    last_detected_at DATETIME,
+    resolved_at DATETIME NULL,
+    started_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    ignored_at DATETIME NULL,
+    last_detected_review_date DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_consultant_action_topic_issue (business_id, topic, issue_title),
+    INDEX idx_consultant_actions_business_status (business_id, status),
+    INDEX idx_consultant_actions_detected (business_id, last_detected_at),
+    FOREIGN KEY (business_id)
+        REFERENCES businesses(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE consultant_action_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    action_id INT NOT NULL,
+    business_id INT NOT NULL,
+    event_type VARCHAR(80) NOT NULL,
+    event_note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_consultant_action_events_action (action_id, created_at),
+    FOREIGN KEY (action_id)
+        REFERENCES consultant_actions(id)
+        ON DELETE CASCADE,
     FOREIGN KEY (business_id)
         REFERENCES businesses(id)
         ON DELETE CASCADE

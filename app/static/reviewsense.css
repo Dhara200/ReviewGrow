@@ -1282,6 +1282,21 @@ td {
     z-index: 1;
 }
 
+.rs-marketing-price {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .75rem;
+}
+
+.rs-marketing-price-original {
+    color: var(--rs-subtle);
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-decoration: line-through;
+    text-decoration-thickness: .12em;
+}
+
 .rs-pricing-list {
     display: grid;
     gap: .9rem;

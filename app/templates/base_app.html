@@ -76,10 +76,6 @@
                     <i class="bi bi-cloud-arrow-up"></i>
                     Upload reviews
                 </a>
-                <a href="/businesses/{{ business_id }}/photos" class="rs-nav-link {% block nav_photos %}{% endblock %}">
-                    <i class="bi bi-images"></i>
-                    Upload photos
-                </a>
                 <a href="/reviews/history/{{ business_id }}" class="rs-nav-link {% block nav_history %}{% endblock %}">
                     <i class="bi bi-chat-square-text"></i>
                     Review history
@@ -143,7 +139,6 @@
             <hr>
             <a href="/dashboard/{{ business_id }}" class="rs-nav-link"><i class="bi bi-speedometer2"></i> Dashboard</a>
             <a href="/upload-reviews/{{ business_id }}" class="rs-nav-link"><i class="bi bi-cloud-arrow-up"></i> Upload reviews</a>
-            <a href="/businesses/{{ business_id }}/photos" class="rs-nav-link"><i class="bi bi-images"></i> Upload photos</a>
             <a href="/reviews/history/{{ business_id }}" class="rs-nav-link"><i class="bi bi-chat-square-text"></i> Review history</a>
             {% endif %}
             <hr>

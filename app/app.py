@@ -14,6 +14,7 @@ from flask import redirect
 from app.routes.admin import admin_bp
 from app.routes.google_business import google_business_bp
 from app.routes.subscription import subscription_bp
+from app.routes.ai_consultant_routes import ai_consultant_bp
 
 app = Flask(__name__)
 app.secret_key = Config.SECRET_KEY
@@ -26,6 +27,7 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(google_business_bp)
 app.register_blueprint(subscription_bp)
+app.register_blueprint(ai_consultant_bp)
 
 try:
     ensure_mvp_schema()
@@ -67,7 +69,9 @@ def home():
 
     return render_template(
         "index.html",
-        landing_hero_images=get_landing_hero_images()
+        landing_hero_images=get_landing_hero_images(),
+        subscription_price=Config.SUBSCRIPTION_PRICE,
+        original_subscription_price=Config.ORIGINAL_SUBSCRIPTION_PRICE
     )
 
 

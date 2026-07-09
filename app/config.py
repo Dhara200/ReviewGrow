@@ -21,7 +21,8 @@ class Config:
     )
 
     UPI_ID = os.getenv("UPI_ID", "dharaprasath52@okhdfcbank")
-    SUBSCRIPTION_PRICE = float(os.getenv("SUBSCRIPTION_PRICE", 2999))
+    SUBSCRIPTION_PRICE = float(os.getenv("SUBSCRIPTION_PRICE", 1999))
+    ORIGINAL_SUBSCRIPTION_PRICE = float(os.getenv("ORIGINAL_SUBSCRIPTION_PRICE", 2999))
 
     MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", 5))
     LOGIN_LOCK_MINUTES = int(os.getenv("LOGIN_LOCK_MINUTES", 15))

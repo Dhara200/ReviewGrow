@@ -31,6 +31,10 @@ from app.services.google_performance_service import (
     parse_date_range,
     sync_performance_metrics
 )
+from app.services.business_analytics_service import (
+    get_google_review_snapshot,
+    refresh_business_review_analytics
+)
 from app.services.review_sync_service import sync_google_reviews
 from app.services.analysis_job_service import create_analysis_job
 from app.services.ai_service import AIService, AIServiceError, log_ai_usage
@@ -718,59 +722,28 @@ def _empty_google_review_stats():
     }
 
 
-def _google_review_stats(business_id, google_location_id=None):
+def _google_review_filters_from_request():
+    return {
+        "rating": request.args.get("rating"),
+        "sentiment": request.args.get("sentiment"),
+        "reply_status": request.args.get("reply_status"),
+        "period": request.args.get("period"),
+        "search": request.args.get("search"),
+        "date_from": request.args.get("date_from"),
+        "date_to": request.args.get("date_to"),
+    }
+
+
+def _google_review_stats(business_id, google_location_id=None, filters=None):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    if google_location_id:
-        cursor.execute(
-            """
-            SELECT
-                COUNT(*) AS total_reviews,
-                AVG(COALESCE(review_rating, rating)) AS average_rating,
-                SUM(CASE WHEN sentiment='Positive' THEN 1 ELSE 0 END) AS positive_reviews,
-                SUM(CASE WHEN sentiment='Neutral' THEN 1 ELSE 0 END) AS neutral_reviews,
-                SUM(CASE WHEN sentiment='Negative' THEN 1 ELSE 0 END) AS negative_reviews
-            FROM reviews
-            WHERE business_id=%s
-            AND source='google'
-            AND google_location_id=%s
-            """,
-            (business_id, google_location_id)
-        )
-        stats = cursor.fetchone()
-
-        cursor.execute(
-            """
-            SELECT
-                id,
-                reviewer_name,
-                review_text,
-                COALESCE(review_rating, rating) AS rating,
-                review_created_at,
-                review_updated_at,
-                sentiment,
-                summary,
-                suggested_reply,
-                reply_status,
-                reply_generated_at,
-                reply_posted_at,
-                reply_error_message,
-                google_review_id,
-                external_review_id
-            FROM reviews
-            WHERE business_id=%s
-            AND source='google'
-            AND google_location_id=%s
-            ORDER BY COALESCE(review_updated_at, review_created_at, review_date, created_at) DESC
-            LIMIT 25
-            """,
-            (business_id, google_location_id)
-        )
-        reviews = cursor.fetchall()
-    else:
-        stats = _empty_google_review_stats()
-        reviews = []
+    stats, reviews, review_summary, urgent_reviews = get_google_review_snapshot(
+        business_id,
+        google_location_id=google_location_id,
+        limit=25,
+        filters=filters,
+    )
 
     if session.get("role") == "admin":
         cursor.execute(
@@ -816,7 +789,7 @@ def _google_review_stats(business_id, google_location_id=None):
     cursor.close()
     conn.close()
 
-    return business, stats, reviews
+    return business, stats, reviews, review_summary, urgent_reviews
 
 
 @google_business_bp.route("/businesses/<int:business_id>/google/connect")
@@ -1188,9 +1161,11 @@ def live_dashboard(business_id):
         if _connection_has_location(connection)
         else None
     )
-    business, stats, reviews = _google_review_stats(
+    review_filters = _google_review_filters_from_request()
+    business, stats, reviews, review_summary, urgent_reviews = _google_review_stats(
         business_id,
-        google_location_id
+        google_location_id,
+        filters=review_filters,
     )
     performance = None
     needs_location = bool(connection and not _connection_has_location(connection))
@@ -1229,6 +1204,9 @@ def live_dashboard(business_id):
         needs_location=needs_location,
         admin_override_active=_admin_override_active_for_connection(connection),
         stats=stats,
+        review_summary=review_summary,
+        urgent_reviews=urgent_reviews,
+        review_filters=review_filters,
         reviews=reviews,
         active_tab=active_tab,
         performance=performance,
@@ -1287,6 +1265,27 @@ def sync_google_business_reviews(business_id):
         cursor.close()
         conn.close()
 
+        analytics_message = ""
+        if result["inserted_count"] or result["updated_count"]:
+            try:
+                analytics_result = refresh_business_review_analytics(
+                    business_id,
+                    mark_consultant_outdated=True,
+                    source="google",
+                    google_location_id=connection.get("google_location_id"),
+                    require_google_review_id=True,
+                )
+                inserted_topics = analytics_result["topic_result"].get(
+                    "inserted_topics",
+                    0,
+                )
+                analytics_message = f" {inserted_topics} review topics refreshed."
+            except Exception:
+                current_app.logger.exception(
+                    "Post-sync analytics refresh failed for business_id=%s",
+                    business_id,
+                )
+
         job_id, created = create_analysis_job(
             session["user_id"],
             business_id,
@@ -1302,7 +1301,7 @@ def sync_google_business_reviews(business_id):
         flash(
             (
                 f"Google sync complete: {result['inserted_count']} new, "
-                f"{result['updated_count']} updated.{job_message}"
+                f"{result['updated_count']} updated.{analytics_message}{job_message}"
             ),
             "success"
         )
@@ -1649,10 +1648,12 @@ def post_google_review_reply_route(review_id):
             UPDATE reviews
             SET reply_status='posted',
                 reply_posted_at=NOW(),
+                replied_at=NOW(),
+                reply_text=%s,
                 reply_error_message=NULL
             WHERE id=%s
             """,
-            (review_id,)
+            (suggested_reply, review_id)
         )
         cursor.execute(
             """
@@ -1712,7 +1713,10 @@ def post_google_review_reply_route(review_id):
             )
         )
         conn.commit()
-        return jsonify({"message": str(error), "reply_status": "failed"}), 500
+        return jsonify({
+            "message": "Google could not post this reply right now. Please check the connection and try again.",
+            "reply_status": "failed"
+        }), 500
     finally:
         cursor.close()
         conn.close()

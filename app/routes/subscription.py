@@ -29,6 +29,7 @@ def pricing_page():
         "pricing.html",
         upi_id=Config.UPI_ID,
         subscription_price=Config.SUBSCRIPTION_PRICE,
+        original_subscription_price=Config.ORIGINAL_SUBSCRIPTION_PRICE,
         upi_qr_exists=os.path.exists(
             os.path.join(current_app.static_folder, "images", "upi_qr.png")
         ),

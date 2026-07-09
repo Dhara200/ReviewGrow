@@ -40,6 +40,21 @@
     .pricing-page-header {
         margin-bottom: 2.2rem;
     }
+
+    .pricing-price {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: .75rem;
+    }
+
+    .pricing-original-price {
+        color: #94a3b8;
+        font-size: 1.5rem;
+        font-weight: 700;
+        text-decoration: line-through;
+        text-decoration-thickness: .12em;
+    }
 </style>
 {% endblock %}
 
@@ -65,7 +80,10 @@
             <div class="col-lg-6">
                 <div class="rs-card rs-card-lg rs-pricing-card h-100">
                     <h2 class="h4 fw-bold mb-2">ReviewGrow Premium</h2>
-                    <div class="display-5 fw-bold text-primary mb-4">₹{{ "%.0f"|format(subscription_price) }}<span class="h6 text-muted">/month</span></div>
+                    <div class="pricing-price mb-4">
+                        <span class="pricing-original-price">₹{{ "%.0f"|format(original_subscription_price) }}</span>
+                        <span class="display-5 fw-bold text-primary">₹{{ "%.0f"|format(subscription_price) }}<span class="h6 text-muted">/month</span></span>
+                    </div>
                     <div class="rs-pricing-list mb-4">
                         {% for item in [
                             "Connect Your Google Business Profile in few clicks",

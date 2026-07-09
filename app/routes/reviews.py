@@ -101,13 +101,13 @@ def upload_reviews_ui():
                 """,
                 (
                     business_id,
-                    review["source"],
+                    "excel",
                     review["rating"],
                     review["review_title"],
                     review["review_text"],
                     review["reviewer_name"],
                     review["review_date"],
-                    review["source"],
+                    "excel",
                     "pending"
                 )
             )

@@ -107,6 +107,62 @@
     gap: 1rem;
 }
 
+.live-filter-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.live-filter-grid .rs-nav-link {
+    width: auto;
+}
+
+.review-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-top: .5rem;
+}
+
+.urgent-review-card {
+    border: 1px solid rgba(239, 68, 68, .28);
+    background: rgba(254, 242, 242, .55);
+    border-radius: .5rem;
+    padding: 1rem;
+}
+
+.review-inbox-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(180px, 1fr) auto;
+    gap: .75rem;
+    align-items: center;
+}
+
+.filter-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .35rem .65rem;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, .1);
+    color: var(--rs-primary);
+    font-size: .85rem;
+    font-weight: 700;
+}
+
+.filter-panel {
+    border: 1px solid var(--rs-border);
+    border-radius: .75rem;
+    padding: 1rem;
+    background: var(--rs-surface);
+}
+
 @media (max-width: 991.98px) {
     .live-hero-grid {
         grid-template-columns: 1fr;
@@ -115,6 +171,10 @@
 
 @media (max-width: 767.98px) {
     .live-performance-form {
+        grid-template-columns: 1fr;
+    }
+
+    .review-inbox-toolbar {
         grid-template-columns: 1fr;
     }
 
@@ -440,6 +500,10 @@
                     <i class="bi bi-activity"></i>
                     Performance Analysis
                 </a>
+                <a href="/business/{{ business_id }}/ai-consultant" class="rs-nav-link">
+                    <i class="bi bi-stars"></i>
+                    AI Business Consultant
+                </a>
             </div>
         </div>
     </div>
@@ -489,29 +553,6 @@
             </div>
         </div>
         {% else %}
-        <div class="rs-kpi-grid mb-4">
-            <div class="rs-card rs-kpi">
-                <div class="rs-kpi-icon"><i class="bi bi-chat-square-text"></i></div>
-                <p class="rs-kpi-value">{{ total_reviews }}</p>
-                <p class="rs-kpi-label">Total Google reviews</p>
-            </div>
-            <div class="rs-card rs-kpi">
-                <div class="rs-kpi-icon"><i class="bi bi-star"></i></div>
-                <p class="rs-kpi-value">{{ "%.1f"|format(average_rating) }}</p>
-                <p class="rs-kpi-label">Average rating</p>
-            </div>
-            <div class="rs-card rs-kpi">
-                <div class="rs-kpi-icon" style="background:var(--rs-accent-soft);color:var(--rs-accent);"><i class="bi bi-emoji-smile"></i></div>
-                <p class="rs-kpi-value">{{ positive_reviews }}</p>
-                <p class="rs-kpi-label">Positive reviews</p>
-            </div>
-            <div class="rs-card rs-kpi">
-                <div class="rs-kpi-icon" style="background:#fef2f2;color:var(--rs-danger);"><i class="bi bi-emoji-frown"></i></div>
-                <p class="rs-kpi-value">{{ negative_reviews }}</p>
-                <p class="rs-kpi-label">Negative reviews</p>
-            </div>
-        </div>
-
         <div class="row g-4 mb-4">
             <div class="col-lg-7">
                 <div class="rs-card rs-card-lg h-100">
@@ -595,13 +636,146 @@
     {% endif %}
     {% if active_tab == "reviews" %}
     <div class="col-12">
+        <div class="rs-card rs-card-lg mb-4 d-none">
+            <form method="GET" action="/businesses/{{ business_id }}/live-dashboard">
+                <input type="hidden" name="tab" value="reviews">
+                <div class="review-inbox-toolbar">
+                    <button class="btn-ghost" type="button" data-bs-toggle="collapse" data-bs-target="#reviewFilterPanel">
+                        <i class="bi bi-funnel"></i>
+                        Filter Reviews
+                    </button>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="search" class="form-control" name="search" value="{{ review_filters.search or '' }}" placeholder="Search reviews..." aria-label="Search reviews">
+                    </div>
+                    <a href="/businesses/{{ business_id }}/live-dashboard?tab=reviews" class="btn-ghost">
+                        <i class="bi bi-x-circle"></i>
+                        Clear Filters
+                    </a>
+                </div>
+
+                <div class="filter-chip-row mt-3">
+                    {% if review_filters.rating %}<span class="filter-chip">{{ review_filters.rating }} Star ×</span>{% endif %}
+                    {% if review_filters.sentiment %}<span class="filter-chip">{{ review_filters.sentiment|title }} ×</span>{% endif %}
+                    {% if review_filters.reply_status %}<span class="filter-chip">{{ review_filters.reply_status|replace("_", " ")|title }} ×</span>{% endif %}
+                    {% if review_filters.period %}<span class="filter-chip">{{ review_filters.period|title }} ×</span>{% endif %}
+                    {% if review_filters.search %}<span class="filter-chip">Search: {{ review_filters.search }} ×</span>{% endif %}
+                    {% if review_filters.date_from or review_filters.date_to %}<span class="filter-chip">Custom Date ×</span>{% endif %}
+                </div>
+
+                <p class="text-muted small mt-3 mb-0">
+                    {% if review_summary.filtered_reviews != review_summary.total_reviews %}
+                    Showing {{ review_summary.filtered_reviews }} matching reviews from {{ review_summary.total_reviews }} total reviews
+                    {% else %}
+                    Showing {{ reviews|length }} of {{ review_summary.total_reviews }} reviews
+                    {% endif %}
+                </p>
+
+                <div class="collapse mt-3" id="reviewFilterPanel">
+                    <div class="filter-panel">
+                        <div class="row g-3">
+                            <div class="col-md-4 col-xl-2">
+                                <label class="form-label small fw-bold">Rating</label>
+                                <select class="form-select" name="rating">
+                                    <option value="">All ratings</option>
+                                    {% for star in [5,4,3,2,1] %}
+                                    <option value="{{ star }}" {% if review_filters.rating == star|string %}selected{% endif %}>{{ star }} Star</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 col-xl-2">
+                                <label class="form-label small fw-bold">Sentiment</label>
+                                <select class="form-select" name="sentiment">
+                                    <option value="">All</option>
+                                    <option value="positive" {% if review_filters.sentiment == "positive" %}selected{% endif %}>Positive</option>
+                                    <option value="neutral" {% if review_filters.sentiment == "neutral" %}selected{% endif %}>Neutral</option>
+                                    <option value="negative" {% if review_filters.sentiment == "negative" %}selected{% endif %}>Negative</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 col-xl-2">
+                                <label class="form-label small fw-bold">Reply Status</label>
+                                <select class="form-select" name="reply_status">
+                                    <option value="">All</option>
+                                    <option value="replied" {% if review_filters.reply_status == "replied" %}selected{% endif %}>Replied</option>
+                                    <option value="unanswered" {% if review_filters.reply_status == "unanswered" %}selected{% endif %}>Unanswered</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 col-xl-2">
+                                <label class="form-label small fw-bold">Date</label>
+                                <select class="form-select" name="period">
+                                    <option value="">All time</option>
+                                    <option value="today" {% if review_filters.period == "today" %}selected{% endif %}>Today</option>
+                                    <option value="week" {% if review_filters.period == "week" %}selected{% endif %}>This Week</option>
+                                    <option value="month" {% if review_filters.period == "month" %}selected{% endif %}>This Month</option>
+                                    <option value="custom" {% if review_filters.period == "custom" %}selected{% endif %}>Custom date range</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 col-xl-2 d-flex align-items-end">
+                                <button type="submit" class="btn-solid w-100">
+                                    <i class="bi bi-check2"></i>
+                                    Apply
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Date from</label>
+                                <input type="date" class="form-control" name="date_from" value="{{ review_filters.date_from or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Date to</label>
+                                <input type="date" class="form-control" name="date_to" value="{{ review_filters.date_to or '' }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        {% if urgent_reviews %}
+        <div class="rs-card rs-card-lg mb-4">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="badge-soft-danger"><i class="bi bi-exclamation-triangle"></i></span>
+                <h2 class="h5 fw-bold mb-0">Needs Attention</h2>
+            </div>
+            <div class="row g-3">
+                {% for review in urgent_reviews %}
+                <div class="col-lg-6">
+                    <div class="urgent-review-card h-100">
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <span class="badge-soft-danger">{{ review.rating or "-" }} Star</span>
+                            <span class="badge-soft-warning">Unanswered</span>
+                            <span class="badge-soft-primary">{{ review.topic or "General" }}</span>
+                        </div>
+                        <p class="fw-bold mb-1">{{ review.reviewer_name or "Google reviewer" }}</p>
+                        <p class="text-muted mb-0">{{ review.review_text }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div class="rs-card rs-card-lg live-feed-card">
             <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
                 <div>
                     <p class="rs-eyebrow">Latest Google reviews</p>
                     <h2 class="h5 fw-bold mb-0">Review feed</h2>
+                    <p class="text-muted small mt-2 mb-0">
+                        {% if review_summary.filtered_reviews != review_summary.total_reviews %}
+                        Showing {{ review_summary.filtered_reviews }} matching reviews from {{ review_summary.total_reviews }} total live Google reviews
+                        {% else %}
+                        Showing {{ reviews|length }} of {{ review_summary.total_reviews }} live Google reviews
+                        {% endif %}
+                    </p>
                 </div>
                 <div class="live-feed-actions">
+                    <button type="button" class="btn-ghost" data-bs-toggle="modal" data-bs-target="#reviewFilterModal" title="Filter reviews" aria-label="Filter reviews">
+                        <i class="bi bi-funnel"></i>
+                        Filter
+                    </button>
+                    <a href="/businesses/{{ business_id }}/live-dashboard?tab=reviews" class="btn-ghost">
+                        <i class="bi bi-x-circle"></i>
+                        Clear
+                    </a>
                     {% if business %}
                     <button type="button" class="btn-ghost" data-bs-toggle="modal" data-bs-target="#replySettingsModal" title="Reply settings" aria-label="Reply settings">
                         <i class="bi bi-sliders"></i>
@@ -622,6 +796,14 @@
                     {% endif %}
                 </div>
             </div>
+            <div class="filter-chip-row mb-3">
+                {% if review_filters.rating %}<span class="filter-chip">{{ review_filters.rating }} Star x</span>{% endif %}
+                {% if review_filters.sentiment %}<span class="filter-chip">{{ review_filters.sentiment|title }} x</span>{% endif %}
+                {% if review_filters.reply_status %}<span class="filter-chip">{{ review_filters.reply_status|replace("_", " ")|title }} x</span>{% endif %}
+                {% if review_filters.period %}<span class="filter-chip">{{ review_filters.period|title }} x</span>{% endif %}
+                {% if review_filters.search %}<span class="filter-chip">Search: {{ review_filters.search }} x</span>{% endif %}
+                {% if review_filters.date_from or review_filters.date_to %}<span class="filter-chip">Custom Date x</span>{% endif %}
+            </div>
 
             {% if reviews %}
             <div class="table-responsive">
@@ -632,7 +814,7 @@
                             <th>Rating</th>
                             <th>Review</th>
                             <th>Sentiment</th>
-                            <th>Suggested Reply</th>
+                            <th>Reply</th>
                             <th>Updated</th>
                         </tr>
                     </thead>
@@ -640,8 +822,42 @@
                         {% for review in reviews %}
                         <tr>
                             <td class="fw-semibold">{{ review.reviewer_name }}</td>
-                            <td>{{ review.rating or "-" }}</td>
-                            <td style="min-width:280px;">{{ review.review_text }}</td>
+                            <td>
+                                {% if review.rating %}
+                                <span class="{% if review.rating <= 2 %}badge-soft-danger{% elif review.rating == 3 %}badge-soft-warning{% else %}badge-soft-success{% endif %}">
+                                    {{ review.rating }} Star
+                                </span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td style="min-width:280px;">
+                                {{ review.review_text }}
+                                <div class="review-badge-row">
+                                    <span class="badge-soft-primary">Source: Google</span>
+                                    {% if review.topic %}
+                                    <span class="badge-soft-primary">{{ review.topic|title }}</span>
+                                    {% endif %}
+                                    {% if review.sentiment == "Positive" %}
+                                    <span class="badge-soft-success">Positive</span>
+                                    {% elif review.sentiment == "Negative" %}
+                                    <span class="badge-soft-danger">Negative</span>
+                                    {% elif review.sentiment == "Neutral" %}
+                                    <span class="badge-soft-warning">Neutral</span>
+                                    {% else %}
+                                    <span class="badge-soft-primary">Sentiment pending</span>
+                                    {% endif %}
+                                    {% if review.reply_status == "posted" %}
+                                    <span class="badge-soft-success">Reply posted</span>
+                                    {% elif review.reply_status == "approved" %}
+                                    <span class="badge-soft-primary">Reply approved</span>
+                                    {% elif review.reply_status == "failed" %}
+                                    <span class="badge-soft-danger">Reply failed</span>
+                                    {% else %}
+                                    <span class="badge-soft-warning">Unanswered</span>
+                                    {% endif %}
+                                </div>
+                            </td>
                             <td>
                                 {% if review.sentiment == "Positive" %}
                                 <span class="badge-soft-success">Positive</span>
@@ -654,44 +870,80 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="gbp-reply-box" data-reply-review-id="{{ review.id }}">
+                                <div class="d-grid gap-2">
                                     {% if review.reply_status == "posted" %}
-                                    <span class="badge-soft-success gbp-reply-status" data-reply-status>Posted</span>
+                                    <span class="badge-soft-success">Replied</span>
                                     {% elif review.reply_status == "approved" %}
-                                    <span class="badge-soft-primary gbp-reply-status" data-reply-status>Approved</span>
+                                    <span class="badge-soft-primary">Ready to post</span>
                                     {% elif review.reply_status == "failed" %}
-                                    <span class="badge-soft-danger gbp-reply-status" data-reply-status>Failed</span>
+                                    <span class="badge-soft-danger">Reply failed</span>
                                     {% else %}
-                                    <span class="badge-soft-warning gbp-reply-status" data-reply-status>Pending approval</span>
+                                    <span class="badge-soft-warning">Unanswered</span>
                                     {% endif %}
+                                    <button type="button" class="btn-ghost" data-bs-toggle="modal" data-bs-target="#replyModal{{ review.id }}">
+                                        <i class="bi bi-reply"></i>
+                                        Reply
+                                    </button>
+                                </div>
 
-                                    <textarea class="form-control gbp-reply-text" data-suggested-reply placeholder="Generate a suggested reply first.">{{ review.suggested_reply or review.ai_reply or "" }}</textarea>
+                                <div class="modal fade" id="replyModal{{ review.id }}" tabindex="-1" aria-labelledby="replyModalLabel{{ review.id }}" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <div>
+                                                    <p class="rs-eyebrow mb-1">Google review reply</p>
+                                                    <h2 class="modal-title h5 fw-bold" id="replyModalLabel{{ review.id }}">Reply to {{ review.reviewer_name or "Google reviewer" }}</h2>
+                                                </div>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                                        <span class="{% if review.rating and review.rating <= 2 %}badge-soft-danger{% elif review.rating == 3 %}badge-soft-warning{% elif review.rating %}badge-soft-success{% else %}badge-soft-primary{% endif %}">{{ review.rating or "-" }} Star</span>
+                                                        <span class="badge-soft-primary">Source: Google</span>
+                                                    </div>
+                                                    <p class="text-muted mb-0">{{ review.review_text }}</p>
+                                                </div>
+                                                <div class="gbp-reply-box" data-reply-review-id="{{ review.id }}">
+                                                    {% if review.reply_status == "posted" %}
+                                                    <span class="badge-soft-success gbp-reply-status" data-reply-status>Posted</span>
+                                                    {% elif review.reply_status == "approved" %}
+                                                    <span class="badge-soft-primary gbp-reply-status" data-reply-status>Approved</span>
+                                                    {% elif review.reply_status == "failed" %}
+                                                    <span class="badge-soft-danger gbp-reply-status" data-reply-status>Failed</span>
+                                                    {% else %}
+                                                    <span class="badge-soft-warning gbp-reply-status" data-reply-status>Pending approval</span>
+                                                    {% endif %}
 
-                                    {% if review.reply_error_message %}
-                                    <p class="text-danger small mb-0" data-reply-error>{{ review.reply_error_message }}</p>
-                                    {% else %}
-                                    <p class="text-danger small mb-0 d-none" data-reply-error></p>
-                                    {% endif %}
+                                                    <label class="form-label fw-bold" for="replyText{{ review.id }}">AI generated reply suggestion</label>
+                                                    <textarea id="replyText{{ review.id }}" class="form-control gbp-reply-text" data-suggested-reply placeholder="Generate a suggested reply first.">{{ review.suggested_reply or review.ai_reply or "" }}</textarea>
 
-                                    <div class="gbp-reply-actions">
-                                        <button type="button" class="btn-ghost" data-regenerate-reply>
-                                            <i class="bi bi-arrow-repeat"></i>
-                                            Regenerate
-                                        </button>
-                                        <button type="button" class="btn-solid" data-approve-reply>
-                                            <i class="bi bi-check2-circle"></i>
-                                            Approve
-                                        </button>
-                                        <button type="button" class="btn-ghost" data-copy-reply>
-                                            <i class="bi bi-clipboard"></i>
-                                            Copy
-                                        </button>
-                                        {% if can_post_replies %}
-                                        <button type="button" class="btn-ghost" data-post-reply {% if review.reply_status != "approved" %}disabled{% endif %}>
-                                            <i class="bi bi-send"></i>
-                                            Post to Google
-                                        </button>
-                                        {% endif %}
+                                                    {% if review.reply_error_message %}
+                                                    <p class="text-danger small mb-0" data-reply-error>{{ review.reply_error_message }}</p>
+                                                    {% else %}
+                                                    <p class="text-danger small mb-0 d-none" data-reply-error></p>
+                                                    {% endif %}
+
+                                                    <div class="gbp-reply-actions">
+                                                        <button type="button" class="btn-ghost" data-regenerate-reply>
+                                                            <i class="bi bi-magic"></i>
+                                                            Generate AI Reply
+                                                        </button>
+                                                        <button type="button" class="btn-solid" data-approve-reply>
+                                                            <i class="bi bi-check2-circle"></i>
+                                                            Save Reply
+                                                        </button>
+                                                        {% if can_post_replies and review.google_review_id %}
+                                                        <button type="button" class="btn-ghost" data-post-reply {% if review.reply_status != "approved" %}disabled{% endif %}>
+                                                            <i class="bi bi-send"></i>
+                                                            Post Reply
+                                                        </button>
+                                                        {% endif %}
+                                                        <button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </td>
@@ -709,6 +961,86 @@
     {% endif %}
 </div>
 {% if active_tab == "reviews" and business %}
+<div class="modal fade" id="reviewFilterModal" tabindex="-1" aria-labelledby="reviewFilterModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form method="GET" action="/businesses/{{ business_id }}/live-dashboard">
+                <input type="hidden" name="tab" value="reviews">
+                <div class="modal-header">
+                    <div>
+                        <p class="rs-eyebrow mb-1">Google review inbox</p>
+                        <h2 class="modal-title h5 fw-bold" id="reviewFilterModalLabel">Filter Reviews</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Search keyword</label>
+                            <input type="search" class="form-control" name="search" value="{{ review_filters.search or '' }}" placeholder="Search review text or reviewer">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Rating</label>
+                            <select class="form-select" name="rating">
+                                <option value="">All ratings</option>
+                                {% for star in [5,4,3,2,1] %}
+                                <option value="{{ star }}" {% if review_filters.rating == star|string %}selected{% endif %}>{{ star }} Star</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Sentiment</label>
+                            <select class="form-select" name="sentiment">
+                                <option value="">All</option>
+                                <option value="positive" {% if review_filters.sentiment == "positive" %}selected{% endif %}>Positive</option>
+                                <option value="neutral" {% if review_filters.sentiment == "neutral" %}selected{% endif %}>Neutral</option>
+                                <option value="negative" {% if review_filters.sentiment == "negative" %}selected{% endif %}>Negative</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Reply Status</label>
+                            <select class="form-select" name="reply_status">
+                                <option value="">All</option>
+                                <option value="replied" {% if review_filters.reply_status == "replied" %}selected{% endif %}>Replied</option>
+                                <option value="unanswered" {% if review_filters.reply_status == "unanswered" %}selected{% endif %}>Unanswered</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Date</label>
+                            <select class="form-select" name="period">
+                                <option value="">All time</option>
+                                <option value="today" {% if review_filters.period == "today" %}selected{% endif %}>Today</option>
+                                <option value="week" {% if review_filters.period == "week" %}selected{% endif %}>This Week</option>
+                                <option value="month" {% if review_filters.period == "month" %}selected{% endif %}>This Month</option>
+                                <option value="custom" {% if review_filters.period == "custom" %}selected{% endif %}>Custom date range</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Date from</label>
+                            <input type="date" class="form-control" name="date_from" value="{{ review_filters.date_from or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Date to</label>
+                            <input type="date" class="form-control" name="date_to" value="{{ review_filters.date_to or '' }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/businesses/{{ business_id }}/live-dashboard?tab=reviews" class="btn-ghost">
+                        <i class="bi bi-x-circle"></i>
+                        Clear Filters
+                    </a>
+                    <button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-solid">
+                        <i class="bi bi-check2"></i>
+                        Apply
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="replySettingsModal" tabindex="-1" aria-labelledby="replySettingsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">

@@ -1,0 +1,780 @@
+{% extends "base_app.html" %}
+
+{% block title %}AI Business Consultant - ReviewGrow{% endblock %}
+{% block nav_consultant %}active{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-muted small fw-semibold">
+    Workspace / {{ business.business_name if business else "Business" }} / AI Business Consultant
+</span>
+{% endblock %}
+
+
+{% block head %}
+<style>
+.rs-content {
+    width: 100%;
+    max-width: none;
+}
+
+.consultant-score {
+    font-size: clamp(2.4rem, 5vw, 4rem);
+    line-height: 1;
+}
+
+.consultant-list {
+    display: grid;
+    gap: .85rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.consultant-list li {
+    display: flex;
+    gap: .65rem;
+    align-items: flex-start;
+    color: var(--rs-muted);
+}
+
+.consultant-list i {
+    margin-top: .15rem;
+    flex: 0 0 auto;
+}
+
+.consultant-metric {
+    padding: 1rem;
+    border: 1px solid var(--rs-border);
+    border-radius: .5rem;
+    background: var(--rs-surface);
+}
+
+.command-grid {
+    display: grid;
+    grid-template-columns: minmax(320px, .8fr) minmax(0, 1.6fr);
+    gap: 1.5rem;
+}
+
+.command-score {
+    font-size: clamp(3rem, 7vw, 5rem);
+    line-height: .95;
+}
+
+.command-section {
+    margin-bottom: 1.5rem;
+}
+
+.command-list {
+    display: grid;
+    gap: .85rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.command-list li,
+.command-action,
+.command-alert,
+.topic-row,
+.attention-review {
+    border: 1px solid var(--rs-border);
+    border-radius: .5rem;
+    background: var(--rs-surface);
+    padding: 1rem;
+}
+
+.command-action,
+.attention-review {
+    display: grid;
+    gap: .5rem;
+}
+
+.topic-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 1fr) auto auto;
+    gap: .75rem;
+    align-items: center;
+}
+
+.emotion-bar {
+    height: .55rem;
+    border-radius: 999px;
+    background: var(--rs-border);
+    overflow: hidden;
+}
+
+.emotion-bar span {
+    display: block;
+    height: 100%;
+    background: var(--rs-primary);
+}
+
+.growth-chart-wrap {
+    position: relative;
+    min-height: 320px;
+}
+
+.growth-chart-wrap canvas {
+    width: 100% !important;
+    height: 320px !important;
+}
+
+@media (max-width: 991.98px) {
+    .command-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% macro consultant_section(title, items, icon, icon_class) %}
+<div class="rs-card rs-card-lg h-100">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-primary"><i class="bi {{ icon }}"></i></span>
+        <h2 class="h5 fw-bold mb-0">{{ title }}</h2>
+    </div>
+    {% if items %}
+    <ul class="consultant-list">
+        {% for item in items %}
+        <li>
+            <i class="bi {{ icon }} {{ icon_class }}"></i>
+            <span>{{ item }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-muted mb-0">No clear pattern detected yet.</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+{% set health = command_center.health %}
+{% set status = command_center.report_status %}
+{% set alerts = (report.ai_alerts if report and report.ai_alerts else command_center.alerts) %}
+{% set action_plan = (report.action_plan if report and report.action_plan else command_center.action_plan) %}
+{% set strengths = (report.strengths if report and report.strengths else command_center.strengths) %}
+{% set weaknesses = (report.weaknesses if report and report.weaknesses else command_center.weaknesses) %}
+{% set opportunities = (report.opportunities if report and report.opportunities else command_center.opportunities) %}
+{% set risks = (report.risks if report and report.risks else command_center.risks) %}
+{% set trend_summary = (report.trend_summary if report and report.trend_summary else command_center.trend_summary) %}
+{% set attention_reviews = (report.latest_attention_reviews if report and report.latest_attention_reviews else command_center.latest_attention_reviews) %}
+{% set emotion_breakdown = (report.emotion_breakdown if report and report.emotion_breakdown else command_center.emotion_breakdown) %}
+{% set daily_briefing = (report.daily_briefing if report and report.daily_briefing else command_center.daily_briefing) %}
+{% set executive_summary = (report.executive_summary if report else command_center.executive_summary) %}
+
+<div class="rs-page-header">
+    <div>
+        <p class="rs-eyebrow">{{ business.business_type if business else "Business" }}</p>
+        <h1 class="rs-page-title">AI Business Command Center</h1>
+        <p class="rs-page-subtitle">
+            Live improvement priorities for {{ business.business_name if business else "this business" }} from Google Business Profile reviews.
+        </p>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <span class="badge-soft-primary">
+                <i class="bi bi-google"></i>
+                Data Source: Live Google Reviews Only
+            </span>
+            <span class="badge-soft-success">
+                Google reviews analyzed: {{ metrics.total_reviews or 0 }}
+            </span>
+        </div>
+    </div>
+    <form method="POST" action="/business/{{ business_id }}/ai-consultant/generate">
+        <button type="submit" class="btn-solid" {% if not can_generate %}disabled{% endif %}>
+            <i class="bi bi-stars"></i>
+            Generate AI Business Consultant Report
+        </button>
+    </form>
+</div>
+
+{% if not can_generate %}
+<div class="alert alert-warning" role="alert">
+    <strong>Pending - Need at least 5 live Google reviews.</strong>
+    <span>{{ minimum_review_message }}</span>
+    <div class="d-flex flex-wrap gap-2 mt-3">
+        {% if not google_connection %}
+        <a href="/auth/google/start/{{ business_id }}" class="btn-ghost">
+            <i class="bi bi-google"></i>
+            Connect Google Business Profile
+        </a>
+        {% endif %}
+        <a href="/businesses/{{ business_id }}/live-dashboard" class="btn-ghost">
+            <i class="bi bi-broadcast"></i>
+            Start live review sync
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<div class="command-grid command-section">
+    <div class="rs-card rs-card-lg h-100">
+        <div class="d-flex justify-content-between gap-3 align-items-start mb-4">
+            <div>
+                <p class="rs-eyebrow">Business Health Score</p>
+                {% if health.score is none %}
+                <p class="h2 fw-bold mb-1">Pending</p>
+                <p class="text-muted mb-0">Need at least 5 live Google reviews</p>
+                {% else %}
+                <p class="command-score fw-bold mb-1">{{ "%.1f"|format(health.score) }}</p>
+                <p class="text-muted mb-0">out of 10</p>
+                {% endif %}
+            </div>
+            {% if health.status == "Excellent" %}
+            <span class="badge-soft-success">Excellent</span>
+            {% elif health.status == "Good" %}
+            <span class="badge-soft-primary">Good</span>
+            {% elif health.status == "Needs Attention" %}
+            <span class="badge-soft-warning">Needs Attention</span>
+            {% elif health.status == "Critical" %}
+            <span class="badge-soft-danger">Critical</span>
+            {% else %}
+            <span class="badge-soft-warning">Pending</span>
+            {% endif %}
+        </div>
+        {% if health.score is not none %}
+        <div class="progress mb-3">
+            <div class="progress-bar" style="width: {{ health.score * 10 }}%;"></div>
+        </div>
+        {% endif %}
+        <ul class="consultant-list">
+            {% for driver in health.drivers %}
+            <li><i class="bi bi-check2-circle text-primary"></i><span>{{ driver }}</span></li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="rs-card rs-card-lg h-100">
+        <div class="d-flex justify-content-between gap-3 align-items-start mb-3">
+            <div>
+                <p class="rs-eyebrow">AI Daily Briefing</p>
+                <h2 class="h5 fw-bold mb-0">Today’s reputation brief</h2>
+            </div>
+            {% if status.state == "up_to_date" %}
+            <span class="badge-soft-success">Up to date</span>
+            {% elif status.state == "outdated" %}
+            <span class="badge-soft-warning">Update available</span>
+            {% else %}
+            <span class="badge-soft-primary">No report yet</span>
+            {% endif %}
+        </div>
+        <p class="text-muted fs-6 lh-lg mb-4">{{ daily_briefing }}</p>
+        <div class="rs-kpi-grid">
+            <div class="consultant-metric">
+                <p class="rs-kpi-value">{{ metrics.total_reviews }}</p>
+                <p class="rs-kpi-label">Total reviews</p>
+            </div>
+            <div class="consultant-metric">
+                <p class="rs-kpi-value">{{ "%.1f"|format(metrics.average_rating) }}</p>
+                <p class="rs-kpi-label">Average rating</p>
+            </div>
+            <div class="consultant-metric">
+                <p class="rs-kpi-value">{{ metrics.recent_review_count }}</p>
+                <p class="rs-kpi-label">Last 30 days</p>
+            </div>
+            <div class="consultant-metric">
+                <p class="rs-kpi-value">{{ metrics.response_rate }}%</p>
+                <p class="rs-kpi-label">Response rate</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-primary"><i class="bi bi-kanban"></i></span>
+        <h2 class="h5 fw-bold mb-0">AI Action Center</h2>
+    </div>
+    <div class="rs-kpi-grid">
+        <div class="consultant-metric">
+            <p class="rs-kpi-value">{{ action_state.analytics.open }}</p>
+            <p class="rs-kpi-label">Open Actions</p>
+        </div>
+        <div class="consultant-metric">
+            <p class="rs-kpi-value">{{ action_state.analytics.in_progress }}</p>
+            <p class="rs-kpi-label">In Progress</p>
+        </div>
+        <div class="consultant-metric">
+            <p class="rs-kpi-value">{{ action_state.analytics.completed }}</p>
+            <p class="rs-kpi-label">Completed</p>
+        </div>
+        <div class="consultant-metric">
+            <p class="rs-kpi-value">{{ action_state.analytics.ignored }}</p>
+            <p class="rs-kpi-label">Ignored</p>
+        </div>
+        <div class="consultant-metric">
+            <p class="rs-kpi-value">{{ action_state.analytics.verified }}</p>
+            <p class="rs-kpi-label">Verified</p>
+        </div>
+        <div class="consultant-metric">
+            <p class="rs-kpi-value">{{ action_state.analytics.completion_rate }}%</p>
+            <p class="rs-kpi-label">Completion Rate</p>
+        </div>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <p class="rs-eyebrow">AI Executive Summary</p>
+    <p class="text-muted fs-6 lh-lg mb-0">{{ executive_summary }}</p>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-primary"><i class="bi bi-bell"></i></span>
+        <h2 class="h5 fw-bold mb-0">AI Alerts</h2>
+    </div>
+    <div class="row g-3">
+        {% for alert in alerts %}
+        <div class="col-lg-4 col-md-6">
+            <div class="command-alert h-100">
+                {% if alert.priority == "High" %}
+                <span class="badge-soft-danger">{{ alert.priority }}</span>
+                {% elif alert.priority == "Medium" %}
+                <span class="badge-soft-warning">{{ alert.priority }}</span>
+                {% else %}
+                <span class="badge-soft-success">{{ alert.priority }}</span>
+                {% endif %}
+                <h3 class="h6 fw-bold mt-3 mb-2">{{ alert.title }}</h3>
+                <p class="text-muted mb-0">{{ alert.message }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-primary"><i class="bi bi-list-check"></i></span>
+        <h2 class="h5 fw-bold mb-0">AI Action Center</h2>
+    </div>
+    <div class="row g-3">
+        {% for item in action_state.active %}
+        <div class="col-lg-6">
+            <div class="command-action h-100">
+                <div class="d-flex justify-content-between gap-2">
+                    <h3 class="h6 fw-bold mb-0">{{ item.issue_title }}</h3>
+                    {% if item.priority == "High" %}
+                    <span class="badge-soft-danger">{{ item.priority }}</span>
+                    {% elif item.priority == "Medium" %}
+                    <span class="badge-soft-warning">{{ item.priority }}</span>
+                    {% else %}
+                    <span class="badge-soft-success">{{ item.priority }}</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge-soft-primary">{{ item.status|replace("_", " ")|title }}</span>
+                    {% if item.verification_badge %}
+                    <span class="badge-soft-warning">{{ item.verification_badge }}</span>
+                    {% endif %}
+                    <span class="text-muted small">Topic: {{ item.topic|title }}</span>
+                </div>
+                {% if item.reason %}
+                <p class="text-muted mb-0"><strong>Reason:</strong> {{ item.reason }}</p>
+                {% endif %}
+                <p class="mb-0"><strong>Recommendation:</strong> {{ item.recommendation }}</p>
+                {% if item.estimated_impact %}
+                <p class="text-muted mb-0"><strong>Estimated impact:</strong> {{ item.estimated_impact }}</p>
+                {% endif %}
+                {% if item.is_reopened or (item.recommendation and "Issue Returned" in item.recommendation) %}
+                <p class="text-danger small fw-bold mb-0">Issue Reappeared</p>
+                {% endif %}
+                <p class="text-muted small mb-0">
+                    First detected: {{ item.first_detected_at or "Not available" }} ·
+                    Last detected: {{ item.last_detected_at or "Not available" }}
+                </p>
+                <div class="d-flex flex-wrap gap-2">
+                    <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status">
+                        <input type="hidden" name="status" value="in_progress">
+                        <button type="submit" class="btn-ghost">Start Work</button>
+                    </form>
+                    <button type="button" class="btn-ghost" data-bs-toggle="collapse" data-bs-target="#resolveAction{{ item.id }}">
+                        Mark Completed
+                    </button>
+                    <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status">
+                        <input type="hidden" name="status" value="ignored">
+                        <button type="submit" class="btn-ghost">Ignore</button>
+                    </form>
+                    <button type="button" class="btn-ghost" data-bs-toggle="collapse" data-bs-target="#noteAction{{ item.id }}">
+                        Add Notes
+                    </button>
+                    <button type="button" class="btn-ghost" data-bs-toggle="collapse" data-bs-target="#timelineAction{{ item.id }}">
+                        View Timeline
+                    </button>
+                </div>
+                <div class="collapse" id="resolveAction{{ item.id }}">
+                    <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status" class="d-grid gap-2 mt-2">
+                        <input type="hidden" name="status" value="completed">
+                        <label class="form-label small fw-bold" for="ownerNote{{ item.id }}">What did you do?</label>
+                        <textarea id="ownerNote{{ item.id }}" name="owner_note" class="form-control" rows="2" placeholder="Installed better WiFi, added parking sign, trained reception staff..."></textarea>
+                        <button type="submit" class="btn-solid">Save Completed</button>
+                    </form>
+                </div>
+                <div class="collapse" id="noteAction{{ item.id }}">
+                    <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status" class="d-grid gap-2 mt-2">
+                        <input type="hidden" name="status" value="{{ item.status }}">
+                        <label class="form-label small fw-bold" for="note{{ item.id }}">Owner note</label>
+                        <textarea id="note{{ item.id }}" name="owner_note" class="form-control" rows="2">{{ item.owner_note or "" }}</textarea>
+                        <button type="submit" class="btn-ghost">Save Note</button>
+                    </form>
+                </div>
+                <div class="collapse" id="timelineAction{{ item.id }}">
+                    <div class="consultant-metric mt-2">
+                        <p class="fw-bold mb-2">Timeline</p>
+                        <ul class="consultant-list">
+                            {% for event in item.events %}
+                            <li><i class="bi bi-clock-history text-primary"></i><span>{{ event.event_type|replace("_", " ")|title }} · {{ event.created_at }}{% if event.event_note %} — {{ event.event_note }}{% endif %}</span></li>
+                            {% else %}
+                            <li><i class="bi bi-clock-history text-muted"></i><span>No timeline events yet.</span></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        {% if not action_state.all %}
+        {% for item in action_plan %}
+        <div class="col-lg-6">
+            <div class="command-action h-100">
+                <div class="d-flex justify-content-between gap-2">
+                    <h3 class="h6 fw-bold mb-0">{{ item.title }}</h3>
+                    <span class="badge-soft-warning">{{ item.priority }}</span>
+                </div>
+                <p class="text-muted mb-0"><strong>Reason:</strong> {{ item.reason }}</p>
+                <p class="mb-0"><strong>Owner action:</strong> {{ item.owner_action }}</p>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted mb-0">No open actions right now. Completed and verified work is tracked below.</p>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-success"><i class="bi bi-check2-circle"></i></span>
+        <h2 class="h5 fw-bold mb-0">Completed Actions</h2>
+    </div>
+    {% if action_state.completed %}
+    <div class="row g-3">
+        {% for item in action_state.completed %}
+        <div class="col-lg-6">
+            <div class="command-action h-100">
+                <div class="d-flex justify-content-between gap-2">
+                    <h3 class="h6 fw-bold mb-0">{{ item.issue_title }}</h3>
+                    <span class="badge-soft-warning">Awaiting Review Confirmation</span>
+                </div>
+                <p class="text-muted mb-0"><strong>Topic:</strong> {{ item.topic|title }}</p>
+                <p class="text-muted mb-0"><strong>Completed:</strong> {{ item.completed_at or "Not available" }}</p>
+                {% if item.owner_note %}
+                <p class="mb-0"><strong>Owner note:</strong> {{ item.owner_note }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Completed actions will appear here while AI waits for future reviews to confirm improvement.</p>
+    {% endif %}
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-success"><i class="bi bi-trophy"></i></span>
+        <h2 class="h5 fw-bold mb-0">Success Stories</h2>
+    </div>
+    {% if action_state.success_stories %}
+    <div class="row g-3">
+        {% for story in action_state.success_stories %}
+        <div class="col-lg-4">
+            <div class="command-action h-100">
+                <span class="badge-soft-success">Verified Improvement</span>
+                <h3 class="h6 fw-bold mt-2 mb-1">{{ story.title }}</h3>
+                <p class="text-muted mb-0">{{ story.message }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Verified improvements will appear here after future reviews confirm that an issue improved.</p>
+    {% endif %}
+</div>
+
+<div class="row g-4 command-section">
+    <div class="col-lg-6">
+        {{ consultant_section("Strengths", strengths, "bi-check-circle-fill", "text-success") }}
+    </div>
+    <div class="col-lg-6">
+        {{ consultant_section("Weaknesses", weaknesses, "bi-exclamation-triangle-fill", "text-warning") }}
+    </div>
+</div>
+
+<div class="row g-4 command-section">
+    <div class="col-lg-7">
+        <div class="rs-card rs-card-lg h-100">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="badge-soft-primary"><i class="bi bi-diagram-3"></i></span>
+                <h2 class="h5 fw-bold mb-0">Topic Analytics</h2>
+            </div>
+            <div class="d-grid gap-2">
+                {% for topic in command_center.topic_analytics %}
+                <div class="topic-row">
+                    <div>
+                        <p class="fw-bold mb-0">{{ topic.topic|title }}</p>
+                        <p class="text-muted small mb-0">{{ topic.sentiment|title }}</p>
+                    </div>
+                    <span class="badge-soft-primary">{{ topic.count }}</span>
+                    <span class="text-muted small">{{ topic.percentage }}%</span>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Topic analytics will appear after reviews are synced or imported.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="rs-card rs-card-lg h-100">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="badge-soft-primary"><i class="bi bi-emoji-smile"></i></span>
+                <h2 class="h5 fw-bold mb-0">Sentiment and Emotion</h2>
+            </div>
+            <div class="d-grid gap-3">
+                <div>
+                    <div class="d-flex justify-content-between small fw-bold mb-1"><span>Positive</span><span>{{ metrics.positive_review_percentage }}%</span></div>
+                    <div class="progress"><div class="progress-bar" style="width: {{ metrics.positive_review_percentage }}%; background:var(--rs-accent);"></div></div>
+                </div>
+                <div>
+                    <div class="d-flex justify-content-between small fw-bold mb-1"><span>Neutral</span><span>{{ metrics.neutral_review_percentage }}%</span></div>
+                    <div class="progress"><div class="progress-bar" style="width: {{ metrics.neutral_review_percentage }}%; background:var(--rs-warning);"></div></div>
+                </div>
+                <div>
+                    <div class="d-flex justify-content-between small fw-bold mb-1"><span>Negative</span><span>{{ metrics.negative_review_percentage }}%</span></div>
+                    <div class="progress"><div class="progress-bar" style="width: {{ metrics.negative_review_percentage }}%; background:var(--rs-danger);"></div></div>
+                </div>
+                {% for emotion in emotion_breakdown %}
+                <div>
+                    <div class="d-flex justify-content-between small mb-1"><span>{{ emotion.label }}</span><span>{{ emotion.count }} · {{ emotion.percentage }}%</span></div>
+                    <div class="emotion-bar"><span style="width: {{ emotion.percentage }}%;"></span></div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-primary"><i class="bi bi-graph-up"></i></span>
+        <h2 class="h5 fw-bold mb-0">Trend Comparison</h2>
+    </div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="consultant-metric h-100">
+                <p class="rs-eyebrow">Last 30 days vs previous 30</p>
+                <p class="text-muted mb-1">Rating change: <strong>{{ trend_summary.last_30_days.rating_change }}</strong></p>
+                <p class="text-muted mb-1">Review volume change: <strong>{{ trend_summary.last_30_days.review_volume_change }}</strong></p>
+                <p class="text-muted mb-1">Positive review change: <strong>{{ trend_summary.last_30_days.positive_review_change }}</strong></p>
+                <p class="text-muted mb-0">Negative review change: <strong>{{ trend_summary.last_30_days.negative_review_change }}</strong></p>
+                {% if trend_summary.last_30_days.most_increased_negative_topic %}
+                <p class="text-danger small fw-bold mt-2 mb-0">
+                    {{ trend_summary.last_30_days.most_increased_negative_topic.topic|title }} complaints increased by {{ trend_summary.last_30_days.most_increased_negative_topic.percentage_change }}%.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="consultant-metric h-100">
+                <p class="rs-eyebrow">This month vs last month</p>
+                <p class="text-muted mb-1">Rating change: <strong>{{ trend_summary.this_month.rating_change }}</strong></p>
+                <p class="text-muted mb-1">Review volume change: <strong>{{ trend_summary.this_month.review_volume_change }}</strong></p>
+                <p class="text-muted mb-1">Positive review change: <strong>{{ trend_summary.this_month.positive_review_change }}</strong></p>
+                <p class="text-muted mb-0">Negative review change: <strong>{{ trend_summary.this_month.negative_review_change }}</strong></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <span class="badge-soft-primary"><i class="bi bi-exclamation-circle"></i></span>
+        <h2 class="h5 fw-bold mb-0">Latest Reviews Requiring Attention</h2>
+    </div>
+    <div class="row g-3">
+        {% for review in attention_reviews %}
+        <div class="col-lg-6">
+            <div class="attention-review h-100">
+                <div class="d-flex justify-content-between gap-2">
+                    <span class="badge-soft-warning">{{ review.rating }} star</span>
+                    <span class="text-muted small">{{ review.topic }}</span>
+                </div>
+                <p class="text-muted mb-0">{{ review.review_text }}</p>
+                <p class="mb-0"><strong>Suggested action:</strong> {{ review.suggested_action }}</p>
+                <a href="/reviews/history/{{ business_id }}?open_review={{ review.id }}" class="btn-ghost w-100">
+                    <i class="bi bi-magic"></i>
+                    Open AI reply tools
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No urgent reviews need attention right now.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="row g-4 command-section">
+    <div class="col-lg-6">
+        {{ consultant_section("Business Opportunities", opportunities, "bi-graph-up-arrow", "text-success") }}
+    </div>
+    <div class="col-lg-6">
+        {{ consultant_section("Risks If Ignored", risks, "bi-shield-exclamation", "text-danger") }}
+    </div>
+</div>
+
+<div class="row g-4 command-section">
+    <div class="col-md-6">
+        <div class="rs-card h-100">
+            <p class="rs-eyebrow">Last Updated</p>
+            {% if report %}
+            <p class="h5 fw-bold mb-0">{{ report.generated_at }}</p>
+            {% else %}
+            <p class="h5 fw-bold mb-0">No report yet</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="rs-card h-100">
+            <p class="rs-eyebrow">Report Status</p>
+            {% if status.state == "up_to_date" %}
+            <span class="badge-soft-success">Up to date</span>
+            {% elif status.state == "outdated" %}
+            <span class="badge-soft-warning">Update available</span>
+            {% else %}
+            <span class="badge-soft-primary">No report yet</span>
+            {% endif %}
+            {% if command_center.latest_review_at %}
+            <p class="text-muted small mt-2 mb-0">Latest stored review activity: {{ command_center.latest_review_at }}</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="rs-card rs-card-lg command-section">
+    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge-soft-primary"><i class="bi bi-graph-up-arrow"></i></span>
+                <h2 class="h5 fw-bold mb-0">Google Review Growth Trend</h2>
+            </div>
+            <p class="text-muted mb-0">From Google Business Profile connection date to today</p>
+            <p class="text-muted small mb-0">Only live Google reviews are included. Excel uploaded reviews are excluded.</p>
+        </div>
+        {% if google_review_trend_data.start_date %}
+        <span class="badge-soft-primary align-self-start">Since {{ google_review_trend_data.start_date }}</span>
+        {% endif %}
+    </div>
+
+    {% set growth_points = google_review_trend_data["data"] if google_review_trend_data else [] %}
+    {% if not growth_points or metrics.total_reviews == 0 %}
+    <div class="consultant-metric">
+        <p class="text-muted mb-0">No live Google reviews available yet. Connect Google Business Profile and sync reviews to view trends.</p>
+    </div>
+    {% elif growth_points|length < 2 %}
+    <div class="consultant-metric">
+        <p class="fw-bold mb-1">{{ google_review_trend_data.insight }}</p>
+        <p class="text-muted mb-0">More review history is needed to show a meaningful trend.</p>
+    </div>
+    {% else %}
+    <div class="consultant-metric mb-3">
+        <p class="fw-bold mb-0">{{ google_review_trend_data.insight }}</p>
+    </div>
+    <div class="growth-chart-wrap">
+        <canvas id="googleReviewGrowthChart" aria-label="Google review growth trend chart" role="img"></canvas>
+    </div>
+    <script type="application/json" id="googleReviewGrowthData">
+        {{ google_review_trend_data|tojson }}
+    </script>
+    {% endif %}
+</div>
+
+{% if google_review_trend_data and google_review_trend_data["data"] and google_review_trend_data["data"]|length >= 2 and metrics.total_reviews > 0 %}
+<script>
+(() => {
+    const dataNode = document.getElementById("googleReviewGrowthData");
+    const canvas = document.getElementById("googleReviewGrowthChart");
+    if (!dataNode || !canvas || !window.Chart) {
+        return;
+    }
+
+    const trend = JSON.parse(dataNode.textContent || "{}");
+    const points = trend.data || [];
+    const labels = points.map((point) => point.period_label);
+    const newReviews = points.map((point) => point.review_count || 0);
+    const cumulativeReviews = points.map((point) => point.cumulative_review_count || 0);
+
+    new Chart(canvas, {
+        type: "line",
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: "New reviews per period",
+                    data: newReviews,
+                    borderColor: "#2563eb",
+                    backgroundColor: "rgba(37, 99, 235, .12)",
+                    tension: .32,
+                    fill: true,
+                    pointRadius: 3
+                },
+                {
+                    label: "Cumulative Google reviews",
+                    data: cumulativeReviews,
+                    borderColor: "#16a34a",
+                    backgroundColor: "rgba(22, 163, 74, .08)",
+                    tension: .32,
+                    fill: false,
+                    pointRadius: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: "index",
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: "bottom"
+                },
+                tooltip: {
+                    callbacks: {
+                        afterBody(items) {
+                            const point = points[items[0].dataIndex] || {};
+                            const rating = point.average_rating_for_period;
+                            return [
+                                `Period: ${point.period_label}`,
+                                `New reviews: ${point.review_count || 0}`,
+                                `Total reviews: ${point.cumulative_review_count || 0}`,
+                                `Average rating: ${rating === null || rating === undefined ? "No rating" : rating}`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
