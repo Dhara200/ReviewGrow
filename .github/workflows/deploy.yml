@@ -71,11 +71,13 @@ jobs:
           ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
           EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
           envs: AWS_REGION,ECR_REGISTRY,ECR_REPOSITORY,IMAGE_TAG,EC2_DEPLOY_PATH
+
           script: |
             set -Eeuo pipefail
 
@@ -95,10 +97,13 @@ jobs:
 
             ECR_IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
 
-            printf '%s\n' \
-              "ECR_IMAGE_URI=${ECR_IMAGE_URI}" \
-              "IMAGE_TAG=${IMAGE_TAG}" \
-              > .deploy.env
+            cp .env .deploy.env
+
+            {
+              echo ""
+              echo "ECR_IMAGE_URI=${ECR_IMAGE_URI}"
+              echo "IMAGE_TAG=${IMAGE_TAG}"
+            } >> .deploy.env
 
             chmod 600 .deploy.env
 
@@ -112,7 +117,14 @@ jobs:
             sudo docker compose \
               --env-file .deploy.env \
               --file docker-compose.yml \
-              config
+              config --quiet
+
+            echo "Compose configuration validated"
+
+            sudo docker compose \
+              --env-file .deploy.env \
+              --file docker-compose.yml \
+              config --images
 
             sudo docker compose \
               --env-file .deploy.env \
@@ -154,6 +166,7 @@ jobs:
                 exit 1
               fi
 
+              echo "Waiting for application... attempt ${attempt}/18"
               sleep 5
             done
 
@@ -175,8 +188,15 @@ jobs:
             echo "App image: ${APP_IMAGE}"
             echo "Worker image: ${WORKER_IMAGE}"
 
-            test "$APP_IMAGE" = "$EXPECTED_IMAGE"
-            test "$WORKER_IMAGE" = "$EXPECTED_IMAGE"
+            test "$APP_IMAGE" = "$EXPECTED_IMAGE" || {
+              echo "ERROR: App is not running expected image"
+              exit 1
+            }
+
+            test "$WORKER_IMAGE" = "$EXPECTED_IMAGE" || {
+              echo "ERROR: Worker is not running expected image"
+              exit 1
+            }
 
             sudo docker compose \
               --env-file .deploy.env \
