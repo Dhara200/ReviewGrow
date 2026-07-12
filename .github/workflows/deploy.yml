@@ -14,7 +14,7 @@ jobs:
 
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      ECR_REPOSITORY: reputation-app
+      ECR_REPOSITORY: reputation-app-app
       IMAGE_TAG: ${{ github.sha }}
       EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
 
