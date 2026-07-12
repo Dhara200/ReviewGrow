@@ -62,7 +62,7 @@ jobs:
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: reputation-app
+          ECR_REPOSITORY: reviewgrow-app-app
           IMAGE_TAG: ${{ github.sha }}
           EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
         with:
