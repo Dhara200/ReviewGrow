@@ -1,221 +1,188 @@
-name: Deploy to EC2 via ECR
+﻿name: Deploy to EC2 via ECR
 
 on:
-push:
-branches:
-- main
+  push:
+    branches:
+      - main
 
 concurrency:
-group: reviewgrow-production
-cancel-in-progress: false
+  group: reviewgrow-production
+  cancel-in-progress: false
 
 permissions:
-contents: read
+  contents: read
 
 env:
-AWS_REGION: ${{ secrets.AWS_REGION }}
-ECR_REPOSITORY: reviewgrow-app-app
-IMAGE_TAG: ${{ github.sha }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: reviewgrow-app-app
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-build-and-deploy:
-name: Build, Push and Deploy
-runs-on: ubuntu-latest
+  build-and-deploy:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - name: Configure AWS credentials
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-  - name: Login to Amazon ECR
-    id: login-ecr
-    uses: aws-actions/amazon-ecr-login@v2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-  - name: Build Docker image
-    env:
-      ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-    run: |
-      set -Eeuo pipefail
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          set -Eeuo pipefail
 
-      IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
 
-      docker build \
-        --file docker/app/Dockerfile \
-        --tag "${IMAGE_URI}:${IMAGE_TAG}" \
-        --tag "${IMAGE_URI}:latest" \
-        .
+          docker build \
+            --file docker/app/Dockerfile \
+            --tag "${IMAGE_URI}:${IMAGE_TAG}" \
+            --tag "${IMAGE_URI}:latest" \
+            .
 
-  - name: Push Docker image to ECR
-    env:
-      ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-    run: |
-      set -Eeuo pipefail
+          docker push "${IMAGE_URI}:${IMAGE_TAG}"
+          docker push "${IMAGE_URI}:latest"
 
-      IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+      - name: Copy production Compose file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          source: docker-compose.prod.yml
+          target: ${{ secrets.EC2_DEPLOY_PATH }}
+          overwrite: true
 
-      docker push "${IMAGE_URI}:${IMAGE_TAG}"
-      docker push "${IMAGE_URI}:latest"
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          envs: AWS_REGION,ECR_REGISTRY,ECR_REPOSITORY,IMAGE_TAG,EC2_DEPLOY_PATH
+          script: |
+            set -Eeuo pipefail
 
-  - name: Copy production Compose file to EC2
-    uses: appleboy/scp-action@v0.1.7
-    with:
-      host: ${{ secrets.EC2_HOST }}
-      username: ${{ secrets.EC2_USER }}
-      key: ${{ secrets.EC2_PRIVATE_KEY }}
-      source: docker-compose.prod.yml
-      target: ${{ secrets.EC2_DEPLOY_PATH }}
-      overwrite: true
+            cd "$EC2_DEPLOY_PATH"
 
-  - name: Deploy SHA image to EC2
-    uses: appleboy/ssh-action@v1.0.3
-    env:
-      AWS_REGION: ${{ env.AWS_REGION }}
-      ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-      IMAGE_TAG: ${{ env.IMAGE_TAG }}
-      EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
-    with:
-      host: ${{ secrets.EC2_HOST }}
-      username: ${{ secrets.EC2_USER }}
-      key: ${{ secrets.EC2_PRIVATE_KEY }}
-      envs: AWS_REGION,ECR_REGISTRY,ECR_REPOSITORY,IMAGE_TAG,EC2_DEPLOY_PATH
-      script: |
-        set -Eeuo pipefail
+            test -f .env || {
+              echo "ERROR: .env does not exist"
+              exit 1
+            }
 
-        if [ -z "${EC2_DEPLOY_PATH:-}" ]; then
-          echo "ERROR: EC2_DEPLOY_PATH is empty."
-          exit 1
-        fi
+            test -f docker-compose.prod.yml || {
+              echo "ERROR: docker-compose.prod.yml does not exist"
+              exit 1
+            }
 
-        mkdir -p "$EC2_DEPLOY_PATH"
-        cd "$EC2_DEPLOY_PATH"
+            mkdir -p uploads
 
-        if [ ! -f ".env" ]; then
-          echo "ERROR: ${EC2_DEPLOY_PATH}/.env does not exist."
-          exit 1
-        fi
+            ECR_IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
 
-        if [ ! -f "docker-compose.prod.yml" ]; then
-          echo "ERROR: docker-compose.prod.yml does not exist."
-          exit 1
-        fi
+            printf '%s\n' \
+              "ECR_IMAGE_URI=${ECR_IMAGE_URI}" \
+              "IMAGE_TAG=${IMAGE_TAG}" \
+              > .deploy.env
 
-        mkdir -p uploads
+            chmod 600 .deploy.env
 
-        ECR_IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+            aws ecr get-login-password \
+              --region "$AWS_REGION" \
+            | sudo docker login \
+                --username AWS \
+                --password-stdin \
+                "$ECR_REGISTRY"
 
-        printf '%s\n' \
-          "ECR_IMAGE_URI=${ECR_IMAGE_URI}" \
-          "IMAGE_TAG=${IMAGE_TAG}" \
-          > .deploy.env
+            sudo docker compose \
+              --env-file .deploy.env \
+              --file docker-compose.prod.yml \
+              config
 
-        chmod 600 .deploy.env
+            sudo docker compose \
+              --env-file .deploy.env \
+              --file docker-compose.prod.yml \
+              pull app worker
 
-        aws ecr get-login-password \
-          --region "$AWS_REGION" \
-        | sudo docker login \
-            --username AWS \
-            --password-stdin \
-            "$ECR_REGISTRY"
+            sudo docker compose \
+              --env-file .deploy.env \
+              --file docker-compose.prod.yml \
+              up -d \
+              --no-build \
+              --force-recreate \
+              --remove-orphans \
+              mysql app worker
 
-        sudo docker compose \
-          --env-file .deploy.env \
-          --file docker-compose.prod.yml \
-          config >/dev/null
+            for attempt in $(seq 1 18); do
+              if curl \
+                --fail \
+                --silent \
+                http://127.0.0.1:5000/health \
+                >/dev/null; then
+                echo "Health check passed"
+                break
+              fi
 
-        sudo docker compose \
-          --env-file .deploy.env \
-          --file docker-compose.prod.yml \
-          pull app worker
+              if [ "$attempt" -eq 18 ]; then
+                echo "ERROR: Health check failed"
 
-        sudo docker compose \
-          --env-file .deploy.env \
-          --file docker-compose.prod.yml \
-          up -d \
-          --no-build \
-          --force-recreate \
-          --remove-orphans \
-          mysql app worker
+                sudo docker compose \
+                  --env-file .deploy.env \
+                  --file docker-compose.prod.yml \
+                  ps
 
-        HEALTH_CHECK_PASSED=false
+                sudo docker compose \
+                  --env-file .deploy.env \
+                  --file docker-compose.prod.yml \
+                  logs --tail=200 app worker
 
-        for attempt in $(seq 1 18); do
-          if curl \
-            --fail \
-            --silent \
-            --show-error \
-            http://127.0.0.1:5000/health \
-            >/dev/null; then
-            HEALTH_CHECK_PASSED=true
-            break
-          fi
+                exit 1
+              fi
 
-          echo "Health check attempt ${attempt}/18 failed."
-          sleep 5
-        done
+              sleep 5
+            done
 
-        if [ "$HEALTH_CHECK_PASSED" != "true" ]; then
-          echo "ERROR: Application health check failed."
+            EXPECTED_IMAGE="${ECR_IMAGE_URI}:${IMAGE_TAG}"
 
-          sudo docker compose \
-            --env-file .deploy.env \
-            --file docker-compose.prod.yml \
-            ps || true
+            APP_IMAGE="$(
+              sudo docker inspect \
+                --format '{{.Config.Image}}' \
+                reputation_app
+            )"
 
-          sudo docker compose \
-            --env-file .deploy.env \
-            --file docker-compose.prod.yml \
-            logs --tail=200 app || true
+            WORKER_IMAGE="$(
+              sudo docker inspect \
+                --format '{{.Config.Image}}' \
+                reputation_worker
+            )"
 
-          sudo docker compose \
-            --env-file .deploy.env \
-            --file docker-compose.prod.yml \
-            logs --tail=200 worker || true
+            echo "Expected image: ${EXPECTED_IMAGE}"
+            echo "App image: ${APP_IMAGE}"
+            echo "Worker image: ${WORKER_IMAGE}"
 
-          exit 1
-        fi
+            test "$APP_IMAGE" = "$EXPECTED_IMAGE"
+            test "$WORKER_IMAGE" = "$EXPECTED_IMAGE"
 
-        APP_IMAGE="$(
-          sudo docker inspect \
-            --format '{{.Config.Image}}' \
-            reputation_app
-        )"
+            sudo docker compose \
+              --env-file .deploy.env \
+              --file docker-compose.prod.yml \
+              ps
 
-        WORKER_IMAGE="$(
-          sudo docker inspect \
-            --format '{{.Config.Image}}' \
-            reputation_worker
-        )"
+            sudo docker image prune -f
 
-        EXPECTED_IMAGE="${ECR_IMAGE_URI}:${IMAGE_TAG}"
-
-        echo "Expected image: ${EXPECTED_IMAGE}"
-        echo "App image: ${APP_IMAGE}"
-        echo "Worker image: ${WORKER_IMAGE}"
-
-        if [ "$APP_IMAGE" != "$EXPECTED_IMAGE" ]; then
-          echo "ERROR: App is running the wrong image."
-          exit 1
-        fi
-
-        if [ "$WORKER_IMAGE" != "$EXPECTED_IMAGE" ]; then
-          echo "ERROR: Worker is running the wrong image."
-          exit 1
-        fi
-
-        sudo docker compose \
-          --env-file .deploy.env \
-          --file docker-compose.prod.yml \
-          ps
-
-        sudo docker image prune -f
-
-        echo "Deployment completed successfully."
-        echo "Commit SHA: ${IMAGE_TAG}"
-
+            echo "Deployment successful: ${IMAGE_TAG}"
