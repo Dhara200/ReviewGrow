@@ -111,17 +111,17 @@ jobs:
 
             sudo docker compose \
               --env-file .deploy.env \
-              --file docker-compose.prod.yml \
+              --file docker-compose.yml \
               config
 
             sudo docker compose \
               --env-file .deploy.env \
-              --file docker-compose.prod.yml \
+              --file docker-compose.yml \
               pull app worker
 
             sudo docker compose \
               --env-file .deploy.env \
-              --file docker-compose.prod.yml \
+              --file docker-compose.yml \
               up -d \
               --no-build \
               --force-recreate \
@@ -143,12 +143,12 @@ jobs:
 
                 sudo docker compose \
                   --env-file .deploy.env \
-                  --file docker-compose.prod.yml \
+                  --file docker-compose.yml \
                   ps
 
                 sudo docker compose \
                   --env-file .deploy.env \
-                  --file docker-compose.prod.yml \
+                  --file docker-compose.yml \
                   logs --tail=200 app worker
 
                 exit 1
@@ -180,7 +180,7 @@ jobs:
 
             sudo docker compose \
               --env-file .deploy.env \
-              --file docker-compose.prod.yml \
+              --file docker-compose.yml \
               ps
 
             sudo docker image prune -f
