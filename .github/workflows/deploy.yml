@@ -90,15 +90,23 @@ steps:
       script: |
         set -Eeuo pipefail
 
+        echo "Starting deployment of commit ${IMAGE_TAG}"
+
+        if [ -z "${EC2_DEPLOY_PATH:-}" ]; then
+          echo "ERROR: EC2_DEPLOY_PATH is empty."
+          exit 1
+        fi
+
+        mkdir -p "$EC2_DEPLOY_PATH"
         cd "$EC2_DEPLOY_PATH"
 
         if [ ! -f ".env" ]; then
-          echo "ERROR: $EC2_DEPLOY_PATH/.env does not exist."
+          echo "ERROR: ${EC2_DEPLOY_PATH}/.env does not exist."
           exit 1
         fi
 
         if [ ! -f "docker-compose.prod.yml" ]; then
-          echo "ERROR: docker-compose.prod.yml was not copied."
+          echo "ERROR: docker-compose.prod.yml does not exist."
           exit 1
         fi
 
@@ -106,31 +114,15 @@ steps:
 
         ECR_IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
 
-        cat > .deploy.env <<EOF
-        ECR_IMAGE_URI=${ECR_IMAGE_URI}
-        IMAGE_TAG=${IMAGE_TAG}
-        EOF
+        printf '%s\n' \
+          "ECR_IMAGE_URI=${ECR_IMAGE_URI}" \
+          "IMAGE_TAG=${IMAGE_TAG}" \
+          > .deploy.env
 
         chmod 600 .deploy.env
 
-        echo "Deploying image:"
-        echo "${ECR_IMAGE_URI}:${IMAGE_TAG}"
+        echo "Deploying ${ECR_IMAGE_URI}:${IMAGE_TAG}"
 
-      - name: Deploy to EC2 over SSH
-        uses: appleboy/ssh-action@v1.0.1
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: reviewgrow-app-app
-          IMAGE_TAG: ${{ github.sha }}
-          EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          envs: AWS_REGION,ECR_REGISTRY,ECR_REPOSITORY,IMAGE_TAG,EC2_DEPLOY_PATH
-          script: |
-            set -euo pipefail
         aws ecr get-login-password \
           --region "$AWS_REGION" \
         | sudo docker login \
@@ -138,72 +130,81 @@ steps:
             --password-stdin \
             "$ECR_REGISTRY"
 
+        echo "Validating Docker Compose configuration..."
+
         sudo docker compose \
           --env-file .deploy.env \
           --file docker-compose.prod.yml \
           config >/dev/null
+
+        echo "Pulling application and worker images..."
 
         sudo docker compose \
           --env-file .deploy.env \
           --file docker-compose.prod.yml \
           pull app worker
 
+        echo "Starting containers..."
+
         sudo docker compose \
           --env-file .deploy.env \
           --file docker-compose.prod.yml \
           up -d \
           --no-build \
+          --force-recreate \
           --remove-orphans \
           mysql app worker
 
-        echo "Waiting for containers to start..."
+        echo "Waiting for application health check..."
 
-        for attempt in $(seq 1 12); do
+        HEALTH_CHECK_PASSED=false
+
+        for attempt in $(seq 1 18); do
           if curl \
             --fail \
             --silent \
             --show-error \
-            http://127.0.0.1:5000/health >/dev/null; then
+            http://127.0.0.1:5000/health \
+            >/dev/null; then
 
+            HEALTH_CHECK_PASSED=true
             echo "Application health check passed."
             break
           fi
 
-          if [ "$attempt" -eq 12 ]; then
-            echo "ERROR: Application health check failed."
-
-            sudo docker compose \
-              --env-file .deploy.env \
-              --file docker-compose.prod.yml \
-              ps
-
-            echo "Recent application logs:"
-
-            sudo docker compose \
-              --env-file .deploy.env \
-              --file docker-compose.prod.yml \
-              logs --tail=200 app
-
-            echo "Recent worker logs:"
-
-            sudo docker compose \
-              --env-file .deploy.env \
-              --file docker-compose.prod.yml \
-              logs --tail=200 worker
-
-            echo "Recent MySQL logs:"
-
-            sudo docker compose \
-              --env-file .deploy.env \
-              --file docker-compose.prod.yml \
-              logs --tail=100 mysql
-
-            exit 1
-          fi
-
-          echo "Health check attempt ${attempt}/12 failed. Retrying..."
+          echo "Health check attempt ${attempt}/18 failed."
           sleep 5
         done
+
+        if [ "$HEALTH_CHECK_PASSED" != "true" ]; then
+          echo "ERROR: Application health check failed."
+
+          echo "Container status:"
+          sudo docker compose \
+            --env-file .deploy.env \
+            --file docker-compose.prod.yml \
+            ps || true
+
+          echo "Application logs:"
+          sudo docker compose \
+            --env-file .deploy.env \
+            --file docker-compose.prod.yml \
+            logs --tail=200 app || true
+
+          echo "Worker logs:"
+          sudo docker compose \
+            --env-file .deploy.env \
+            --file docker-compose.prod.yml \
+            logs --tail=200 worker || true
+
+          echo "MySQL logs:"
+          sudo docker compose \
+            --env-file .deploy.env \
+            --file docker-compose.prod.yml \
+            logs --tail=100 mysql || true
+
+          exit 1
+        fi
 
         APP_STATUS="$(
           sudo docker inspect \
@@ -229,24 +230,40 @@ steps:
           exit 1
         fi
 
-        echo "Deployed containers:"
+        DEPLOYED_APP_IMAGE="$(
+          sudo docker inspect \
+            --format '{{.Config.Image}}' \
+            reputation_app
+        )"
+
+        DEPLOYED_WORKER_IMAGE="$(
+          sudo docker inspect \
+            --format '{{.Config.Image}}' \
+            reputation_worker
+        )"
+
+        EXPECTED_IMAGE="${ECR_IMAGE_URI}:${IMAGE_TAG}"
+
+        echo "Expected image: ${EXPECTED_IMAGE}"
+        echo "Application image: ${DEPLOYED_APP_IMAGE}"
+        echo "Worker image: ${DEPLOYED_WORKER_IMAGE}"
+
+        if [ "$DEPLOYED_APP_IMAGE" != "$EXPECTED_IMAGE" ]; then
+          echo "ERROR: Application is running the wrong image."
+          exit 1
+        fi
+
+        if [ "$DEPLOYED_WORKER_IMAGE" != "$EXPECTED_IMAGE" ]; then
+          echo "ERROR: Worker is running the wrong image."
+          exit 1
+        fi
+
+        echo "Final container status:"
 
         sudo docker compose \
           --env-file .deploy.env \
           --file docker-compose.prod.yml \
           ps
-
-        echo "Application image:"
-
-        sudo docker inspect \
-          --format '{{.Config.Image}}' \
-          reputation_app
-
-        echo "Worker image:"
-
-        sudo docker inspect \
-          --format '{{.Config.Image}}' \
-          reputation_worker
 
         sudo docker image prune -f
 
