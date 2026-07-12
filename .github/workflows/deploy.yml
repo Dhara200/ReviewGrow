@@ -59,7 +59,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
-          source: docker-compose.prod.yml
+          source: docker-compose.yml
           target: ${{ secrets.EC2_DEPLOY_PATH }}
           overwrite: true
 
@@ -86,8 +86,8 @@ jobs:
               exit 1
             }
 
-            test -f docker-compose.prod.yml || {
-              echo "ERROR: docker-compose.prod.yml does not exist"
+            test -f docker-compose.yml || {
+              echo "ERROR: docker-compose.yml does not exist"
               exit 1
             }
 
