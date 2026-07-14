@@ -19,7 +19,11 @@
                         <p class="text-muted mb-0">Start managing customer reviews with AI-powered insights.</p>
                     </div>
 
-                    <form method="POST" action="/register-page">
+                    <form method="POST" action="/register-page" data-recaptcha-form data-recaptcha-action="register" data-recaptcha-site-key="{{ recaptcha_site_key }}">
+                        <input type="hidden" name="recaptcha_token" data-recaptcha-token>
+                        <div class="alert alert-danger d-none" role="alert" data-recaptcha-error>
+                            Security verification failed. Please try again.
+                        </div>
                         {% if register_error %}
                         <div class="alert alert-danger" role="alert">
                             {{ register_error }}

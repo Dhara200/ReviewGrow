@@ -51,7 +51,11 @@
                         <p class="text-muted mb-0">Login to continue managing your business reputation.</p>
                     </div>
 
-                    <form id="loginForm" method="POST" action="/login-page" data-lock-seconds="{{ login_lock_seconds or '' }}">
+                    <form id="loginForm" method="POST" action="/login-page" data-lock-seconds="{{ login_lock_seconds or '' }}" data-recaptcha-form data-recaptcha-action="login" data-recaptcha-site-key="{{ recaptcha_site_key }}">
+                        <input type="hidden" name="recaptcha_token" data-recaptcha-token>
+                        <div class="alert alert-danger d-none" role="alert" data-recaptcha-error>
+                            Security verification failed. Please try again.
+                        </div>
                         {% if login_error %}
                         <p class="login-error-text mb-3">{{ login_error }}</p>
                         {% endif %}

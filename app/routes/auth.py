@@ -16,10 +16,12 @@ from werkzeug.security import (
 from app.config import Config
 from app.services.database_service import get_connection
 from app.services.subscription_service import create_expired_subscription, has_active_subscription
+from app.services.recaptcha_service import verify_recaptcha
 
 auth_bp = Blueprint("auth", __name__)
 INVALID_LOGIN_MESSAGE = "Invalid email or password."
 LOCKED_LOGIN_MESSAGE = "Too many failed login attempts. Please try again after 15 minutes."
+RECAPTCHA_ERROR_MESSAGE = "Security verification failed. Please try again."
 
 
 def get_client_ip():
@@ -185,6 +187,19 @@ def register_form():
   try:
     name = (request.form.get("name") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
+    recaptcha_result = verify_recaptcha(
+        request.form.get("recaptcha_token"),
+        "register",
+        get_client_ip()
+    )
+    if not recaptcha_result.success:
+        return render_template(
+            "register.html",
+            register_error=RECAPTCHA_ERROR_MESSAGE,
+            name=name,
+            email=email
+        ), 400
+
     password = request.form.get("password") or ""
     confirm_password = request.form.get("confirm_password") or ""
 
@@ -248,6 +263,18 @@ def login_form():
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password")
         ip_address = get_client_ip()
+
+        recaptcha_result = verify_recaptcha(
+            request.form.get("recaptcha_token"),
+            "login",
+            ip_address
+        )
+        if not recaptcha_result.success:
+            return _login_error_response(
+                RECAPTCHA_ERROR_MESSAGE,
+                email=email,
+                status_code=400
+            )
 
         locked_until = is_login_locked(email, ip_address) if email else None
 

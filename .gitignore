@@ -13,3 +13,7 @@ docs/
 .idea/
 
 .env.example
+
+docker-compose.local.yml
+
+docker-compose.prod.yml

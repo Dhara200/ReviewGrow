@@ -17,7 +17,16 @@ from app.routes.subscription import subscription_bp
 from app.routes.ai_consultant_routes import ai_consultant_bp
 
 app = Flask(__name__)
+app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
+
+
+@app.context_processor
+def recaptcha_template_config():
+    return {
+        "recaptcha_enabled": app.config["RECAPTCHA_ENABLED"],
+        "recaptcha_site_key": app.config["RECAPTCHA_SITE_KEY"]
+    }
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(business_bp)

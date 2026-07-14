@@ -3,7 +3,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _get_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 class Config:
+    APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
+    DEBUG = _get_bool("APP_DEBUG", False)
+    TESTING = False
     DB_HOST = os.getenv("DB_HOST")
     DB_PORT = int(os.getenv("DB_PORT", 3306))
     DB_NAME = os.getenv("DB_NAME")
@@ -29,6 +39,16 @@ class Config:
     LOGIN_WINDOW_MINUTES = int(os.getenv("LOGIN_WINDOW_MINUTES", 15))
 
     SECRET_KEY = os.getenv("SECRET_KEY")
+
+    RECAPTCHA_ENABLED = _get_bool("RECAPTCHA_ENABLED", True)
+    RECAPTCHA_SITE_KEY = (os.getenv("RECAPTCHA_SITE_KEY") or "").strip()
+    RECAPTCHA_SECRET_KEY = (os.getenv("RECAPTCHA_SECRET_KEY") or "").strip()
+    RECAPTCHA_SCORE_THRESHOLD = float(os.getenv("RECAPTCHA_SCORE_THRESHOLD", 0.5))
+    RECAPTCHA_VERIFY_URL = os.getenv(
+        "RECAPTCHA_VERIFY_URL",
+        "https://www.google.com/recaptcha/api/siteverify"
+    ).strip()
+    RECAPTCHA_TIMEOUT_SECONDS = float(os.getenv("RECAPTCHA_TIMEOUT_SECONDS", 5))
 
     AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
     AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gemini-2.5-flash")
