@@ -10,8 +10,6 @@ COPY . .
 
 EXPOSE 5000
 
-<<<<<<< HEAD
+
 CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:5000", "--timeout", "120", "app.app:app"]
-=======
-CMD ["gunicorn","--workers", " 4", "--bind","0.0.0.0:5000", "app.app:app"]
->>>>>>> e9695b2 (Use Gunicorn for production)
+
