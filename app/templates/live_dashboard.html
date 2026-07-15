@@ -238,50 +238,6 @@
         return data;
     }
 
-    async function pollSyncJob() {
-        const jobId = new URLSearchParams(window.location.search).get("sync_job");
-        if (!jobId) {
-            return;
-        }
-        const notice = document.createElement("div");
-        notice.className = "alert alert-info mb-3";
-        notice.setAttribute("role", "status");
-        document.querySelector("main")?.prepend(notice);
-
-        while (true) {
-            try {
-                const response = await fetch(`/google-review-sync-jobs/${jobId}/status`, {
-                    headers: {"Accept": "application/json"}
-                });
-                const job = await response.json();
-                if (!response.ok) {
-                    throw new Error(job.message || "Could not load sync status.");
-                }
-                notice.className = `alert ${job.status === "failed" ? "alert-danger" : job.status === "completed" ? "alert-success" : "alert-info"} mb-3`;
-                notice.textContent = job.status === "completed"
-                    ? `Google sync complete: ${job.inserted_count} new, ${job.updated_count} updated, ${job.topics_inserted} topics refreshed.`
-                    : job.status === "failed"
-                        ? `Google sync failed: ${job.error_message || "Please try again."}`
-                        : `Google review sync #${jobId}: ${job.status}.`;
-                if (job.status === "completed" || job.status === "failed") {
-                    if (job.status === "completed") {
-                        window.setTimeout(() => {
-                            const url = new URL(window.location.href);
-                            url.searchParams.delete("sync_job");
-                            window.location.replace(url.toString());
-                        }, 1200);
-                    }
-                    return;
-                }
-            } catch (error) {
-                notice.className = "alert alert-danger mb-3";
-                notice.textContent = error.message;
-                return;
-            }
-            await new Promise((resolve) => window.setTimeout(resolve, 3000));
-        }
-    }
-
     function setStatus(box, status) {
         const statusNode = box.querySelector("[data-reply-status]");
         if (!statusNode) {
@@ -390,7 +346,6 @@
             }
         });
     });
-    pollSyncJob();
 })();
 </script>
 {% endblock %}

@@ -32,12 +32,11 @@ from app.services.google_performance_service import (
     sync_performance_metrics
 )
 from app.services.business_analytics_service import (
-    get_google_review_snapshot
+    get_google_review_snapshot,
+    refresh_business_review_analytics
 )
-from app.services.google_review_sync_job_service import (
-    create_google_review_sync_job,
-    get_google_review_sync_job,
-)
+from app.services.review_sync_service import sync_google_reviews
+from app.services.analysis_job_service import create_analysis_job
 from app.services.ai_service import AIService, AIServiceError, log_ai_usage
 from app.services.oauth_identity_service import (
     OAUTH_EMAIL_MISMATCH_MESSAGE,
@@ -1231,50 +1230,92 @@ def sync_google_business_reviews(business_id):
         flash("Google Business Profile is not connected.", "warning")
         return redirect(f"/businesses/{business_id}/live-dashboard")
 
-    if not _connection_has_location(connection):
-        flash("Select the Google Business Profile location before syncing reviews.", "warning")
-        return redirect(f"/businesses/{business_id}/google/select-location")
-
     try:
-        job_id, created = create_google_review_sync_job(session["user_id"], business_id)
+        cooldown_response = _review_sync_cooldown_response(business_id)
+
+        if cooldown_response:
+            return cooldown_response
+
+        _start_review_sync_cooldown(business_id)
+        connection = _valid_connection_token(connection)
+        connection, location_response = _resolve_missing_location(
+            business_id,
+            connection
+        )
+
+        if location_response:
+            _clear_review_sync_cooldown(business_id)
+            return location_response
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        result = sync_google_reviews(cursor, connection)
+
+        cursor.execute(
+            """
+            UPDATE google_business_connections
+            SET last_sync_at=NOW()
+            WHERE id=%s
+            """,
+            (connection["id"],)
+        )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        analytics_message = ""
+        if result["inserted_count"] or result["updated_count"]:
+            try:
+                analytics_result = refresh_business_review_analytics(
+                    business_id,
+                    mark_consultant_outdated=True,
+                    source="google",
+                    google_location_id=connection.get("google_location_id"),
+                    require_google_review_id=True,
+                )
+                inserted_topics = analytics_result["topic_result"].get(
+                    "inserted_topics",
+                    0,
+                )
+                analytics_message = f" {inserted_topics} review topics refreshed."
+            except Exception:
+                current_app.logger.exception(
+                    "Post-sync analytics refresh failed for business_id=%s",
+                    business_id,
+                )
+
+        job_id, created = create_analysis_job(
+            session["user_id"],
+            business_id,
+            force_reanalysis=False
+        )
+        _clear_review_sync_cooldown(business_id)
+
+        job_message = (
+            f" AI analysis job #{job_id} queued."
+            if created else
+            f" Existing AI analysis job #{job_id} is still running."
+        )
+        flash(
+            (
+                f"Google sync complete: {result['inserted_count']} new, "
+                f"{result['updated_count']} updated.{analytics_message}{job_message}"
+            ),
+            "success"
+        )
+    except GoogleQuotaError as e:
+        flash(str(e), "warning")
+    except GoogleBusinessError as e:
+        _clear_review_sync_cooldown(business_id)
+        flash(str(e), "danger")
     except Exception:
-        current_app.logger.exception("Could not queue Google review sync")
-        if request.accept_mimetypes.best == "application/json":
-            return jsonify({"message": "Could not queue Google review sync."}), 500
-        flash("Could not queue Google review sync. Please try again.", "danger")
-        return redirect(f"/businesses/{business_id}/live-dashboard")
+        _clear_review_sync_cooldown(business_id)
+        current_app.logger.exception("Google review sync failed")
+        flash("Google review sync failed. Please try again.", "danger")
 
-    payload = {
-        "success": True,
-        "created": created,
-        "job_id": job_id,
-        "status": "pending" if created else "already_running",
-        "status_url": f"/google-review-sync-jobs/{job_id}/status",
-    }
-    if request.accept_mimetypes.best == "application/json":
-        return jsonify(payload), 202 if created else 200
-
-    flash(
-        f"Google review sync job #{job_id} queued."
-        if created else f"Google review sync job #{job_id} is already running.",
-        "success" if created else "info",
-    )
-    return redirect(f"/businesses/{business_id}/live-dashboard?sync_job={job_id}")
-
-
-@google_business_bp.route("/google-review-sync-jobs/<int:job_id>/status", methods=["GET"])
-@subscription_required
-def google_review_sync_job_status(job_id):
-    if "user_id" not in session:
-        return jsonify({"message": "Login required"}), 401
-    job = get_google_review_sync_job(
-        job_id,
-        session["user_id"],
-        is_admin=session.get("role") == "admin",
-    )
-    if not job:
-        return jsonify({"message": "Job not found"}), 404
-    return jsonify(job)
+    return redirect(f"/businesses/{business_id}/live-dashboard")
 
 
 @google_business_bp.route("/businesses/<int:business_id>/photos", methods=["GET", "POST"])
