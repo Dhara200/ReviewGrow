@@ -83,6 +83,7 @@ class LegalPageTests(unittest.TestCase):
         self.assertIn(b'href="/privacy-policy"', response.data)
         self.assertIn(b'href="/terms-of-service"', response.data)
         self.assertIn(b'href="/data-deletion"', response.data)
+        self.assertIn(b'href="/sitemap.xml">Sitemap</a>', response.data)
 
     def test_registration_links_to_privacy_and_terms(self):
         response = self.client.get("/register-page")

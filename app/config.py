@@ -12,6 +12,7 @@ def _get_bool(name, default=False):
 
 class Config:
     APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
+    PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
     DEBUG = _get_bool("APP_DEBUG", False)
     TESTING = False
     DB_HOST = os.getenv("DB_HOST")

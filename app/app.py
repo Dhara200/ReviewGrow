@@ -16,6 +16,7 @@ from app.routes.google_business import google_business_bp
 from app.routes.subscription import subscription_bp
 from app.routes.ai_consultant_routes import ai_consultant_bp
 from app.routes.legal import legal_bp
+from app.routes.seo import seo_bp
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -41,6 +42,7 @@ app.register_blueprint(google_business_bp)
 app.register_blueprint(subscription_bp)
 app.register_blueprint(ai_consultant_bp)
 app.register_blueprint(legal_bp)
+app.register_blueprint(seo_bp)
 
 try:
     ensure_mvp_schema()

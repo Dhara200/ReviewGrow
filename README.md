@@ -326,6 +326,17 @@ For production, enter the corresponding `https://reviewgrow.in` URLs in the Goog
 
 Google Cloud Console configuration is an external deployment step and is not performed by the application or its deployment workflow.
 
+## SEO
+
+ReviewGrow exposes public search-engine discovery files at:
+
+* Sitemap: `https://reviewgrow.in/sitemap.xml`
+* Robots: `https://reviewgrow.in/robots.txt`
+* Google Search Console submission value: `sitemap.xml`
+
+Only public, indexable pages should be included in the sitemap. Authenticated,
+administrative, API, OAuth, and user-specific routes must remain excluded.
+
 ## Project Status
 
 ReviewGrow is under active development.
