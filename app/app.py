@@ -26,7 +26,9 @@ app.secret_key = Config.SECRET_KEY
 def recaptcha_template_config():
     return {
         "recaptcha_enabled": app.config["RECAPTCHA_ENABLED"],
-        "recaptcha_site_key": app.config["RECAPTCHA_SITE_KEY"]
+        "recaptcha_site_key": app.config["RECAPTCHA_SITE_KEY"],
+        "contact_phone": app.config["CONTACT_PHONE"],
+        "whatsapp_number": app.config["WHATSAPP_NUMBER"]
     }
 
 app.register_blueprint(auth_bp)

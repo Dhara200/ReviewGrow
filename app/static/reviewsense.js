@@ -105,6 +105,26 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    document.querySelectorAll("[data-contact-widget]").forEach((widget) => {
+        const toggle = widget.querySelector("[data-contact-toggle]");
+        const close = widget.querySelector("[data-contact-close]");
+        const options = widget.querySelector("[data-contact-options]");
+
+        if (!toggle || !close || !options) {
+            return;
+        }
+
+        const setOpen = (isOpen) => {
+            widget.classList.toggle("is-open", isOpen);
+            toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            options.setAttribute("aria-hidden", isOpen ? "false" : "true");
+            (isOpen ? close : toggle).focus();
+        };
+
+        toggle.addEventListener("click", () => setOpen(true));
+        close.addEventListener("click", () => setOpen(false));
+    });
+
     const isExcelFile = (fileName) => /\.(xlsx|xls)$/i.test(fileName || "");
 
     document.querySelectorAll("[data-excel-upload]").forEach((input) => {

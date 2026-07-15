@@ -1026,6 +1026,7 @@ a {
 }
 
 .rs-footer {
+    position: relative;
     margin-left: var(--rs-sidebar);
     padding: 1.25rem 2rem;
     border-top: 1px solid var(--rs-border);
@@ -1035,8 +1036,116 @@ a {
 }
 
 .rs-public-footer {
+    position: relative;
     border-top: 1px solid var(--rs-border);
     background: var(--rs-surface);
+}
+
+.rs-footer > div:first-child,
+.rs-public-footer > .rs-public-container {
+    padding-right: 4.75rem;
+}
+
+.rs-contact-widget {
+    position: absolute;
+    right: max(1.25rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 1050;
+    width: 3.5rem;
+    height: 3.5rem;
+}
+
+.rs-contact-options {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    visibility: hidden;
+    pointer-events: none;
+    transition: visibility 0s linear .2s;
+}
+
+.rs-contact-button {
+    display: inline-grid;
+    width: 3.5rem;
+    height: 3.5rem;
+    flex: 0 0 3.5rem;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 1.3rem;
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, .24);
+    transition: opacity .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+
+.rs-contact-button:hover,
+.rs-contact-button:focus-visible {
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px rgba(15, 23, 42, .3);
+}
+
+.rs-contact-button:focus-visible {
+    outline: 3px solid rgba(96, 165, 250, .5);
+    outline-offset: 3px;
+}
+
+.rs-contact-toggle,
+.rs-contact-close {
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+}
+
+.rs-contact-call {
+    background: #14b8a6;
+}
+
+.rs-contact-whatsapp {
+    background: #25d366;
+}
+
+.rs-contact-options .rs-contact-button {
+    opacity: 0;
+    transform: translateY(1rem) scale(.86);
+}
+
+.rs-contact-widget.is-open .rs-contact-options {
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+}
+
+.rs-contact-widget.is-open .rs-contact-options .rs-contact-button {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.rs-contact-widget.is-open .rs-contact-options .rs-contact-button:nth-child(2) {
+    transition-delay: .04s;
+}
+
+.rs-contact-widget.is-open .rs-contact-options .rs-contact-button:first-child {
+    transition-delay: .08s;
+}
+
+.rs-contact-widget.is-open .rs-contact-toggle {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(.8);
+}
+
+@media (max-width: 575.98px) {
+    .rs-contact-widget {
+        right: max(1rem, env(safe-area-inset-right));
+        bottom: max(1rem, env(safe-area-inset-bottom));
+    }
 }
 
 .modal-content,
@@ -1538,6 +1647,11 @@ td {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .rs-contact-button,
+    .rs-contact-options {
+        transition: none;
+    }
+
     .rs-hero-bg-slide,
     .has-single-bg .rs-hero-bg-slide,
     .has-slideshow-bg .rs-hero-bg-slide {
