@@ -195,6 +195,7 @@
     <span>{{ minimum_review_message }}</span>
     <div class="d-flex flex-wrap gap-2 mt-3">
         {% if not google_connection %}
+        <div class="w-100">{% include "_google_oauth_notice.html" %}</div>
         <a href="/auth/google/start/{{ business_id }}" class="btn-ghost">
             <i class="bi bi-google"></i>
             Connect Google Business Profile

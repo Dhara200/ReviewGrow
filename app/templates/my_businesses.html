@@ -120,6 +120,7 @@
                     </button>
                 </form>
                 {% else %}
+                {% include "_google_oauth_notice.html" %}
                 <a href="/auth/google/start/{{ business.id }}" class="btn-ghost">
                     <i class="bi bi-google"></i>
                     Connect Google Business Profile

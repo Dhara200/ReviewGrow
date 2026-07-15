@@ -450,6 +450,7 @@
     <div class="rs-kpi-icon mx-auto"><i class="bi bi-google"></i></div>
     <h2 class="h4 fw-bold">Google Business Profile is not connected</h2>
     <p class="text-muted mb-4">Connect Google Business Profile to sync reviews and performance metrics.</p>
+    {% include "_google_oauth_notice.html" %}
     <a href="/auth/google/start/{{ business_id }}" class="btn-solid">
         <i class="bi bi-google"></i>
         Connect Google Business Profile

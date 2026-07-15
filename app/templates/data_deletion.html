@@ -1,0 +1,24 @@
+{% extends "base_public.html" %}
+{% block title %}Data Deletion Instructions - ReviewGrow{% endblock %}
+{% block meta_description %}Learn how to delete your ReviewGrow account, request deletion of stored data, and revoke ReviewGrow access from your Google Account.{% endblock %}
+{% block public_nav %}<a href="/" class="btn-ghost">Back to Home</a><a href="/login-page" class="btn-solid">Login</a>{% endblock %}
+
+{% block content %}
+<article class="rs-legal-page py-5"><div class="rs-public-container">
+    <header class="rs-legal-header"><p class="rs-eyebrow">Privacy</p><h1>Data Deletion Instructions</h1><p><strong>Last updated:</strong> July 14, 2026</p></header>
+    <div class="rs-card rs-card-lg rs-legal-content">
+        <p>ReviewGrow allows users to request deletion of their account and associated data. Deletion may require identity verification and may not be immediate where lawful retention or backup-processing periods apply.</p>
+        <section><h2>Delete Your ReviewGrow Account</h2>
+            <h3>Use the in-app deletion control</h3><p>If you are logged in, open any authenticated ReviewGrow page, scroll to the application footer, select <strong>Delete Account</strong>, and confirm the warning. The existing account deletion flow is designed to remove the active account and its related businesses, reviews, reports, Google Business Profile connections, subscription, and payment records from the active database.</p>
+            <p>This action cannot be undone. If the operation reports an error, your account may not have been deleted; use the email-request method below.</p>
+            <h3>Request deletion by email</h3><p>Email <a href="mailto:{{ legal.support_email }}?subject=ReviewGrow%20Data%20Deletion%20Request">{{ legal.support_email }}</a> from your registered email address using the subject <strong>ReviewGrow Data Deletion Request</strong>. Include your registered email address and business name so we can identify the correct account.</p>
+            <p>We may request additional information to verify your identity and confirm your authority to delete the account and connected business data.</p>
+        </section>
+        <section><h2>Information That May Be Deleted</h2><p>After verification, ReviewGrow may delete or anonymize data associated with your account, including:</p><ul><li>ReviewGrow account information and businesses</li><li>Stored Google Business Profile information</li><li>Stored Google reviews and review replies</li><li>AI reports, analysis, recommendations, and reply suggestions</li><li>Google OAuth access and refresh tokens</li><li>Uploaded CSV, spreadsheet, or report files</li><li>WhatsApp review-request records, where present</li><li>Subscription-related account information, subject to legal and accounting requirements</li></ul></section>
+        <section><h2>Revoke Google Account Access</h2><p>You can revoke ReviewGrow’s access at any time from your Google Account:</p><ol><li>Open <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener noreferrer">Google Account third-party connections</a>.</li><li>Sign in to the Google Account you connected to ReviewGrow.</li><li>Find ReviewGrow in the connected applications or services list.</li><li>Choose the option to remove or revoke access and confirm.</li></ol><p>Revocation stops ReviewGrow from retrieving new Google Business Profile information, but it does <strong>not</strong> automatically delete your ReviewGrow account or previously stored data. Use one of the deletion methods above for account and stored-data deletion.</p></section>
+        <section><h2>Retention Exceptions</h2><p>Some information may be retained where required for legal or regulatory compliance, tax and accounting obligations, fraud prevention, security investigations, dispute resolution, or agreement enforcement. Deleted information may also remain temporarily in protected backups until overwritten under ReviewGrow’s normal backup schedule.</p></section>
+        <section><h2>Processing Time</h2><p>We will review verified requests and complete them within a commercially reasonable period and any timeframe required by law. Deletion may not be immediate where identity verification, lawful retention, or backup-processing periods apply.</p></section>
+        <section><h2>Contact</h2><address><strong>{{ legal.brand_name }}</strong><br>Operated by: {{ legal.owner_name }}<br>{{ legal.business_address }}<br>Email: <a href="mailto:{{ legal.support_email }}">{{ legal.support_email }}</a><br>Website: <a href="{{ legal.website }}">{{ legal.website }}</a></address></section>
+    </div>
+</div></article>
+{% endblock %}

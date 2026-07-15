@@ -99,6 +99,7 @@
         Select Google location
     </a>
     {% else %}
+    {% include "_google_oauth_notice.html" %}
     <a href="/auth/google/start/{{ business_id }}" class="btn-solid">
         <i class="bi bi-google"></i>
         Connect Google Business Profile

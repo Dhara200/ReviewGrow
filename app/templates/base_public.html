@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{% block meta_description %}ReviewGrow helps businesses manage customer reviews, reputation insights, and Google Business Profile responses.{% endblock %}">
     <title>{% block title %}ReviewGrow{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
@@ -56,9 +57,14 @@
     </main>
 
     <footer class="rs-public-footer py-4">
-        <div class="rs-public-container d-flex flex-column flex-md-row justify-content-between gap-3">
+        <div class="rs-public-container d-flex flex-column flex-lg-row justify-content-between gap-3">
             <span>© 2026 ReviewGrow. All rights reserved.</span>
-            <a class="text-decoration-none text-muted" href="mailto:dharaprasath52@gmail.com">Contact</a>
+            <nav class="d-flex flex-wrap gap-3" aria-label="Legal and support links">
+                <a class="text-decoration-none text-muted" href="/privacy-policy">Privacy Policy</a>
+                <a class="text-decoration-none text-muted" href="/terms-of-service">Terms of Service</a>
+                <a class="text-decoration-none text-muted" href="/data-deletion">Data Deletion</a>
+                <a class="text-decoration-none text-muted" href="mailto:dharaprasath52@gmail.com">Contact</a>
+            </nav>
         </div>
     </footer>
 

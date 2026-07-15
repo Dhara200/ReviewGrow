@@ -116,7 +116,7 @@
 
                     {% if upi_qr_exists %}
                     <div class="text-center mb-4">
-                        <img src="{{ url_for('static', filename='images/upi_qr.png') }}" alt="UPI QR code" class="img-fluid rounded-3 border" style="max-width: 240px;">
+                        <img src="{{ url_for('static', filename='images/GooglePay_QR.png') }}" alt="UPI QR code" class="img-fluid rounded-3 border" style="max-width: 240px;">
                     </div>
                     {% endif %}
 
@@ -139,7 +139,7 @@
                     {% if not session.get("user_id") %}
                     <p class="text-muted">Create an account or login before submitting your UPI payment reference.</p>
                     <div class="d-flex flex-column flex-sm-row gap-3">
-                        <a href="/register-page" class="btn-solid flex-fill">Subscribe Now</a>
+                        <a href="/register-page" class="btn-solid flex-fill">Register</a>
                         <a href="/login-page" class="btn-ghost flex-fill">Login</a>
                     </div>
                     {% elif pending_payment and pending_payment.payment_status == "pending" %}
@@ -161,6 +161,11 @@
                             <textarea id="notes" name="notes" class="form-control" rows="3"></textarea>
                         </div>
                         <button type="submit" class="btn-solid w-100">Yes, I paid</button>
+                        <p class="small text-muted text-center mt-3 mb-0">
+                            By submitting payment details, you acknowledge the
+                            <a href="/terms-of-service">Terms of Service</a> and
+                            <a href="/privacy-policy">Privacy Policy</a>.
+                        </p>
                     </form>
                     {% endif %}
                 </div>
