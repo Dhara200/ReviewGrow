@@ -173,6 +173,37 @@ def claim_next_job():
         conn.close()
 
 
+def claim_analysis_job_by_id(job_id):
+    """Claims one known pending analysis job for inline execution by a worker."""
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        conn.start_transaction()
+        cursor.execute(
+            "SELECT id FROM analysis_jobs WHERE id=%s AND status='pending' FOR UPDATE",
+            (job_id,),
+        )
+        if not cursor.fetchone():
+            conn.commit()
+            return False
+        cursor.execute(
+            """
+            UPDATE analysis_jobs
+            SET status='processing', started_at=NOW(), error_message=NULL
+            WHERE id=%s AND status='pending'
+            """,
+            (job_id,),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def reset_stale_processing_jobs(timeout_minutes=30):
     conn = get_connection()
     cursor = conn.cursor()
