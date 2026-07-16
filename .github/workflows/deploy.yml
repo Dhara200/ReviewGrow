@@ -53,16 +53,6 @@ jobs:
           docker push "${IMAGE_URI}:${IMAGE_TAG}"
           docker push "${IMAGE_URI}:latest"
 
-      - name: Copy production Compose file to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          source: docker-compose.yml
-          target: ${{ secrets.EC2_DEPLOY_PATH }}
-          overwrite: true
-
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -83,6 +73,19 @@ jobs:
 
             cd "$EC2_DEPLOY_PATH"
 
+            echo "Updating EC2 repository..."
+
+            test -d .git || {
+              echo "ERROR: $EC2_DEPLOY_PATH is not a Git repository"
+              exit 1
+            }
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "EC2 repository updated:"
+            git log -1 --oneline
+
             test -f .env || {
               echo "ERROR: .env does not exist"
               exit 1
@@ -90,6 +93,11 @@ jobs:
 
             test -f docker-compose.yml || {
               echo "ERROR: docker-compose.yml does not exist"
+              exit 1
+            }
+
+            test -f scripts/run_migrations.sh || {
+              echo "ERROR: scripts/run_migrations.sh does not exist"
               exit 1
             }
 
@@ -126,10 +134,32 @@ jobs:
               --file docker-compose.yml \
               config --images
 
+            echo "Pulling new app and worker images..."
+
             sudo docker compose \
               --env-file .deploy.env \
               --file docker-compose.yml \
               pull app worker
+
+            echo "Starting MySQL..."
+
+            sudo docker compose \
+              --env-file .deploy.env \
+              --file docker-compose.yml \
+              up -d mysql
+
+            echo "Loading migration environment..."
+
+            set -a
+            source .deploy.env
+            set +a
+
+            echo "Running pending database migrations..."
+
+            chmod +x scripts/run_migrations.sh
+            ./scripts/run_migrations.sh
+
+            echo "Starting app and worker..."
 
             sudo docker compose \
               --env-file .deploy.env \
@@ -138,7 +168,7 @@ jobs:
               --no-build \
               --force-recreate \
               --remove-orphans \
-              mysql app worker
+              app worker
 
             for attempt in $(seq 1 18); do
               if curl \
