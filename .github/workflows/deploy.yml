@@ -101,6 +101,11 @@ jobs:
               exit 1
             }
 
+            test -d database/migrations || {
+              echo "ERROR: database/migrations directory does not exist"
+              exit 1
+            }
+
             mkdir -p uploads
 
             ECR_IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
@@ -115,12 +120,16 @@ jobs:
 
             chmod 600 .deploy.env
 
+            echo "Logging in to Amazon ECR..."
+
             aws ecr get-login-password \
               --region "$AWS_REGION" \
             | sudo docker login \
                 --username AWS \
                 --password-stdin \
                 "$ECR_REGISTRY"
+
+            echo "Validating Docker Compose configuration..."
 
             sudo docker compose \
               --env-file .deploy.env \
@@ -148,16 +157,92 @@ jobs:
               --file docker-compose.yml \
               up -d mysql
 
-            echo "Loading migration environment..."
+            echo "Waiting for MySQL container..."
 
-            set -a
-            source .deploy.env
-            set +a
+            for attempt in $(seq 1 30); do
+              MYSQL_STATUS="$(
+                sudo docker inspect \
+                  --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                  reputation_mysql \
+                  2>/dev/null || true
+              )"
+
+              if [ "$MYSQL_STATUS" = "healthy" ] || [ "$MYSQL_STATUS" = "running" ]; then
+                if sudo docker exec reputation_mysql \
+                  mysqladmin ping \
+                  -uroot \
+                  --password="$(
+                    sudo docker exec reputation_mysql \
+                      printenv MYSQL_ROOT_PASSWORD
+                  )" \
+                  --silent \
+                  >/dev/null 2>&1; then
+                  echo "MySQL is ready"
+                  break
+                fi
+              fi
+
+              if [ "$attempt" -eq 30 ]; then
+                echo "ERROR: MySQL did not become ready"
+
+                sudo docker compose \
+                  --env-file .deploy.env \
+                  --file docker-compose.yml \
+                  ps
+
+                sudo docker compose \
+                  --env-file .deploy.env \
+                  --file docker-compose.yml \
+                  logs --tail=200 mysql
+
+                exit 1
+              fi
+
+              echo "Waiting for MySQL... attempt ${attempt}/30"
+              sleep 3
+            done
+
+            echo "Loading migration variables from MySQL container..."
+
+            export MYSQL_DATABASE="$(
+              sudo docker exec reputation_mysql \
+                printenv MYSQL_DATABASE
+            )"
+
+            export MYSQL_USER="$(
+              sudo docker exec reputation_mysql \
+                printenv MYSQL_USER
+            )"
+
+            export MYSQL_PASSWORD="$(
+              sudo docker exec reputation_mysql \
+                printenv MYSQL_PASSWORD
+            )"
+
+            test -n "$MYSQL_DATABASE" || {
+              echo "ERROR: MYSQL_DATABASE is empty"
+              exit 1
+            }
+
+            test -n "$MYSQL_USER" || {
+              echo "ERROR: MYSQL_USER is empty"
+              exit 1
+            }
+
+            test -n "$MYSQL_PASSWORD" || {
+              echo "ERROR: MYSQL_PASSWORD is empty"
+              exit 1
+            }
+
+            export MYSQL_CONTAINER="reputation_mysql"
+            export MIGRATIONS_DIR="database/migrations"
 
             echo "Running pending database migrations..."
 
             chmod +x scripts/run_migrations.sh
             ./scripts/run_migrations.sh
+
+            echo "Database migrations completed"
 
             echo "Starting app and worker..."
 
@@ -169,6 +254,8 @@ jobs:
               --force-recreate \
               --remove-orphans \
               app worker
+
+            echo "Waiting for application health check..."
 
             for attempt in $(seq 1 18); do
               if curl \
