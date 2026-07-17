@@ -31,12 +31,8 @@ from app.services.google_performance_service import (
     parse_date_range,
     sync_performance_metrics
 )
-from app.services.business_analytics_service import (
-    get_google_review_snapshot,
-    refresh_business_review_analytics
-)
-from app.services.review_sync_service import sync_google_reviews
-from app.services.analysis_job_service import create_analysis_job
+from app.services.business_analytics_service import get_google_review_snapshot
+from app.services.google_review_post_sync_service import perform_google_review_post_sync
 from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
 from app.services.google_review_sync_execution_service import (
     ensure_valid_google_connection_token,
@@ -1244,32 +1240,30 @@ def sync_google_business_reviews(business_id):
 
         result = synchronize_google_reviews(connection)
 
-        analytics_message = ""
-        if result["inserted_count"] or result["updated_count"]:
-            try:
-                analytics_result = refresh_business_review_analytics(
-                    business_id,
-                    mark_consultant_outdated=True,
-                    source="google",
-                    google_location_id=connection.get("google_location_id"),
-                    require_google_review_id=True,
-                )
-                inserted_topics = analytics_result["topic_result"].get(
-                    "inserted_topics",
-                    0,
-                )
-                analytics_message = f" {inserted_topics} review topics refreshed."
-            except Exception:
-                current_app.logger.exception(
-                    "Post-sync analytics refresh failed for business_id=%s",
-                    business_id,
-                )
+        def log_analytics_error(_error):
+            current_app.logger.exception(
+                "Post-sync analytics refresh failed for business_id=%s",
+                business_id,
+            )
 
-        job_id, created = create_analysis_job(
+        post_sync_result = perform_google_review_post_sync(
             session["user_id"],
             business_id,
-            force_reanalysis=False
+            result,
+            connection.get("google_location_id"),
+            on_analytics_error=log_analytics_error,
         )
+        analytics_result = post_sync_result["analytics_result"]
+        inserted_topics = (
+            analytics_result["topic_result"].get("inserted_topics", 0)
+            if analytics_result else 0
+        )
+        analytics_message = (
+            f" {inserted_topics} review topics refreshed."
+            if analytics_result else ""
+        )
+        job_id = post_sync_result["analysis_job_id"]
+        created = post_sync_result["analysis_job_created"]
         _clear_review_sync_cooldown(business_id)
 
         job_message = (

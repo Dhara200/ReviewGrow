@@ -15,6 +15,7 @@ from app.services.analysis_job_service import (
 )
 from app.services.database_service import ensure_mvp_schema
 from app.services.google_review_sync_execution_service import run_google_review_sync
+from app.services.google_review_post_sync_service import perform_google_review_post_sync
 from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
 from app.services.google_business_service import GoogleQuotaError, GoogleTransientError
 
@@ -74,6 +75,12 @@ def _process_google_review_sync_job(job):
     )
     try:
         result = _run_google_review_sync_with_retries(job)
+        perform_google_review_post_sync(
+            job["user_id"],
+            job["business_id"],
+            result,
+            result.get("google_location_id"),
+        )
         google_review_sync_jobs.update_job(
             job["id"],
             status="completed",

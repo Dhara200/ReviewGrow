@@ -51,9 +51,12 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         self.assertFalse(processed)
         process_sync.assert_not_called()
 
+    @patch("worker.perform_google_review_post_sync")
     @patch("worker.run_google_review_sync")
     @patch("worker.google_review_sync_jobs")
-    def test_success_records_counts_and_completes_job(self, job_service, run_sync):
+    def test_success_runs_post_sync_once_and_completes_job(
+        self, job_service, run_sync, post_sync
+    ):
         run_sync.return_value = {
             "fetched_count": 12,
             "inserted_count": 5,
@@ -64,12 +67,36 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         worker._process_google_review_sync_job(job)
 
         run_sync.assert_called_once_with(7, 9)
+        post_sync.assert_called_once_with(7, 9, run_sync.return_value, None)
         fields = job_service.update_job.call_args.kwargs
         self.assertEqual("completed", fields["status"])
         self.assertEqual(12, fields["fetched_count"])
         self.assertEqual(5, fields["inserted_count"])
         self.assertEqual(2, fields["updated_count"])
         self.assertIsNone(fields["error_message"])
+
+    @patch("worker.logger")
+    @patch("worker.perform_google_review_post_sync", side_effect=RuntimeError("Bearer secret"))
+    @patch("worker.run_google_review_sync")
+    @patch("worker.google_review_sync_jobs")
+    def test_post_sync_failure_is_sanitized_and_marks_job_failed(
+        self, job_service, run_sync, post_sync, logger
+    ):
+        run_sync.return_value = {
+            "fetched_count": 2,
+            "inserted_count": 1,
+            "updated_count": 0,
+            "google_location_id": "locations/2",
+        }
+
+        worker._process_google_review_sync_job({"id": 41, "user_id": 7, "business_id": 9})
+
+        post_sync.assert_called_once()
+        updates = job_service.update_job.call_args_list
+        self.assertEqual(1, len(updates))
+        self.assertEqual("failed", updates[0].kwargs["status"])
+        self.assertNotIn("secret", updates[0].kwargs["error_message"])
+        logger.error.assert_called_once()
 
     @patch("worker.logger")
     @patch("worker.run_google_review_sync")

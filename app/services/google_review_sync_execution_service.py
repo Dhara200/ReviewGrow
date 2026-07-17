@@ -11,7 +11,9 @@ def run_google_review_sync(user_id, business_id):
     """Validate and execute one Google review sync without Flask session state."""
     connection = _load_owned_google_connection(user_id, business_id)
     connection = ensure_valid_google_connection_token(connection)
-    return synchronize_google_reviews(connection)
+    result = synchronize_google_reviews(connection)
+    result["google_location_id"] = connection.get("google_location_id")
+    return result
 
 
 def synchronize_google_reviews(connection):
@@ -126,4 +128,3 @@ def _load_owned_google_connection(user_id, business_id):
     connection["access_token"] = decrypt_token(connection.get("access_token"))
     connection["refresh_token"] = decrypt_token(connection.get("refresh_token"))
     return connection
-

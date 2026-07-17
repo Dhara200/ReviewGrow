@@ -26,6 +26,55 @@ class GoogleReviewSyncJobRouteTests(unittest.TestCase):
         )
 
     @patch("app.services.subscription_service.has_active_subscription", return_value=True)
+    @patch("app.routes.google_business._clear_review_sync_cooldown")
+    @patch("app.routes.google_business.perform_google_review_post_sync")
+    @patch("app.routes.google_business.synchronize_google_reviews")
+    @patch("app.routes.google_business._resolve_missing_location")
+    @patch("app.routes.google_business._valid_connection_token")
+    @patch("app.routes.google_business._start_review_sync_cooldown")
+    @patch("app.routes.google_business._review_sync_cooldown_response", return_value=None)
+    @patch("app.routes.google_business._get_connection_row")
+    @patch("app.routes.google_business.user_owns_business", return_value=True)
+    def test_fallback_route_uses_shared_post_sync_work_once(
+        self,
+        _owns_business,
+        get_connection,
+        _cooldown_response,
+        _start_cooldown,
+        valid_token,
+        resolve_location,
+        synchronize,
+        post_sync,
+        clear_cooldown,
+        _has_subscription,
+    ):
+        self.login()
+        connection = {"google_location_id": "locations/2"}
+        get_connection.return_value = connection
+        valid_token.return_value = connection
+        resolve_location.return_value = (connection, None)
+        synchronize.return_value = {
+            "fetched_count": 4,
+            "inserted_count": 2,
+            "updated_count": 1,
+        }
+        post_sync.return_value = {
+            "analytics_result": {"topic_result": {"inserted_topics": 3}},
+            "analysis_job_id": 18,
+            "analysis_job_created": True,
+        }
+
+        response = self.client.post("/businesses/9/google/sync-reviews")
+
+        self.assertEqual(302, response.status_code)
+        synchronize.assert_called_once_with(connection)
+        post_sync.assert_called_once()
+        args = post_sync.call_args.args
+        self.assertEqual((7, 9, synchronize.return_value, "locations/2"), args)
+        self.assertIn("on_analytics_error", post_sync.call_args.kwargs)
+        clear_cooldown.assert_called_once_with(9)
+
+    @patch("app.services.subscription_service.has_active_subscription", return_value=True)
     @patch("app.routes.google_business._get_connection_row")
     @patch("app.routes.google_business.user_owns_business", return_value=True)
     @patch("app.routes.google_business.google_review_sync_jobs.create_job", return_value=(41, True))
