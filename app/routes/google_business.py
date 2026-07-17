@@ -37,6 +37,7 @@ from app.services.business_analytics_service import (
 )
 from app.services.review_sync_service import sync_google_reviews
 from app.services.analysis_job_service import create_analysis_job
+from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
 from app.services.ai_service import AIService, AIServiceError, log_ai_usage
 from app.services.oauth_identity_service import (
     OAUTH_EMAIL_MISMATCH_MESSAGE,
@@ -48,6 +49,7 @@ from app.services.token_crypto_service import decrypt_token, encrypt_token
 
 
 google_business_bp = Blueprint("google_business", __name__)
+google_review_sync_jobs = GoogleReviewSyncJobService()
 REVIEW_SYNC_COOLDOWN_SECONDS = 120
 LOCATION_CACHE_SECONDS = 600
 PHOTO_MAX_BYTES = 5 * 1024 * 1024
@@ -1316,6 +1318,78 @@ def sync_google_business_reviews(business_id):
         flash("Google review sync failed. Please try again.", "danger")
 
     return redirect(f"/businesses/{business_id}/live-dashboard")
+
+
+@google_business_bp.route(
+    "/businesses/<int:business_id>/google/review-sync-jobs",
+    methods=["POST"],
+)
+@subscription_required
+def enqueue_google_review_sync_job(business_id):
+    if "user_id" not in session:
+        return jsonify({"message": "Login required"}), 401
+
+    if not user_owns_business(session["user_id"], business_id):
+        return jsonify({"message": "Access denied"}), 403
+
+    connection = _get_connection_row(business_id, connected_only=True)
+    if not connection:
+        return jsonify({
+            "success": False,
+            "message": "Google Business Profile is not connected.",
+        }), 400
+
+    if not _connection_has_location(connection):
+        return jsonify({
+            "success": False,
+            "message": "Select a Google Business Profile location before synchronizing reviews.",
+        }), 400
+
+    job_id, created = google_review_sync_jobs.create_job(
+        session["user_id"],
+        business_id,
+    )
+    return jsonify({
+        "success": True,
+        "job_id": job_id,
+        "created": created,
+        "status": "pending" if created else "already_running",
+        "message": (
+            "Review synchronization has been queued."
+            if created
+            else "Review synchronization is already active."
+        ),
+    }), 202 if created else 200
+
+
+@google_business_bp.route(
+    "/google-review-sync-jobs/<int:job_id>/status",
+    methods=["GET"],
+)
+@subscription_required
+def google_review_sync_job_status(job_id):
+    if "user_id" not in session:
+        return jsonify({"message": "Login required"}), 401
+
+    job = google_review_sync_jobs.get_job(job_id, user_id=session["user_id"])
+    if not job:
+        return jsonify({"message": "Job not found"}), 404
+
+    payload = {
+        "job_id": job["id"],
+        "business_id": job["business_id"],
+        "status": job["status"],
+        "fetched_count": job.get("fetched_count", 0),
+        "inserted_count": job.get("inserted_count", 0),
+        "updated_count": job.get("updated_count", 0),
+        "created_at": job.get("created_at"),
+        "started_at": job.get("started_at"),
+        "completed_at": job.get("completed_at"),
+    }
+    if job["status"] == "failed":
+        payload["error_message"] = job.get("error_message")
+
+    return jsonify(payload)
 
 
 @google_business_bp.route("/businesses/<int:business_id>/photos", methods=["GET", "POST"])
