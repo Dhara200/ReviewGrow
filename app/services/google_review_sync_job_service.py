@@ -214,3 +214,25 @@ class GoogleReviewSyncJobService:
         finally:
             cursor.close()
             connection.close()
+
+    def get_active_job(self, business_id, user_id):
+        connection = self._connection_factory()
+        cursor = connection.cursor(dictionary=True)
+
+        try:
+            cursor.execute(
+                """
+                SELECT *
+                FROM google_review_sync_jobs
+                WHERE business_id=%s
+                  AND user_id=%s
+                  AND status IN ('pending', 'processing')
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (business_id, user_id),
+            )
+            return cursor.fetchone()
+        finally:
+            cursor.close()
+            connection.close()

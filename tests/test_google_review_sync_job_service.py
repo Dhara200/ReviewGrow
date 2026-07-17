@@ -232,6 +232,20 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
         self.assertIn("AND user_id=%s", cursor.executions[0][0])
         self.assertEqual((41, 7), cursor.executions[0][1])
 
+    def test_get_active_job_is_scoped_to_business_and_user(self):
+        expected = {"id": 41, "business_id": 9, "user_id": 7, "status": "processing"}
+        cursor = FakeCursor(fetch_results=[expected])
+        service, _connection = self.service_for(cursor)
+
+        result = service.get_active_job(9, user_id=7)
+
+        self.assertEqual(expected, result)
+        query, params = cursor.executions[0]
+        self.assertIn("business_id=%s", query)
+        self.assertIn("user_id=%s", query)
+        self.assertIn("status IN ('pending', 'processing')", query)
+        self.assertEqual((9, 7), params)
+
 
 if __name__ == "__main__":
     unittest.main()

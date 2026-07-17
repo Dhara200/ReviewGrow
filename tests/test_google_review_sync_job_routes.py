@@ -177,6 +177,50 @@ class GoogleReviewSyncJobRouteTests(unittest.TestCase):
 
         self.assertEqual(404, response.status_code)
 
+    @patch("app.services.subscription_service.has_active_subscription", return_value=True)
+    @patch("app.routes.google_business.google_review_sync_jobs.get_active_job")
+    @patch("app.routes.google_business.user_owns_business", return_value=True)
+    def test_owner_can_resume_active_job(self, _owns_business, get_active_job, _subscription):
+        self.login(user_id=7)
+        get_active_job.return_value = {
+            "id": 41, "business_id": 9, "status": "processing",
+            "fetched_count": 0, "inserted_count": 0, "updated_count": 0,
+            "created_at": datetime(2026, 7, 17, 8, 30),
+            "started_at": datetime(2026, 7, 17, 8, 31), "completed_at": None,
+        }
+
+        response = self.client.get("/businesses/9/google/review-sync-jobs/active")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(41, response.get_json()["job_id"])
+        get_active_job.assert_called_once_with(9, user_id=7)
+
+    @patch("app.services.subscription_service.has_active_subscription", return_value=True)
+    @patch("app.routes.google_business.google_review_sync_jobs.get_active_job")
+    @patch("app.routes.google_business.user_owns_business", return_value=False)
+    def test_user_cannot_discover_another_users_active_job(
+        self, _owns_business, get_active_job, _subscription
+    ):
+        self.login(user_id=7)
+        response = self.client.get("/businesses/9/google/review-sync-jobs/active")
+        self.assertEqual(403, response.status_code)
+        get_active_job.assert_not_called()
+
+    @patch("app.services.subscription_service.has_active_subscription", return_value=True)
+    @patch("app.routes.google_business.google_review_sync_jobs.get_active_job", return_value=None)
+    @patch("app.routes.google_business.user_owns_business", return_value=True)
+    def test_missing_active_job_returns_404(self, _owns_business, _get_active, _subscription):
+        self.login(user_id=7)
+        response = self.client.get("/businesses/9/google/review-sync-jobs/active")
+        self.assertEqual(404, response.status_code)
+
+    def test_synchronous_fallback_route_remains_registered(self):
+        rules = {
+            (rule.rule, tuple(sorted(rule.methods - {"HEAD", "OPTIONS"})))
+            for rule in self.app.url_map.iter_rules()
+        }
+        self.assertIn(("/businesses/<int:business_id>/google/sync-reviews", ("POST",)), rules)
+
 
 if __name__ == "__main__":
     unittest.main()

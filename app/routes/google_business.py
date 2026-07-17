@@ -1352,6 +1352,32 @@ def google_review_sync_job_status(job_id):
     if not job:
         return jsonify({"message": "Job not found"}), 404
 
+    return jsonify(_google_review_sync_job_payload(job))
+
+
+@google_business_bp.route(
+    "/businesses/<int:business_id>/google/review-sync-jobs/active",
+    methods=["GET"],
+)
+@subscription_required
+def active_google_review_sync_job(business_id):
+    if "user_id" not in session:
+        return jsonify({"message": "Login required"}), 401
+
+    if not user_owns_business(session["user_id"], business_id):
+        return jsonify({"message": "Access denied"}), 403
+
+    job = google_review_sync_jobs.get_active_job(
+        business_id,
+        user_id=session["user_id"],
+    )
+    if not job:
+        return jsonify({"message": "No active synchronization job."}), 404
+
+    return jsonify(_google_review_sync_job_payload(job))
+
+
+def _google_review_sync_job_payload(job):
     payload = {
         "job_id": job["id"],
         "business_id": job["business_id"],
@@ -1366,7 +1392,7 @@ def google_review_sync_job_status(job_id):
     if job["status"] == "failed":
         payload["error_message"] = job.get("error_message")
 
-    return jsonify(payload)
+    return payload
 
 
 @google_business_bp.route("/businesses/<int:business_id>/photos", methods=["GET", "POST"])
