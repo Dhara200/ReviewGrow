@@ -32,6 +32,12 @@ class GoogleQuotaError(GoogleBusinessError):
     pass
 
 
+class GoogleTransientError(GoogleBusinessError):
+    """A temporary Google service failure that may succeed when retried."""
+
+    pass
+
+
 def _safe_url(url):
     parsed = urlsplit(url)
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
@@ -226,6 +232,9 @@ def refresh_access_token(refresh_token):
         timeout=20
     )
 
+    if response.status_code in {429, 500, 502, 503, 504}:
+        raise GoogleTransientError("Google token service is temporarily unavailable.")
+
     if not response.ok:
         error, body = _google_error_payload(response)
         logger.warning(
@@ -278,6 +287,9 @@ def api_get(access_token, url, params=None):
 
     if response.status_code == 429:
         raise GoogleQuotaError(_quota_error_message(response))
+
+    if response.status_code in {500, 502, 503, 504}:
+        raise GoogleTransientError("Google Business Profile API is temporarily unavailable.")
 
     if not response.ok:
         error, body = _google_error_payload(response)

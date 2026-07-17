@@ -127,6 +127,37 @@ class GoogleReviewSyncJobService:
             cursor.close()
             connection.close()
 
+    def recover_stale_processing_jobs(self, timeout_minutes):
+        if timeout_minutes <= 0:
+            raise ValueError("Stale processing timeout must be greater than zero.")
+
+        connection = self._connection_factory()
+        cursor = connection.cursor()
+
+        try:
+            cursor.execute(
+                """
+                UPDATE google_review_sync_jobs
+                SET status='pending',
+                    started_at=NULL,
+                    completed_at=NULL,
+                    error_message=NULL,
+                    active_business_id=business_id
+                WHERE status='processing'
+                  AND started_at < DATE_SUB(NOW(), INTERVAL %s MINUTE)
+                """,
+                (timeout_minutes,),
+            )
+            recovered_count = cursor.rowcount
+            connection.commit()
+            return recovered_count
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+
     def update_job(self, job_id, **fields):
         if not fields:
             return False

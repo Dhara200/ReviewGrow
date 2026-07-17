@@ -152,6 +152,31 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
         self.assertIn("WHERE status='pending'", cursor.executions[0][0])
         self.assertIn("ORDER BY created_at ASC, id ASC", cursor.executions[0][0])
 
+    def test_stale_processing_jobs_are_recovered(self):
+        cursor = FakeCursor(rowcounts=[2])
+        service, connection = self.service_for(cursor)
+
+        recovered = service.recover_stale_processing_jobs(30)
+
+        self.assertEqual(2, recovered)
+        self.assertEqual(1, connection.commits)
+        query, params = cursor.executions[0]
+        self.assertIn("SET status='pending'", query)
+        self.assertIn("started_at=NULL", query)
+        self.assertIn("completed_at=NULL", query)
+        self.assertIn("error_message=NULL", query)
+        self.assertIn("active_business_id=business_id", query)
+        self.assertIn("WHERE status='processing'", query)
+        self.assertEqual((30,), params)
+
+    def test_stale_recovery_rejects_non_positive_timeout(self):
+        service, connection = self.service_for(FakeCursor())
+
+        with self.assertRaises(ValueError):
+            service.recover_stale_processing_jobs(0)
+
+        self.assertFalse(connection.closed)
+
     def test_only_one_of_two_workers_can_claim_the_same_job(self):
         first_service, _first_connection = self.service_for(FakeCursor(rowcounts=[1]))
         second_service, _second_connection = self.service_for(FakeCursor(rowcounts=[0]))

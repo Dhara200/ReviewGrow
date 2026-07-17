@@ -1,10 +1,16 @@
 import unittest
 from unittest.mock import patch
 
+import requests
+
 import worker
+from app.services.google_business_service import GoogleBusinessError, GoogleTransientError
 
 
 class GoogleReviewSyncWorkerTests(unittest.TestCase):
+    def setUp(self):
+        worker.shutdown_requested = False
+
     @patch("worker.process_analysis_job")
     @patch("worker.claim_next_job", return_value=None)
     @patch("worker._process_google_review_sync_job")
@@ -112,6 +118,117 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
 
         self.assertTrue(processed)
         self.assertEqual("failed", job_service.update_job.call_args.kwargs["status"])
+        process_analysis.assert_called_once_with(88, batch_size=worker.Config.AI_BATCH_SIZE)
+
+    @patch("worker.run_google_review_sync")
+    def test_retryable_failure_retries_then_succeeds(self, run_sync):
+        run_sync.side_effect = [
+            requests.Timeout("temporary timeout"),
+            {"fetched_count": 1, "inserted_count": 1, "updated_count": 0},
+        ]
+        delays = []
+
+        result = worker._run_google_review_sync_with_retries(
+            {"id": 41, "user_id": 7, "business_id": 9},
+            sleep=delays.append,
+            jitter=lambda _low, _high: 0.25,
+        )
+
+        self.assertEqual(1, result["fetched_count"])
+        self.assertEqual([2.25], delays)
+        self.assertEqual(2, run_sync.call_count)
+
+    @patch("worker.run_google_review_sync")
+    def test_non_retryable_failure_is_not_retried(self, run_sync):
+        run_sync.side_effect = GoogleBusinessError("Location is invalid.")
+        delays = []
+
+        with self.assertRaises(GoogleBusinessError):
+            worker._run_google_review_sync_with_retries(
+                {"id": 41, "user_id": 7, "business_id": 9},
+                sleep=delays.append,
+            )
+
+        self.assertEqual(1, run_sync.call_count)
+        self.assertEqual([], delays)
+
+    @patch("worker.run_google_review_sync")
+    def test_retry_limit_has_no_sleep_after_final_failure(self, run_sync):
+        run_sync.side_effect = GoogleTransientError("Google is unavailable.")
+        delays = []
+
+        with patch.object(worker.Config, "GOOGLE_REVIEW_SYNC_MAX_RETRIES", 3):
+            with self.assertRaises(GoogleTransientError):
+                worker._run_google_review_sync_with_retries(
+                    {"id": 41, "user_id": 7, "business_id": 9},
+                    sleep=delays.append,
+                    jitter=lambda _low, _high: 0,
+                )
+
+        self.assertEqual(4, run_sync.call_count)
+        self.assertEqual([2, 4, 8], delays)
+
+    def test_backoff_calculation_uses_exponential_delay_and_jitter(self):
+        with patch.object(worker.Config, "GOOGLE_REVIEW_SYNC_BACKOFF_BASE_SECONDS", 2):
+            with patch.object(worker.Config, "GOOGLE_REVIEW_SYNC_BACKOFF_JITTER_SECONDS", 0.5):
+                delays = [
+                    worker._retry_backoff_seconds(number, jitter=lambda _low, _high: 0.1)
+                    for number in (1, 2, 3)
+                ]
+
+        self.assertEqual([2.1, 4.1, 8.1], delays)
+
+    @patch("worker.run_worker_iteration", return_value=False)
+    @patch("worker.reset_stale_processing_jobs")
+    @patch("worker.time.sleep")
+    @patch("worker.google_review_sync_jobs")
+    def test_startup_recovery_runs_once(self, job_service, sleep, reset_ai, iteration):
+        job_service.recover_stale_processing_jobs.return_value = 2
+        sleep.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True)
+
+        worker.run_worker_forever()
+
+        job_service.recover_stale_processing_jobs.assert_called_once_with(
+            worker.Config.GOOGLE_REVIEW_SYNC_STALE_TIMEOUT_MINUTES
+        )
+        reset_ai.assert_called_once()
+        iteration.assert_called_once()
+
+    def test_shutdown_handler_requests_exit_without_interrupting_current_work(self):
+        worker._request_shutdown(15, None)
+
+        self.assertTrue(worker.shutdown_requested)
+
+    @patch("worker.claim_next_job")
+    @patch("worker._process_google_review_sync_job")
+    @patch("worker.google_review_sync_jobs")
+    def test_shutdown_during_google_job_does_not_start_new_ai_job(
+        self, job_service, process_sync, claim_analysis
+    ):
+        job = {"id": 41, "user_id": 7, "business_id": 9}
+        job_service.get_oldest_pending_job.return_value = job
+        job_service.claim_job.return_value = True
+        process_sync.side_effect = lambda _job: setattr(worker, "shutdown_requested", True)
+
+        worker.run_worker_iteration()
+
+        process_sync.assert_called_once_with(job)
+        claim_analysis.assert_not_called()
+
+    @patch("worker.process_analysis_job")
+    @patch("worker.claim_next_job", return_value={"id": 88})
+    @patch("worker._process_google_review_sync_job")
+    @patch("worker.google_review_sync_jobs")
+    def test_google_and_ai_queues_both_progress(
+        self, job_service, process_sync, _claim_analysis, process_analysis
+    ):
+        job = {"id": 41, "user_id": 7, "business_id": 9}
+        job_service.get_oldest_pending_job.return_value = job
+        job_service.claim_job.return_value = True
+
+        worker.run_worker_iteration()
+
+        process_sync.assert_called_once_with(job)
         process_analysis.assert_called_once_with(88, batch_size=worker.Config.AI_BATCH_SIZE)
 
 
