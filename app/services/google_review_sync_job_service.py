@@ -3,18 +3,6 @@ import mysql.connector
 from app.services.database_service import get_connection
 
 
-JOB_STATUSES = frozenset({"pending", "processing", "completed", "failed"})
-UPDATABLE_FIELDS = frozenset({
-    "status",
-    "fetched_count",
-    "inserted_count",
-    "updated_count",
-    "error_message",
-    "started_at",
-    "completed_at",
-})
-
-
 class GoogleReviewSyncJobService:
     """Data access for the future Google review synchronization queue."""
 
@@ -80,9 +68,10 @@ class GoogleReviewSyncJobService:
             cursor.close()
             connection.close()
 
-    def claim_job(self, job_id):
+    def claim_job(self, job_id, worker_id, lease_seconds):
+        _validate_lease_arguments(worker_id, lease_seconds)
         connection = self._connection_factory()
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor()
 
         try:
             cursor.execute(
@@ -90,17 +79,112 @@ class GoogleReviewSyncJobService:
                 UPDATE google_review_sync_jobs
                 SET status='processing',
                     active_business_id=business_id,
-                    started_at=COALESCE(started_at, NOW()),
+                    worker_id=%s,
+                    started_at=COALESCE(started_at, UTC_TIMESTAMP(6)),
+                    heartbeat_at=UTC_TIMESTAMP(6),
+                    lease_expires_at=DATE_ADD(
+                        UTC_TIMESTAMP(6), INTERVAL %s SECOND
+                    ),
                     completed_at=NULL,
                     error_message=NULL
                 WHERE id=%s
                   AND status='pending'
                 """,
-                (job_id,),
+                (worker_id, lease_seconds, job_id),
             )
             claimed = cursor.rowcount == 1
             connection.commit()
             return claimed
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+
+    def heartbeat_job(self, job_id, worker_id, lease_seconds):
+        _validate_lease_arguments(worker_id, lease_seconds)
+        connection = self._connection_factory()
+        cursor = connection.cursor()
+
+        try:
+            cursor.execute(
+                """
+                UPDATE google_review_sync_jobs
+                SET heartbeat_at=UTC_TIMESTAMP(6),
+                    lease_expires_at=DATE_ADD(
+                        UTC_TIMESTAMP(6), INTERVAL %s SECOND
+                    )
+                WHERE id=%s
+                  AND status='processing'
+                  AND worker_id=%s
+                """,
+                (lease_seconds, job_id, worker_id),
+            )
+            renewed = cursor.rowcount == 1
+            connection.commit()
+            return renewed
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+
+    def complete_job(self, job_id, worker_id, result):
+        return self._finalize_job(
+            job_id,
+            worker_id,
+            status="completed",
+            fetched_count=result["fetched_count"],
+            inserted_count=result["inserted_count"],
+            updated_count=result["updated_count"],
+            error_message=None,
+        )
+
+    def fail_job(self, job_id, worker_id, error_message):
+        return self._finalize_job(
+            job_id,
+            worker_id,
+            status="failed",
+            error_message=error_message,
+        )
+
+    def _finalize_job(self, job_id, worker_id, status, error_message, **counts):
+        if not worker_id:
+            raise ValueError("Worker ID is required.")
+        assignments = [
+            "status=%s",
+            "error_message=%s",
+            "completed_at=UTC_TIMESTAMP(6)",
+            "worker_id=NULL",
+            "lease_expires_at=NULL",
+            "heartbeat_at=NULL",
+            "active_business_id=NULL",
+        ]
+        params = [status, error_message]
+        for field in ("fetched_count", "inserted_count", "updated_count"):
+            if field in counts:
+                assignments.append(f"{field}=%s")
+                params.append(counts[field])
+        params.extend((job_id, worker_id))
+        connection = self._connection_factory()
+        cursor = connection.cursor()
+
+        try:
+            cursor.execute(
+                f"""
+                UPDATE google_review_sync_jobs
+                SET {', '.join(assignments)}
+                WHERE id=%s
+                  AND status='processing'
+                  AND worker_id=%s
+                """,
+                tuple(params),
+            )
+            finalized = cursor.rowcount == 1
+            connection.commit()
+            return finalized
         except Exception:
             connection.rollback()
             raise
@@ -127,8 +211,8 @@ class GoogleReviewSyncJobService:
             cursor.close()
             connection.close()
 
-    def recover_stale_processing_jobs(self, timeout_minutes):
-        if timeout_minutes <= 0:
+    def recover_expired_processing_jobs(self, legacy_timeout_minutes):
+        if legacy_timeout_minutes <= 0:
             raise ValueError("Stale processing timeout must be greater than zero.")
 
         connection = self._connection_factory()
@@ -142,55 +226,26 @@ class GoogleReviewSyncJobService:
                     started_at=NULL,
                     completed_at=NULL,
                     error_message=NULL,
+                    worker_id=NULL,
+                    lease_expires_at=NULL,
+                    heartbeat_at=NULL,
                     active_business_id=business_id
                 WHERE status='processing'
-                  AND started_at < DATE_SUB(NOW(), INTERVAL %s MINUTE)
+                  AND (
+                      lease_expires_at < UTC_TIMESTAMP(6)
+                      OR (
+                          lease_expires_at IS NULL
+                          AND started_at < DATE_SUB(
+                              UTC_TIMESTAMP(6), INTERVAL %s MINUTE
+                          )
+                      )
+                  )
                 """,
-                (timeout_minutes,),
+                (legacy_timeout_minutes,),
             )
             recovered_count = cursor.rowcount
             connection.commit()
             return recovered_count
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            cursor.close()
-            connection.close()
-
-    def update_job(self, job_id, **fields):
-        if not fields:
-            return False
-
-        invalid_fields = set(fields) - UPDATABLE_FIELDS
-        if invalid_fields:
-            names = ", ".join(sorted(invalid_fields))
-            raise ValueError(f"Unsupported Google review sync job fields: {names}")
-
-        status = fields.get("status")
-        if status is not None and status not in JOB_STATUSES:
-            raise ValueError(f"Unsupported Google review sync job status: {status}")
-
-        assignments = [f"{field}=%s" for field in fields]
-        if status in {"pending", "processing"}:
-            assignments.append("active_business_id=business_id")
-        elif status in {"completed", "failed"}:
-            assignments.append("active_business_id=NULL")
-
-        assignments_sql = ", ".join(assignments)
-        params = [fields[field] for field in fields]
-        params.append(job_id)
-        connection = self._connection_factory()
-        cursor = connection.cursor()
-
-        try:
-            cursor.execute(
-                f"UPDATE google_review_sync_jobs SET {assignments_sql} WHERE id=%s",
-                tuple(params),
-            )
-            updated = cursor.rowcount == 1
-            connection.commit()
-            return updated
         except Exception:
             connection.rollback()
             raise
@@ -236,3 +291,10 @@ class GoogleReviewSyncJobService:
         finally:
             cursor.close()
             connection.close()
+
+
+def _validate_lease_arguments(worker_id, lease_seconds):
+    if not worker_id:
+        raise ValueError("Worker ID is required.")
+    if lease_seconds <= 0:
+        raise ValueError("Lease duration must be greater than zero.")

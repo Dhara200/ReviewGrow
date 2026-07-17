@@ -134,12 +134,16 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
         cursor = FakeCursor(rowcounts=[1])
         service, connection = self.service_for(cursor)
 
-        claimed = service.claim_job(41)
+        claimed = service.claim_job(41, "worker-a", 120)
 
         self.assertTrue(claimed)
         self.assertEqual(1, connection.commits)
         self.assertIn("AND status='pending'", cursor.executions[0][0])
         self.assertIn("active_business_id=business_id", cursor.executions[0][0])
+        self.assertIn("worker_id=%s", cursor.executions[0][0])
+        self.assertIn("heartbeat_at=UTC_TIMESTAMP(6)", cursor.executions[0][0])
+        self.assertIn("lease_expires_at=DATE_ADD", cursor.executions[0][0])
+        self.assertEqual(("worker-a", 120, 41), cursor.executions[0][1])
 
     def test_oldest_pending_job_is_discovered(self):
         expected = {"id": 11, "status": "pending"}
@@ -152,11 +156,11 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
         self.assertIn("WHERE status='pending'", cursor.executions[0][0])
         self.assertIn("ORDER BY created_at ASC, id ASC", cursor.executions[0][0])
 
-    def test_stale_processing_jobs_are_recovered(self):
+    def test_expired_and_legacy_stale_processing_jobs_are_recovered(self):
         cursor = FakeCursor(rowcounts=[2])
         service, connection = self.service_for(cursor)
 
-        recovered = service.recover_stale_processing_jobs(30)
+        recovered = service.recover_expired_processing_jobs(30)
 
         self.assertEqual(2, recovered)
         self.assertEqual(1, connection.commits)
@@ -165,15 +169,20 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
         self.assertIn("started_at=NULL", query)
         self.assertIn("completed_at=NULL", query)
         self.assertIn("error_message=NULL", query)
+        self.assertIn("worker_id=NULL", query)
+        self.assertIn("lease_expires_at=NULL", query)
+        self.assertIn("heartbeat_at=NULL", query)
         self.assertIn("active_business_id=business_id", query)
         self.assertIn("WHERE status='processing'", query)
+        self.assertIn("lease_expires_at < UTC_TIMESTAMP(6)", query)
+        self.assertIn("lease_expires_at IS NULL", query)
         self.assertEqual((30,), params)
 
     def test_stale_recovery_rejects_non_positive_timeout(self):
         service, connection = self.service_for(FakeCursor())
 
         with self.assertRaises(ValueError):
-            service.recover_stale_processing_jobs(0)
+            service.recover_expired_processing_jobs(0)
 
         self.assertFalse(connection.closed)
 
@@ -181,45 +190,57 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
         first_service, _first_connection = self.service_for(FakeCursor(rowcounts=[1]))
         second_service, _second_connection = self.service_for(FakeCursor(rowcounts=[0]))
 
-        first_claim = first_service.claim_job(41)
-        second_claim = second_service.claim_job(41)
+        first_claim = first_service.claim_job(41, "worker-a", 120)
+        second_claim = second_service.claim_job(41, "worker-b", 120)
 
         self.assertTrue(first_claim)
         self.assertFalse(second_claim)
 
-    def test_update_job_keeps_active_marker_for_pending_and_processing(self):
-        for status in ("pending", "processing"):
-            with self.subTest(status=status):
-                cursor = FakeCursor(rowcounts=[1])
+    def test_heartbeat_is_guarded_by_processing_owner(self):
+        for rowcount, expected in ((1, True), (0, False)):
+            with self.subTest(rowcount=rowcount):
+                cursor = FakeCursor(rowcounts=[rowcount])
                 service, connection = self.service_for(cursor)
 
-                updated = service.update_job(41, status=status)
+                renewed = service.heartbeat_job(41, "worker-a", 120)
 
-                self.assertTrue(updated)
+                self.assertEqual(expected, renewed)
+                query, params = cursor.executions[0]
+                self.assertIn("AND status='processing'", query)
+                self.assertIn("AND worker_id=%s", query)
+                self.assertEqual((120, 41, "worker-a"), params)
                 self.assertEqual(1, connection.commits)
-                self.assertIn("active_business_id=business_id", cursor.executions[0][0])
-                self.assertEqual((status, 41), cursor.executions[0][1])
 
-    def test_update_job_clears_active_marker_for_completed_and_failed(self):
-        for status in ("completed", "failed"):
-            with self.subTest(status=status):
-                cursor = FakeCursor(rowcounts=[1])
-                service, connection = self.service_for(cursor)
+    def test_completion_is_owner_guarded_and_clears_lease_metadata(self):
+        cursor = FakeCursor(rowcounts=[1])
+        service, _connection = self.service_for(cursor)
 
-                updated = service.update_job(41, status=status)
+        completed = service.complete_job(
+            41,
+            "worker-a",
+            {"fetched_count": 5, "inserted_count": 2, "updated_count": 1},
+        )
 
-                self.assertTrue(updated)
-                self.assertEqual(1, connection.commits)
-                self.assertIn("active_business_id=NULL", cursor.executions[0][0])
-                self.assertEqual((status, 41), cursor.executions[0][1])
+        self.assertTrue(completed)
+        query, params = cursor.executions[0]
+        self.assertIn("AND worker_id=%s", query)
+        self.assertIn("worker_id=NULL", query)
+        self.assertIn("lease_expires_at=NULL", query)
+        self.assertIn("heartbeat_at=NULL", query)
+        self.assertIn("active_business_id=NULL", query)
+        self.assertEqual(("completed", None, 5, 2, 1, 41, "worker-a"), params)
 
-    def test_update_job_rejects_unknown_fields(self):
-        service, connection = self.service_for(FakeCursor())
+    def test_failure_is_owner_guarded_and_clears_lease_metadata(self):
+        cursor = FakeCursor(rowcounts=[0])
+        service, _connection = self.service_for(cursor)
 
-        with self.assertRaises(ValueError):
-            service.update_job(41, claimed_by="worker-1")
+        failed = service.fail_job(41, "other-worker", "safe failure")
 
-        self.assertFalse(connection.closed)
+        self.assertFalse(failed)
+        query, params = cursor.executions[0]
+        self.assertIn("AND worker_id=%s", query)
+        self.assertIn("active_business_id=NULL", query)
+        self.assertEqual(("failed", "safe failure", 41, "other-worker"), params)
 
     def test_get_job_can_be_scoped_to_user(self):
         expected = {"id": 41, "user_id": 7, "status": "pending"}

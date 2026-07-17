@@ -30,8 +30,10 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         processed = worker.run_worker_iteration()
 
         self.assertTrue(processed)
-        job_service.claim_job.assert_called_once_with(41)
-        process_sync.assert_called_once_with(job)
+        job_service.claim_job.assert_called_once_with(
+            41, worker.WORKER_ID, worker.Config.GOOGLE_REVIEW_SYNC_LEASE_SECONDS
+        )
+        process_sync.assert_called_once_with(job, worker.WORKER_ID)
 
     @patch("worker.process_analysis_job")
     @patch("worker.claim_next_job", return_value=None)
@@ -69,12 +71,9 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
 
         run_sync.assert_called_once_with(7, 9)
         post_sync.assert_called_once_with(7, 9, run_sync.return_value, None)
-        fields = job_service.update_job.call_args.kwargs
-        self.assertEqual("completed", fields["status"])
-        self.assertEqual(12, fields["fetched_count"])
-        self.assertEqual(5, fields["inserted_count"])
-        self.assertEqual(2, fields["updated_count"])
-        self.assertIsNone(fields["error_message"])
+        job_service.complete_job.assert_called_once_with(
+            41, worker.WORKER_ID, run_sync.return_value
+        )
 
     @patch("worker.logger")
     @patch("worker.perform_google_review_post_sync", side_effect=RuntimeError("Bearer secret"))
@@ -93,10 +92,8 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         worker._process_google_review_sync_job({"id": 41, "user_id": 7, "business_id": 9})
 
         post_sync.assert_called_once()
-        updates = job_service.update_job.call_args_list
-        self.assertEqual(1, len(updates))
-        self.assertEqual("failed", updates[0].kwargs["status"])
-        self.assertNotIn("secret", updates[0].kwargs["error_message"])
+        job_service.fail_job.assert_called_once()
+        self.assertNotIn("secret", job_service.fail_job.call_args.args[2])
         logger.error.assert_called_once()
 
     @patch("worker.logger")
@@ -105,11 +102,11 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
     def test_failed_status_persistence_failure_does_not_escape(
         self, job_service, _run_sync, logger
     ):
-        job_service.update_job.side_effect = RuntimeError("password=secret unavailable")
+        job_service.fail_job.side_effect = RuntimeError("password=secret unavailable")
 
         worker._process_google_review_sync_job({"id": 41, "user_id": 7, "business_id": 9})
 
-        self.assertEqual(1, job_service.update_job.call_count)
+        self.assertEqual(1, job_service.fail_job.call_count)
         self.assertEqual(2, logger.error.call_count)
 
     @patch("worker.logger")
@@ -124,13 +121,13 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
             "inserted_count": 1,
             "updated_count": 0,
         }
-        job_service.update_job.side_effect = RuntimeError("database unavailable")
+        job_service.complete_job.side_effect = RuntimeError("database unavailable")
 
         worker._process_google_review_sync_job({"id": 41, "user_id": 7, "business_id": 9})
 
         run_sync.assert_called_once_with(7, 9)
-        job_service.update_job.assert_called_once()
-        self.assertEqual("completed", job_service.update_job.call_args.kwargs["status"])
+        job_service.complete_job.assert_called_once()
+        job_service.fail_job.assert_not_called()
         logger.error.assert_called_once()
 
     @patch("worker.logger")
@@ -149,11 +146,10 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
 
         worker._process_google_review_sync_job(job)
 
-        fields = job_service.update_job.call_args.kwargs
-        self.assertEqual("failed", fields["status"])
-        self.assertIn("[REDACTED]", fields["error_message"])
-        self.assertNotIn("secret-token", fields["error_message"])
-        self.assertNotIn("refresh-secret", fields["error_message"])
+        error_message = job_service.fail_job.call_args.args[2]
+        self.assertIn("[REDACTED]", error_message)
+        self.assertNotIn("secret-token", error_message)
+        self.assertNotIn("refresh-secret", error_message)
         logger.error.assert_called_once()
 
     @patch("worker.process_analysis_job")
@@ -179,7 +175,7 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         processed = worker.run_worker_iteration()
 
         self.assertTrue(processed)
-        self.assertEqual("failed", job_service.update_job.call_args.kwargs["status"])
+        job_service.fail_job.assert_called_once()
         process_analysis.assert_called_once_with(88, batch_size=worker.Config.AI_BATCH_SIZE)
 
     @patch("worker.run_google_review_sync")
@@ -260,12 +256,12 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
     @patch("worker._wait_for_shutdown")
     @patch("worker.google_review_sync_jobs")
     def test_startup_recovery_runs_once(self, job_service, wait, reset_ai, iteration):
-        job_service.recover_stale_processing_jobs.return_value = 2
+        job_service.recover_expired_processing_jobs.return_value = 2
         wait.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True) or True
 
         worker.run_worker_forever()
 
-        job_service.recover_stale_processing_jobs.assert_called_once_with(
+        job_service.recover_expired_processing_jobs.assert_called_once_with(
             worker.Config.GOOGLE_REVIEW_SYNC_STALE_TIMEOUT_MINUTES
         )
         reset_ai.assert_called_once()
@@ -279,13 +275,13 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
     def test_startup_recovery_retries_after_failure_then_polls(
         self, job_service, wait, reset_ai, iteration, logger
     ):
-        job_service.recover_stale_processing_jobs.side_effect = [
+        job_service.recover_expired_processing_jobs.side_effect = [
             RuntimeError("database unavailable"),
             3,
         ]
 
         def wait_side_effect(_seconds):
-            if job_service.recover_stale_processing_jobs.call_count == 2:
+            if job_service.recover_expired_processing_jobs.call_count == 2:
                 worker.shutdown_requested = True
                 return True
             return False
@@ -294,7 +290,7 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
 
         worker.run_worker_forever()
 
-        self.assertEqual(2, job_service.recover_stale_processing_jobs.call_count)
+        self.assertEqual(2, job_service.recover_expired_processing_jobs.call_count)
         reset_ai.assert_called_once()
         iteration.assert_called_once()
         self.assertTrue(logger.error.called)
@@ -310,7 +306,7 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
                 worker.shutdown_requested = False
                 job_service.reset_mock()
                 wait.reset_mock()
-                job_service.recover_stale_processing_jobs.return_value = 0
+                job_service.recover_expired_processing_jobs.return_value = 0
                 if failure_point == "discovery":
                     job_service.get_oldest_pending_job.side_effect = RuntimeError("db down")
                 else:
@@ -334,7 +330,7 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
     def test_ai_discovery_failure_does_not_terminate_worker(
         self, job_service, wait, _reset_ai, _claim_ai, logger
     ):
-        job_service.recover_stale_processing_jobs.return_value = 0
+        job_service.recover_expired_processing_jobs.return_value = 0
         job_service.get_oldest_pending_job.return_value = None
         wait.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True) or True
 
@@ -350,7 +346,7 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
     def test_empty_poll_uses_normal_delay_not_error_backoff(
         self, job_service, wait, _reset_ai, _iteration
     ):
-        job_service.recover_stale_processing_jobs.return_value = 0
+        job_service.recover_expired_processing_jobs.return_value = 0
         wait.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True) or True
 
         worker.run_worker_forever()
@@ -361,11 +357,11 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
     @patch("worker._wait_for_shutdown", return_value=True)
     @patch("worker.google_review_sync_jobs")
     def test_shutdown_interrupts_startup_recovery_backoff(self, job_service, wait, logger):
-        job_service.recover_stale_processing_jobs.side_effect = RuntimeError("db down")
+        job_service.recover_expired_processing_jobs.side_effect = RuntimeError("db down")
 
         worker.run_worker_forever()
 
-        job_service.recover_stale_processing_jobs.assert_called_once()
+        job_service.recover_expired_processing_jobs.assert_called_once()
         wait.assert_called_once_with(worker.Config.WORKER_ERROR_BACKOFF_SECONDS)
         self.assertTrue(logger.info.called)
 
@@ -384,11 +380,13 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         job = {"id": 41, "user_id": 7, "business_id": 9}
         job_service.get_oldest_pending_job.return_value = job
         job_service.claim_job.return_value = True
-        process_sync.side_effect = lambda _job: setattr(worker, "shutdown_requested", True)
+        process_sync.side_effect = lambda _job, _worker_id: setattr(
+            worker, "shutdown_requested", True
+        )
 
         worker.run_worker_iteration()
 
-        process_sync.assert_called_once_with(job)
+        process_sync.assert_called_once_with(job, worker.WORKER_ID)
         claim_analysis.assert_not_called()
 
     @patch("worker.process_analysis_job")
@@ -404,7 +402,7 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
 
         worker.run_worker_iteration()
 
-        process_sync.assert_called_once_with(job)
+        process_sync.assert_called_once_with(job, worker.WORKER_ID)
         process_analysis.assert_called_once_with(88, batch_size=worker.Config.AI_BATCH_SIZE)
 
 

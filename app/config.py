@@ -19,6 +19,14 @@ def _get_non_negative_float(name, default):
     return value if value >= 0 else float(default)
 
 
+def _get_positive_int(name, default, minimum=1):
+    try:
+        value = int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+    return value if value >= minimum else int(default)
+
+
 class Config:
     APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
@@ -79,6 +87,16 @@ class Config:
     GOOGLE_REVIEW_SYNC_STALE_TIMEOUT_MINUTES = int(
         os.getenv("GOOGLE_REVIEW_SYNC_STALE_TIMEOUT_MINUTES", 30)
     )
+    GOOGLE_REVIEW_SYNC_LEASE_SECONDS = _get_positive_int(
+        "GOOGLE_REVIEW_SYNC_LEASE_SECONDS", 120, minimum=2
+    )
+    GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS = _get_positive_int(
+        "GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS", 30
+    )
+    if GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS >= GOOGLE_REVIEW_SYNC_LEASE_SECONDS:
+        GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS = max(
+            1, GOOGLE_REVIEW_SYNC_LEASE_SECONDS // 4
+        )
     MAX_REVIEWS_PER_MONTH = int(os.getenv("MAX_REVIEWS_PER_MONTH", 0))
     MAX_AI_REQUESTS_PER_MONTH = int(os.getenv("MAX_AI_REQUESTS_PER_MONTH", 0))
     MAX_TOKENS_PER_MONTH = int(os.getenv("MAX_TOKENS_PER_MONTH", 0))

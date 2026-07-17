@@ -1,11 +1,12 @@
 import logging
+import os
 import random
 import re
 import signal
+import socket
 import threading
 import time
-from datetime import datetime
-
+import uuid
 import requests
 
 from app.config import Config
@@ -25,6 +26,7 @@ google_review_sync_jobs = GoogleReviewSyncJobService()
 logger = logging.getLogger(__name__)
 shutdown_requested = False
 shutdown_event = threading.Event()
+WORKER_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex}"[:255]
 
 
 class WorkerInfrastructureError(Exception):
@@ -34,15 +36,26 @@ class WorkerInfrastructureError(Exception):
 def run_worker_iteration():
     """Process at most one job from each queue so neither queue is starved."""
     processed_job = False
+    if shutdown_requested:
+        return False
     pending_sync_job = google_review_sync_jobs.get_oldest_pending_job()
 
-    if pending_sync_job and google_review_sync_jobs.claim_job(pending_sync_job["id"]):
+    if (
+        pending_sync_job
+        and not shutdown_requested
+        and google_review_sync_jobs.claim_job(
+            pending_sync_job["id"],
+            WORKER_ID,
+            Config.GOOGLE_REVIEW_SYNC_LEASE_SECONDS,
+        )
+    ):
         logger.info(
-            "Google review sync job claimed: job_id=%s business_id=%s",
+            "Google review sync job claimed: job_id=%s business_id=%s worker_id=%s",
             pending_sync_job.get("id"),
             pending_sync_job.get("business_id"),
+            WORKER_ID,
         )
-        if _process_google_review_sync_job(pending_sync_job) is False:
+        if _process_google_review_sync_job(pending_sync_job, WORKER_ID) is False:
             raise WorkerInfrastructureError(
                 "Google review sync terminal state could not be persisted."
             )
@@ -91,13 +104,24 @@ def run_worker_forever():
     logger.info("Background worker stopped cleanly.")
 
 
-def _process_google_review_sync_job(job):
+def _process_google_review_sync_job(job, worker_id=WORKER_ID):
     started_at = time.monotonic()
+    heartbeat = GoogleReviewSyncHeartbeat(
+        google_review_sync_jobs,
+        job,
+        worker_id,
+        Config.GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS,
+        Config.GOOGLE_REVIEW_SYNC_LEASE_SECONDS,
+    )
     logger.info(
-        "Google review sync job started: job_id=%s business_id=%s",
+        "Google review sync job started: job_id=%s business_id=%s worker_id=%s",
         job.get("id"),
         job.get("business_id"),
+        worker_id,
     )
+    execution_error = None
+    result = None
+    heartbeat.start()
     try:
         result = _run_google_review_sync_with_retries(job)
         perform_google_review_post_sync(
@@ -107,21 +131,36 @@ def _process_google_review_sync_job(job):
             result.get("google_location_id"),
         )
     except Exception as error:
-        safe_message = _safe_error_message(error)
-        _log_sanitized_exception(
-            "Google review sync job failed: job_id=%s business_id=%s "
-            "elapsed_seconds=%.3f",
-            error,
+        execution_error = error
+    finally:
+        heartbeat.stop()
+
+    if heartbeat.ownership_lost:
+        logger.warning(
+            "Google review sync ownership lost; terminal update skipped: "
+            "job_id=%s business_id=%s worker_id=%s",
             job.get("id"),
             job.get("business_id"),
+            worker_id,
+        )
+        return True
+
+    if execution_error is not None:
+        safe_message = _safe_error_message(execution_error)
+        _log_sanitized_exception(
+            "Google review sync job failed: job_id=%s business_id=%s "
+            "worker_id=%s elapsed_seconds=%.3f",
+            execution_error,
+            job.get("id"),
+            job.get("business_id"),
+            worker_id,
             time.monotonic() - started_at,
         )
         try:
-            google_review_sync_jobs.update_job(
+            finalized = google_review_sync_jobs.fail_job(
                 job["id"],
-                status="failed",
-                completed_at=datetime.utcnow(),
-                error_message=safe_message,
+                worker_id,
+                safe_message,
             )
         except Exception as persistence_error:
             _log_sanitized_exception(
@@ -132,17 +171,21 @@ def _process_google_review_sync_job(job):
                 job.get("business_id"),
             )
             return False
+        if not finalized:
+            logger.warning(
+                "Google review sync failure not persisted because ownership was lost: "
+                "job_id=%s business_id=%s worker_id=%s",
+                job.get("id"),
+                job.get("business_id"),
+                worker_id,
+            )
         return True
 
     try:
-        google_review_sync_jobs.update_job(
+        finalized = google_review_sync_jobs.complete_job(
             job["id"],
-            status="completed",
-            fetched_count=result["fetched_count"],
-            inserted_count=result["inserted_count"],
-            updated_count=result["updated_count"],
-            completed_at=datetime.utcnow(),
-            error_message=None,
+            worker_id,
+            result,
         )
     except Exception as persistence_error:
         _log_sanitized_exception(
@@ -153,6 +196,16 @@ def _process_google_review_sync_job(job):
             job.get("business_id"),
         )
         return False
+
+    if not finalized:
+        logger.warning(
+            "Google review sync completion not persisted because ownership was lost: "
+            "job_id=%s business_id=%s worker_id=%s",
+            job.get("id"),
+            job.get("business_id"),
+            worker_id,
+        )
+        return True
 
     logger.info(
         "Google review sync job completed: job_id=%s fetched=%s inserted=%s "
@@ -166,13 +219,74 @@ def _process_google_review_sync_job(job):
     return True
 
 
+class GoogleReviewSyncHeartbeat:
+    def __init__(self, job_service, job, worker_id, interval_seconds, lease_seconds):
+        self._job_service = job_service
+        self._job = job
+        self._worker_id = worker_id
+        self._interval_seconds = interval_seconds
+        self._lease_seconds = lease_seconds
+        self._stop_event = threading.Event()
+        self._ownership_lost = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"google-review-sync-heartbeat-{job.get('id')}",
+            daemon=True,
+        )
+
+    @property
+    def ownership_lost(self):
+        return self._ownership_lost.is_set()
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        self._thread.join()
+
+    def _run(self):
+        while not self._stop_event.wait(self._interval_seconds):
+            try:
+                renewed = self._job_service.heartbeat_job(
+                    self._job["id"],
+                    self._worker_id,
+                    self._lease_seconds,
+                )
+            except Exception as error:
+                _log_sanitized_exception(
+                    "Google review sync heartbeat failed temporarily: "
+                    "job_id=%s business_id=%s worker_id=%s",
+                    error,
+                    self._job.get("id"),
+                    self._job.get("business_id"),
+                    self._worker_id,
+                )
+                continue
+
+            if not renewed:
+                self._ownership_lost.set()
+                logger.warning(
+                    "Google review sync heartbeat lost ownership: "
+                    "job_id=%s business_id=%s worker_id=%s",
+                    self._job.get("id"),
+                    self._job.get("business_id"),
+                    self._worker_id,
+                )
+                return
+
+
 def _recover_stale_google_jobs():
     while not shutdown_requested:
         try:
-            recovered_count = google_review_sync_jobs.recover_stale_processing_jobs(
+            recovered_count = google_review_sync_jobs.recover_expired_processing_jobs(
                 Config.GOOGLE_REVIEW_SYNC_STALE_TIMEOUT_MINUTES
             )
-            logger.info("Recovered stale Google review sync jobs: count=%s", recovered_count)
+            logger.info(
+                "Recovered expired Google review sync jobs: count=%s worker_id=%s",
+                recovered_count,
+                WORKER_ID,
+            )
             return True
         except Exception as error:
             _log_sanitized_exception(
