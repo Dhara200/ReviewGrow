@@ -1,6 +1,10 @@
 from app.config import Config
 from app.services.analysis_job_service import run_worker_forever
 from app.services.database_service import ensure_mvp_schema
+from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
+
+
+google_review_sync_jobs = GoogleReviewSyncJobService()
 
 
 if __name__ == "__main__":
