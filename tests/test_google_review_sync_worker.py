@@ -10,6 +10,7 @@ from app.services.google_business_service import GoogleBusinessError, GoogleTran
 class GoogleReviewSyncWorkerTests(unittest.TestCase):
     def setUp(self):
         worker.shutdown_requested = False
+        worker.shutdown_event.clear()
 
     @patch("worker.process_analysis_job")
     @patch("worker.claim_next_job", return_value=None)
@@ -96,6 +97,40 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         self.assertEqual(1, len(updates))
         self.assertEqual("failed", updates[0].kwargs["status"])
         self.assertNotIn("secret", updates[0].kwargs["error_message"])
+        logger.error.assert_called_once()
+
+    @patch("worker.logger")
+    @patch("worker.run_google_review_sync", side_effect=RuntimeError("sync failed"))
+    @patch("worker.google_review_sync_jobs")
+    def test_failed_status_persistence_failure_does_not_escape(
+        self, job_service, _run_sync, logger
+    ):
+        job_service.update_job.side_effect = RuntimeError("password=secret unavailable")
+
+        worker._process_google_review_sync_job({"id": 41, "user_id": 7, "business_id": 9})
+
+        self.assertEqual(1, job_service.update_job.call_count)
+        self.assertEqual(2, logger.error.call_count)
+
+    @patch("worker.logger")
+    @patch("worker.perform_google_review_post_sync")
+    @patch("worker.run_google_review_sync")
+    @patch("worker.google_review_sync_jobs")
+    def test_completed_status_persistence_failure_does_not_rerun_or_mark_failed(
+        self, job_service, run_sync, _post_sync, logger
+    ):
+        run_sync.return_value = {
+            "fetched_count": 2,
+            "inserted_count": 1,
+            "updated_count": 0,
+        }
+        job_service.update_job.side_effect = RuntimeError("database unavailable")
+
+        worker._process_google_review_sync_job({"id": 41, "user_id": 7, "business_id": 9})
+
+        run_sync.assert_called_once_with(7, 9)
+        job_service.update_job.assert_called_once()
+        self.assertEqual("completed", job_service.update_job.call_args.kwargs["status"])
         logger.error.assert_called_once()
 
     @patch("worker.logger")
@@ -205,13 +240,28 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
 
         self.assertEqual([2.1, 4.1, 8.1], delays)
 
+    def test_worker_error_backoff_config_is_non_negative(self):
+        self.assertGreaterEqual(worker.Config.WORKER_ERROR_BACKOFF_SECONDS, 0)
+
+    def test_infrastructure_error_sanitizer_redacts_database_credentials(self):
+        message = worker._safe_error_message(
+            RuntimeError(
+                "password=secret dsn=mysql://user:pass@database/reviewgrow "
+                "Authorization: Bearer oauth-token"
+            )
+        )
+
+        self.assertNotIn("secret", message)
+        self.assertNotIn("user:pass", message)
+        self.assertNotIn("oauth-token", message)
+
     @patch("worker.run_worker_iteration", return_value=False)
     @patch("worker.reset_stale_processing_jobs")
-    @patch("worker.time.sleep")
+    @patch("worker._wait_for_shutdown")
     @patch("worker.google_review_sync_jobs")
-    def test_startup_recovery_runs_once(self, job_service, sleep, reset_ai, iteration):
+    def test_startup_recovery_runs_once(self, job_service, wait, reset_ai, iteration):
         job_service.recover_stale_processing_jobs.return_value = 2
-        sleep.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True)
+        wait.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True) or True
 
         worker.run_worker_forever()
 
@@ -221,10 +271,109 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         reset_ai.assert_called_once()
         iteration.assert_called_once()
 
+    @patch("worker.logger")
+    @patch("worker.run_worker_iteration", return_value=False)
+    @patch("worker.reset_stale_processing_jobs")
+    @patch("worker._wait_for_shutdown")
+    @patch("worker.google_review_sync_jobs")
+    def test_startup_recovery_retries_after_failure_then_polls(
+        self, job_service, wait, reset_ai, iteration, logger
+    ):
+        job_service.recover_stale_processing_jobs.side_effect = [
+            RuntimeError("database unavailable"),
+            3,
+        ]
+
+        def wait_side_effect(_seconds):
+            if job_service.recover_stale_processing_jobs.call_count == 2:
+                worker.shutdown_requested = True
+                return True
+            return False
+
+        wait.side_effect = wait_side_effect
+
+        worker.run_worker_forever()
+
+        self.assertEqual(2, job_service.recover_stale_processing_jobs.call_count)
+        reset_ai.assert_called_once()
+        iteration.assert_called_once()
+        self.assertTrue(logger.error.called)
+
+    @patch("worker.logger")
+    @patch("worker._wait_for_shutdown")
+    @patch("worker.google_review_sync_jobs")
+    def test_google_discovery_and_claim_failures_do_not_terminate_worker(
+        self, job_service, wait, logger
+    ):
+        for failure_point in ("discovery", "claim"):
+            with self.subTest(failure_point=failure_point):
+                worker.shutdown_requested = False
+                job_service.reset_mock()
+                wait.reset_mock()
+                job_service.recover_stale_processing_jobs.return_value = 0
+                if failure_point == "discovery":
+                    job_service.get_oldest_pending_job.side_effect = RuntimeError("db down")
+                else:
+                    job_service.get_oldest_pending_job.side_effect = None
+                    job_service.get_oldest_pending_job.return_value = {"id": 41}
+                    job_service.claim_job.side_effect = RuntimeError("db down")
+                wait.side_effect = lambda _seconds: setattr(
+                    worker, "shutdown_requested", True
+                ) or True
+
+                worker.run_worker_forever()
+
+                self.assertTrue(logger.error.called)
+                wait.assert_called_with(worker.Config.WORKER_ERROR_BACKOFF_SECONDS)
+
+    @patch("worker.logger")
+    @patch("worker.claim_next_job", side_effect=RuntimeError("db down"))
+    @patch("worker.reset_stale_processing_jobs")
+    @patch("worker._wait_for_shutdown")
+    @patch("worker.google_review_sync_jobs")
+    def test_ai_discovery_failure_does_not_terminate_worker(
+        self, job_service, wait, _reset_ai, _claim_ai, logger
+    ):
+        job_service.recover_stale_processing_jobs.return_value = 0
+        job_service.get_oldest_pending_job.return_value = None
+        wait.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True) or True
+
+        worker.run_worker_forever()
+
+        self.assertTrue(logger.error.called)
+        wait.assert_called_once_with(worker.Config.WORKER_ERROR_BACKOFF_SECONDS)
+
+    @patch("worker.run_worker_iteration", return_value=False)
+    @patch("worker.reset_stale_processing_jobs")
+    @patch("worker._wait_for_shutdown")
+    @patch("worker.google_review_sync_jobs")
+    def test_empty_poll_uses_normal_delay_not_error_backoff(
+        self, job_service, wait, _reset_ai, _iteration
+    ):
+        job_service.recover_stale_processing_jobs.return_value = 0
+        wait.side_effect = lambda _seconds: setattr(worker, "shutdown_requested", True) or True
+
+        worker.run_worker_forever()
+
+        wait.assert_called_once_with(worker.Config.AI_WORKER_POLL_SECONDS)
+
+    @patch("worker.logger")
+    @patch("worker._wait_for_shutdown", return_value=True)
+    @patch("worker.google_review_sync_jobs")
+    def test_shutdown_interrupts_startup_recovery_backoff(self, job_service, wait, logger):
+        job_service.recover_stale_processing_jobs.side_effect = RuntimeError("db down")
+
+        worker.run_worker_forever()
+
+        job_service.recover_stale_processing_jobs.assert_called_once()
+        wait.assert_called_once_with(worker.Config.WORKER_ERROR_BACKOFF_SECONDS)
+        self.assertTrue(logger.info.called)
+
     def test_shutdown_handler_requests_exit_without_interrupting_current_work(self):
         worker._request_shutdown(15, None)
 
         self.assertTrue(worker.shutdown_requested)
+        self.assertTrue(worker.shutdown_event.is_set())
 
     @patch("worker.claim_next_job")
     @patch("worker._process_google_review_sync_job")
