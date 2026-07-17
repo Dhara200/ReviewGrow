@@ -141,6 +141,27 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
         self.assertIn("AND status='pending'", cursor.executions[0][0])
         self.assertIn("active_business_id=business_id", cursor.executions[0][0])
 
+    def test_oldest_pending_job_is_discovered(self):
+        expected = {"id": 11, "status": "pending"}
+        cursor = FakeCursor(fetch_results=[expected])
+        service, _connection = self.service_for(cursor)
+
+        result = service.get_oldest_pending_job()
+
+        self.assertEqual(expected, result)
+        self.assertIn("WHERE status='pending'", cursor.executions[0][0])
+        self.assertIn("ORDER BY created_at ASC, id ASC", cursor.executions[0][0])
+
+    def test_only_one_of_two_workers_can_claim_the_same_job(self):
+        first_service, _first_connection = self.service_for(FakeCursor(rowcounts=[1]))
+        second_service, _second_connection = self.service_for(FakeCursor(rowcounts=[0]))
+
+        first_claim = first_service.claim_job(41)
+        second_claim = second_service.claim_job(41)
+
+        self.assertTrue(first_claim)
+        self.assertFalse(second_claim)
+
     def test_update_job_keeps_active_marker_for_pending_and_processing(self):
         for status in ("pending", "processing"):
             with self.subTest(status=status):

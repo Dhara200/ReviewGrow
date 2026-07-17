@@ -90,7 +90,7 @@ class GoogleReviewSyncJobService:
                 UPDATE google_review_sync_jobs
                 SET status='processing',
                     active_business_id=business_id,
-                    started_at=NOW(),
+                    started_at=COALESCE(started_at, NOW()),
                     completed_at=NULL,
                     error_message=NULL
                 WHERE id=%s
@@ -104,6 +104,25 @@ class GoogleReviewSyncJobService:
         except Exception:
             connection.rollback()
             raise
+        finally:
+            cursor.close()
+            connection.close()
+
+    def get_oldest_pending_job(self):
+        connection = self._connection_factory()
+        cursor = connection.cursor(dictionary=True)
+
+        try:
+            cursor.execute(
+                """
+                SELECT *
+                FROM google_review_sync_jobs
+                WHERE status='pending'
+                ORDER BY created_at ASC, id ASC
+                LIMIT 1
+                """
+            )
+            return cursor.fetchone()
         finally:
             cursor.close()
             connection.close()

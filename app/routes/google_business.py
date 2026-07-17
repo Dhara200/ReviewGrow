@@ -38,6 +38,10 @@ from app.services.business_analytics_service import (
 from app.services.review_sync_service import sync_google_reviews
 from app.services.analysis_job_service import create_analysis_job
 from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
+from app.services.google_review_sync_execution_service import (
+    ensure_valid_google_connection_token,
+    synchronize_google_reviews,
+)
 from app.services.ai_service import AIService, AIServiceError, log_ai_usage
 from app.services.oauth_identity_service import (
     OAUTH_EMAIL_MISMATCH_MESSAGE,
@@ -424,18 +428,7 @@ def _store_refreshed_token(connection, token_data):
 
 
 def _valid_connection_token(connection):
-    expiry = connection.get("token_expiry")
-
-    if expiry and expiry > datetime.utcnow() + timedelta(minutes=5):
-        return connection
-
-    token_data = refresh_access_token(connection.get("refresh_token"))
-    _store_refreshed_token(connection, token_data)
-
-    connection["access_token"] = token_data["access_token"]
-    connection["token_expiry"] = token_data["token_expiry"]
-
-    return connection
+    return ensure_valid_google_connection_token(connection)
 
 
 def _connection_has_location(connection):
@@ -1249,23 +1242,7 @@ def sync_google_business_reviews(business_id):
             _clear_review_sync_cooldown(business_id)
             return location_response
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        result = sync_google_reviews(cursor, connection)
-
-        cursor.execute(
-            """
-            UPDATE google_business_connections
-            SET last_sync_at=NOW()
-            WHERE id=%s
-            """,
-            (connection["id"],)
-        )
-
-        conn.commit()
-        cursor.close()
-        conn.close()
+        result = synchronize_google_reviews(connection)
 
         analytics_message = ""
         if result["inserted_count"] or result["updated_count"]:
