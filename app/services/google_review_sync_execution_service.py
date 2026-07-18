@@ -11,18 +11,22 @@ def run_google_review_sync(user_id, business_id):
     """Validate and execute one Google review sync without Flask session state."""
     connection = _load_owned_google_connection(user_id, business_id)
     connection = ensure_valid_google_connection_token(connection)
-    result = synchronize_google_reviews(connection)
+    result = synchronize_google_reviews(connection, allow_internal_api_retry=False)
     result["google_location_id"] = connection.get("google_location_id")
     return result
 
 
-def synchronize_google_reviews(connection):
+def synchronize_google_reviews(connection, allow_internal_api_retry=True):
     """Run the existing review mapping/upsert logic and record sync completion."""
     database = get_connection()
     cursor = database.cursor(dictionary=True)
 
     try:
-        result = sync_google_reviews(cursor, connection)
+        result = sync_google_reviews(
+            cursor,
+            connection,
+            allow_internal_api_retry=allow_internal_api_retry,
+        )
         cursor.execute(
             """
             UPDATE google_business_connections

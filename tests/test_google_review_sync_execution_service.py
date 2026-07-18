@@ -38,7 +38,7 @@ class GoogleReviewSyncExecutionServiceTests(unittest.TestCase):
         self.assertEqual(8, result["fetched_count"])
         load_connection.assert_called_once_with(7, 9)
         ensure_token.assert_called_once_with(connection)
-        synchronize.assert_called_once_with(connection)
+        synchronize.assert_called_once_with(connection, allow_internal_api_retry=False)
 
     @patch("app.services.google_review_sync_execution_service.get_connection")
     def test_missing_owned_connection_fails_validation(self, get_connection):

@@ -19,7 +19,11 @@ from app.services.database_service import ensure_mvp_schema
 from app.services.google_review_sync_execution_service import run_google_review_sync
 from app.services.google_review_post_sync_service import perform_google_review_post_sync
 from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
-from app.services.google_business_service import GoogleQuotaError, GoogleTransientError
+from app.services.google_business_service import (
+    GoogleBusinessError,
+    GoogleQuotaError,
+    GoogleTransientError,
+)
 
 
 google_review_sync_jobs = GoogleReviewSyncJobService()
@@ -320,7 +324,7 @@ def _log_sanitized_exception(message, error, *args):
     )
 
 
-def _run_google_review_sync_with_retries(job, sleep=time.sleep, jitter=random.uniform):
+def _run_google_review_sync_with_retries(job, sleep=None, jitter=random.uniform):
     max_retries = Config.GOOGLE_REVIEW_SYNC_MAX_RETRIES
     for retry_count in range(max_retries + 1):
         try:
@@ -340,7 +344,12 @@ def _run_google_review_sync_with_retries(job, sleep=time.sleep, jitter=random.un
                 delay,
                 error.__class__.__name__,
             )
-            sleep(delay)
+            if sleep is not None:
+                sleep(delay)
+            elif _wait_for_shutdown(delay):
+                raise GoogleBusinessError(
+                    "Worker shutdown requested during Google retry backoff."
+                )
 
 
 def _is_retryable_sync_error(error):

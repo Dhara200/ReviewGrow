@@ -211,6 +211,18 @@ class GoogleReviewSyncWorkerTests(unittest.TestCase):
         self.assertEqual([], delays)
 
     @patch("worker.run_google_review_sync")
+    def test_shutdown_interrupts_worker_retry_backoff(self, run_sync):
+        run_sync.side_effect = GoogleTransientError("Google is unavailable.")
+        worker.shutdown_event.set()
+
+        with self.assertRaises(GoogleBusinessError):
+            worker._run_google_review_sync_with_retries(
+                {"id": 41, "user_id": 7, "business_id": 9}
+            )
+
+        run_sync.assert_called_once_with(7, 9)
+
+    @patch("worker.run_google_review_sync")
     def test_retry_limit_has_no_sleep_after_final_failure(self, run_sync):
         run_sync.side_effect = GoogleTransientError("Google is unavailable.")
         delays = []

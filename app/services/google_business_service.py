@@ -255,10 +255,11 @@ def refresh_access_token(refresh_token):
     }
 
 
-def api_get(access_token, url, params=None):
+def api_get(access_token, url, params=None, allow_internal_retry=True):
     response = None
+    attempt_count = 3 if allow_internal_retry else 1
 
-    for attempt in range(3):
+    for attempt in range(attempt_count):
         response = requests.get(
             url,
             params=params or {},
@@ -272,14 +273,16 @@ def api_get(access_token, url, params=None):
         retry_after = _retry_after_seconds(response)
         wait_seconds = retry_after if retry_after is not None else 2 ** attempt
 
-        logger.warning(
-            "Google Business Profile API quota response: status=429 url=%s retry_after=%s attempt=%s",
-            _safe_url(response.url),
-            retry_after,
-            attempt + 1
-        )
+        if allow_internal_retry:
+            logger.warning(
+                "Google Business Profile API quota response: status=429 "
+                "url=%s retry_after=%s attempt=%s",
+                _safe_url(response.url),
+                retry_after,
+                attempt + 1
+            )
 
-        if attempt < 2 and wait_seconds <= 10:
+        if allow_internal_retry and attempt < attempt_count - 1 and wait_seconds <= 10:
             time.sleep(wait_seconds)
             continue
 
@@ -481,7 +484,12 @@ def review_parent(account_id, location_id):
     return f"{account_id}/locations/{location_id}"
 
 
-def list_reviews(access_token, account_id, location_id):
+def list_reviews(
+    access_token,
+    account_id,
+    location_id,
+    allow_internal_retry=True,
+):
     parent = review_parent(account_id, location_id)
     reviews = []
     page_token = None
@@ -494,7 +502,8 @@ def list_reviews(access_token, account_id, location_id):
         data = api_get(
             access_token,
             f"{REVIEWS_BASE_URL}/{parent}/reviews",
-            params=params
+            params=params,
+            allow_internal_retry=allow_internal_retry,
         )
         reviews.extend(data.get("reviews", []))
         page_token = data.get("nextPageToken")
