@@ -17,10 +17,12 @@ from app.routes.subscription import subscription_bp
 from app.routes.ai_consultant_routes import ai_consultant_bp
 from app.routes.legal import legal_bp
 from app.routes.seo import seo_bp
+from app.services.csrf_service import init_csrf
 
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
+init_csrf(app)
 
 
 @app.context_processor

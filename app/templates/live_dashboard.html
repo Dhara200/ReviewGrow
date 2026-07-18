@@ -210,6 +210,7 @@
 </div>
 {% elif connection and active_tab == "performance" and not needs_location %}
 <form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="d-inline">
+    {{ csrf_field() }}
     <input type="hidden" name="start_date" value="{{ performance_start }}">
     <input type="hidden" name="end_date" value="{{ performance_end }}">
     <button type="submit" class="btn-solid">
@@ -238,7 +239,8 @@
             credentials: "same-origin",
             headers: {
                 "Accept": "application/json",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "X-CSRF-Token": window.reviewGrowCsrfToken
             },
             body: JSON.stringify(payload)
         });
@@ -570,7 +572,8 @@
                     </a>
                 </div>
                 {% else %}
-                <form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="live-performance-form">
+            <form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="live-performance-form">
+                {{ csrf_field() }}
                     <div>
                         <label class="form-label small fw-bold" for="hero_start_date">Start</label>
                         <input id="hero_start_date" class="form-control" type="date" name="start_date" value="{{ performance_start }}" required>
@@ -1238,6 +1241,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form method="POST" action="/businesses/{{ business_id }}/reply-settings">
+                {{ csrf_field() }}
                 <div class="modal-header">
                     <div>
                         <p class="rs-eyebrow mb-1">Reply settings</p>

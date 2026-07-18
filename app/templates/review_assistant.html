@@ -24,6 +24,7 @@
     <div class="col-lg-7">
         <div class="rs-card rs-card-lg">
             <form method="POST">
+                {{ csrf_field() }}
                 <div class="field">
                     <label for="review_text">Customer review</label>
                     <textarea id="review_text" name="review_text" class="form-control" rows="10" placeholder="Paste a customer review here..." required></textarea>

@@ -119,6 +119,7 @@
             </div>
 
             <form method="POST" enctype="multipart/form-data" action="/businesses/{{ business_id }}/photos" data-photo-upload-form>
+                {{ csrf_field() }}
                 <div class="field">
                     <label for="photo">Photo</label>
                     <div class="photo-upload-dropzone" data-photo-dropzone>

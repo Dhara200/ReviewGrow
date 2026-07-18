@@ -32,6 +32,7 @@ from app.services.google_performance_service import (
     sync_performance_metrics
 )
 from app.services.business_analytics_service import get_google_review_snapshot
+from app.services.review_sync_service import sync_google_reviews
 from app.services.google_review_post_sync_service import perform_google_review_post_sync
 from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
 from app.services.google_review_sync_execution_service import (

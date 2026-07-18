@@ -5,12 +5,14 @@ from unittest.mock import patch
 from flask import Flask
 
 from app.routes.google_business import google_business_bp
+from app.services.csrf_service import CSRF_SESSION_KEY, init_csrf
 
 
 class GoogleReviewSyncJobRouteTests(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
         self.app.config.update(TESTING=True, SECRET_KEY="test-secret")
+        init_csrf(self.app)
         self.app.register_blueprint(google_business_bp)
         self.client = self.app.test_client()
 
@@ -18,12 +20,40 @@ class GoogleReviewSyncJobRouteTests(unittest.TestCase):
         with self.client.session_transaction() as session:
             session["user_id"] = user_id
             session["role"] = "owner"
+            session[CSRF_SESSION_KEY] = "test-csrf-token"
 
     def enqueue(self, business_id=9):
         return self.client.post(
             f"/businesses/{business_id}/google/review-sync-jobs",
+            headers={
+                "Accept": "application/json",
+                "X-CSRF-Token": "test-csrf-token",
+            },
+        )
+
+    def test_async_enqueue_requires_csrf_token(self):
+        self.login()
+        response = self.client.post(
+            "/businesses/9/google/review-sync-jobs",
+            json={},
             headers={"Accept": "application/json"},
         )
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(False, response.get_json()["success"])
+
+    def test_async_enqueue_rejects_invalid_csrf_token(self):
+        self.login()
+        response = self.client.post(
+            "/businesses/9/google/review-sync-jobs",
+            json={},
+            headers={"X-CSRF-Token": "invalid"},
+        )
+        self.assertEqual(403, response.status_code)
+
+    def test_legacy_sync_requires_csrf_token(self):
+        self.login()
+        response = self.client.post("/businesses/9/google/sync-reviews")
+        self.assertEqual(403, response.status_code)
 
     @patch("app.services.subscription_service.has_active_subscription", return_value=True)
     @patch("app.routes.google_business._clear_review_sync_cooldown")
@@ -64,7 +94,10 @@ class GoogleReviewSyncJobRouteTests(unittest.TestCase):
             "analysis_job_created": True,
         }
 
-        response = self.client.post("/businesses/9/google/sync-reviews")
+        response = self.client.post(
+            "/businesses/9/google/sync-reviews",
+            data={"csrf_token": "test-csrf-token"},
+        )
 
         self.assertEqual(302, response.status_code)
         synchronize.assert_called_once_with(connection)

@@ -182,6 +182,7 @@
         </div>
     </div>
     <form method="POST" action="/business/{{ business_id }}/ai-consultant/generate">
+        {{ csrf_field() }}
         <button type="submit" class="btn-solid" {% if not can_generate %}disabled{% endif %}>
             <i class="bi bi-stars"></i>
             Generate AI Business Consultant Report
@@ -385,6 +386,7 @@
                 </p>
                 <div class="d-flex flex-wrap gap-2">
                     <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status">
+                        {{ csrf_field() }}
                         <input type="hidden" name="status" value="in_progress">
                         <button type="submit" class="btn-ghost">Start Work</button>
                     </form>
@@ -392,6 +394,7 @@
                         Mark Completed
                     </button>
                     <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status">
+                        {{ csrf_field() }}
                         <input type="hidden" name="status" value="ignored">
                         <button type="submit" class="btn-ghost">Ignore</button>
                     </form>
@@ -404,6 +407,7 @@
                 </div>
                 <div class="collapse" id="resolveAction{{ item.id }}">
                     <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status" class="d-grid gap-2 mt-2">
+                        {{ csrf_field() }}
                         <input type="hidden" name="status" value="completed">
                         <label class="form-label small fw-bold" for="ownerNote{{ item.id }}">What did you do?</label>
                         <textarea id="ownerNote{{ item.id }}" name="owner_note" class="form-control" rows="2" placeholder="Installed better WiFi, added parking sign, trained reception staff..."></textarea>
@@ -412,6 +416,7 @@
                 </div>
                 <div class="collapse" id="noteAction{{ item.id }}">
                     <form method="POST" action="/business/{{ business_id }}/ai-consultant/actions/{{ item.id }}/status" class="d-grid gap-2 mt-2">
+                        {{ csrf_field() }}
                         <input type="hidden" name="status" value="{{ item.status }}">
                         <label class="form-label small fw-bold" for="note{{ item.id }}">Owner note</label>
                         <textarea id="note{{ item.id }}" name="owner_note" class="form-control" rows="2">{{ item.owner_note or "" }}</textarea>

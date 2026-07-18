@@ -50,9 +50,11 @@
                         {% if payment.payment_status == "pending" %}
                         <div class="d-flex justify-content-end gap-2">
                             <form method="POST" action="/admin/payments/{{ payment.id }}/approve">
+                                {{ csrf_field() }}
                                 <button type="submit" class="btn-solid">Approve</button>
                             </form>
                             <form method="POST" action="/admin/payments/{{ payment.id }}/reject">
+                                {{ csrf_field() }}
                                 <button type="submit" class="btn-ghost">Reject</button>
                             </form>
                         </div>
