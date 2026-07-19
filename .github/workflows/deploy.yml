@@ -110,6 +110,28 @@ jobs:
 
             ECR_IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
 
+            echo "Reading worker replica count..."
+
+            WORKER_REPLICAS="$(
+              sed -n \
+                's/^[[:space:]]*WORKER_REPLICAS[[:space:]]*=[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$/\1/p' \
+                .env \
+              | tail -n 1
+            )"
+
+            if [ -z "$WORKER_REPLICAS" ]; then
+              echo "ERROR: WORKER_REPLICAS is missing or invalid in .env"
+              echo "Expected example: WORKER_REPLICAS=1"
+              exit 1
+            fi
+
+            if [ "$WORKER_REPLICAS" -lt 1 ]; then
+              echo "ERROR: WORKER_REPLICAS must be at least 1"
+              exit 1
+            fi
+
+            echo "Configured worker replicas: ${WORKER_REPLICAS}"
+
             cp .env .deploy.env
 
             {
@@ -244,7 +266,7 @@ jobs:
 
             echo "Database migrations completed"
 
-            echo "Starting app and worker..."
+            echo "Starting app and ${WORKER_REPLICAS} worker replica(s)..."
 
             sudo docker compose \
               --env-file .deploy.env \
@@ -253,6 +275,7 @@ jobs:
               --no-build \
               --force-recreate \
               --remove-orphans \
+              --scale worker="$WORKER_REPLICAS" \
               app worker
 
             echo "Waiting for application health check..."
@@ -295,25 +318,77 @@ jobs:
                 reputation_app
             )"
 
-            WORKER_IMAGE="$(
-              sudo docker inspect \
-                --format '{{.Config.Image}}' \
-                reputation_worker
-            )"
-
             echo "Expected image: ${EXPECTED_IMAGE}"
             echo "App image: ${APP_IMAGE}"
-            echo "Worker image: ${WORKER_IMAGE}"
 
             test "$APP_IMAGE" = "$EXPECTED_IMAGE" || {
               echo "ERROR: App is not running expected image"
               exit 1
             }
 
-            test "$WORKER_IMAGE" = "$EXPECTED_IMAGE" || {
-              echo "ERROR: Worker is not running expected image"
+            echo "Finding worker containers..."
+
+            WORKER_CONTAINERS="$(
+              sudo docker compose \
+                --env-file .deploy.env \
+                --file docker-compose.yml \
+                ps -q worker
+            )"
+
+            test -n "$WORKER_CONTAINERS" || {
+              echo "ERROR: No worker containers are running"
               exit 1
             }
+
+            ACTUAL_WORKER_COUNT="$(
+              printf '%s\n' "$WORKER_CONTAINERS" \
+              | sed '/^[[:space:]]*$/d' \
+              | wc -l \
+              | tr -d '[:space:]'
+            )"
+
+            echo "Expected worker count: ${WORKER_REPLICAS}"
+            echo "Actual worker count: ${ACTUAL_WORKER_COUNT}"
+
+            test "$ACTUAL_WORKER_COUNT" -eq "$WORKER_REPLICAS" || {
+              echo "ERROR: Worker replica count does not match"
+              exit 1
+            }
+
+            for WORKER_CONTAINER in $WORKER_CONTAINERS; do
+              WORKER_NAME="$(
+                sudo docker inspect \
+                  --format '{{.Name}}' \
+                  "$WORKER_CONTAINER" \
+                | sed 's#^/##'
+              )"
+
+              WORKER_IMAGE="$(
+                sudo docker inspect \
+                  --format '{{.Config.Image}}' \
+                  "$WORKER_CONTAINER"
+              )"
+
+              WORKER_STATUS="$(
+                sudo docker inspect \
+                  --format '{{.State.Status}}' \
+                  "$WORKER_CONTAINER"
+              )"
+
+              echo "Worker: ${WORKER_NAME}"
+              echo "Worker status: ${WORKER_STATUS}"
+              echo "Worker image: ${WORKER_IMAGE}"
+
+              test "$WORKER_STATUS" = "running" || {
+                echo "ERROR: Worker ${WORKER_NAME} is not running"
+                exit 1
+              }
+
+              test "$WORKER_IMAGE" = "$EXPECTED_IMAGE" || {
+                echo "ERROR: Worker ${WORKER_NAME} is not running expected image"
+                exit 1
+              }
+            done
 
             sudo docker compose \
               --env-file .deploy.env \
@@ -322,4 +397,7 @@ jobs:
 
             sudo docker image prune -f
 
+            rm -f .deploy.env
+
             echo "Deployment successful: ${IMAGE_TAG}"
+            echo "Worker replicas running: ${WORKER_REPLICAS}"

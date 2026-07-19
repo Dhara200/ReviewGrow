@@ -58,7 +58,6 @@ services:
 
   worker:
     image: ${ECR_REGISTRY:?ECR_REGISTRY is required}/reviewgrow-app-app:${IMAGE_TAG:?IMAGE_TAG is required}
-    container_name: reputation_worker
     restart: unless-stopped
 
     env_file:
