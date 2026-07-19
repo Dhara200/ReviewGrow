@@ -53,7 +53,7 @@ def _google_review_id(review):
     return name.rstrip("/").split("/")[-1] if name else None
 
 
-def sync_google_reviews(cursor, connection):
+def sync_google_reviews(cursor, connection, allow_internal_api_retry=True):
     if not connection.get("google_account_id") or not connection.get("google_location_id"):
         raise GoogleBusinessError(
             "Google Business Profile location is not selected. Please select a location before syncing reviews."
@@ -63,7 +63,8 @@ def sync_google_reviews(cursor, connection):
     google_reviews = list_reviews(
         connection["access_token"],
         connection["google_account_id"],
-        google_location_id
+        google_location_id,
+        allow_internal_retry=allow_internal_api_retry,
     )
 
     inserted_count = 0
@@ -234,7 +235,7 @@ def sync_google_reviews(cursor, connection):
                     analysis_status
                 )
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     connection["business_id"],

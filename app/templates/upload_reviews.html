@@ -32,6 +32,7 @@
             </div>
 
             <form method="POST" enctype="multipart/form-data" action="/reviews/upload-ui">
+                {{ csrf_field() }}
                 <input type="hidden" name="business_id" value="{{ business_id }}">
 
                 <div class="field">

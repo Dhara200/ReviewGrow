@@ -121,6 +121,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
                 <form id="deleteUserForm" method="POST">
+                    {{ csrf_field() }}
                     <button type="submit" class="btn-solid">Delete user</button>
                 </form>
             </div>

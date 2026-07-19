@@ -199,14 +199,18 @@
 
 {% block topbar_actions %}
 {% if connection and active_tab == "reviews" and not needs_location %}
-<form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews" class="d-inline">
-    <button type="submit" class="btn-solid">
+<div class="d-inline" data-google-review-sync
+     data-enqueue-url="{{ url_for('google_business.enqueue_google_review_sync_job', business_id=business_id) }}"
+     data-active-url="{{ url_for('google_business.active_google_review_sync_job', business_id=business_id) }}">
+    <button type="button" class="btn-solid" data-google-review-sync-button>
         <i class="bi bi-arrow-repeat"></i>
-        Sync Reviews
+        <span data-google-review-sync-label>Sync Reviews</span>
     </button>
-</form>
+    <span class="visually-hidden" data-google-review-sync-status aria-live="polite"></span>
+</div>
 {% elif connection and active_tab == "performance" and not needs_location %}
 <form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="d-inline">
+    {{ csrf_field() }}
     <input type="hidden" name="start_date" value="{{ performance_start }}">
     <input type="hidden" name="end_date" value="{{ performance_end }}">
     <button type="submit" class="btn-solid">
@@ -220,12 +224,23 @@
 {% block scripts %}
 <script>
 (() => {
+    const REVIEW_SYNC_POLL_INTERVAL_MS = 2000;
+    const REVIEW_SYNC_POLL_TIMEOUT_MS = 10 * 60 * 1000;
+    const reviewSyncControls = [...document.querySelectorAll("[data-google-review-sync]")];
+    let activeReviewSyncJobId = null;
+    let reviewSyncStartedAt = null;
+    let reviewSyncTimer = null;
+    let reviewSyncRequest = null;
+    let enqueueInProgress = false;
+
     async function postJson(url, payload = {}) {
         const response = await fetch(url, {
             method: "POST",
+            credentials: "same-origin",
             headers: {
                 "Accept": "application/json",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "X-CSRF-Token": window.reviewGrowCsrfToken
             },
             body: JSON.stringify(payload)
         });
@@ -237,6 +252,179 @@
 
         return data;
     }
+
+    function setReviewSyncUi(message, { disabled = true, label = null, error = false } = {}) {
+        reviewSyncControls.forEach((control) => {
+            const button = control.querySelector("[data-google-review-sync-button]");
+            const labelNode = control.querySelector("[data-google-review-sync-label]");
+            const statusNode = control.querySelector("[data-google-review-sync-status]");
+            if (button) {
+                button.disabled = disabled;
+            }
+            if (labelNode && label) {
+                labelNode.textContent = label;
+            }
+            if (statusNode) {
+                statusNode.textContent = message || "";
+                statusNode.classList.toggle("text-danger", error);
+                statusNode.classList.toggle("text-muted", !error);
+            }
+        });
+    }
+
+    function stopReviewSyncPolling() {
+        if (reviewSyncTimer !== null) {
+            window.clearTimeout(reviewSyncTimer);
+            reviewSyncTimer = null;
+        }
+        if (reviewSyncRequest) {
+            reviewSyncRequest.abort();
+            reviewSyncRequest = null;
+        }
+        activeReviewSyncJobId = null;
+        reviewSyncStartedAt = null;
+    }
+
+    function scheduleReviewSyncPoll() {
+        reviewSyncTimer = window.setTimeout(pollReviewSyncStatus, REVIEW_SYNC_POLL_INTERVAL_MS);
+    }
+
+    async function pollReviewSyncStatus() {
+        if (!activeReviewSyncJobId || reviewSyncStartedAt === null) {
+            return;
+        }
+
+        if (Date.now() - reviewSyncStartedAt >= REVIEW_SYNC_POLL_TIMEOUT_MS) {
+            stopReviewSyncPolling();
+            setReviewSyncUi(
+                "Synchronization is taking longer than expected and may still be running in the background.",
+                { disabled: false, label: "Sync Reviews" }
+            );
+            return;
+        }
+
+        reviewSyncRequest = new AbortController();
+        try {
+            const response = await fetch(`/google-review-sync-jobs/${activeReviewSyncJobId}/status`, {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" },
+                signal: reviewSyncRequest.signal
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.message || "Unable to check synchronization status.");
+            }
+
+            if (data.status === "completed") {
+                const message = `Synchronization completed. Fetched: ${data.fetched_count || 0}, inserted: ${data.inserted_count || 0}, updated: ${data.updated_count || 0}.`;
+                stopReviewSyncPolling();
+                setReviewSyncUi(message, { disabled: true, label: "Synchronized" });
+                window.setTimeout(() => window.location.reload(), 1000);
+                return;
+            }
+
+            if (data.status === "failed") {
+                const message = data.error_message || "Review synchronization failed. Please try again.";
+                stopReviewSyncPolling();
+                setReviewSyncUi(message, { disabled: false, label: "Sync Reviews", error: true });
+                return;
+            }
+
+            if (data.status === "processing") {
+                setReviewSyncUi("Synchronizing Google reviews…", {
+                    disabled: true,
+                    label: "Synchronizing…"
+                });
+            } else {
+                setReviewSyncUi("Synchronization queued…", {
+                    disabled: true,
+                    label: "Queued…"
+                });
+            }
+        } catch (error) {
+            if (error.name === "AbortError") {
+                return;
+            }
+            setReviewSyncUi("Synchronization is continuing. Checking status again…", {
+                disabled: true,
+                label: "Synchronizing…"
+            });
+        } finally {
+            reviewSyncRequest = null;
+        }
+
+        if (activeReviewSyncJobId) {
+            scheduleReviewSyncPoll();
+        }
+    }
+
+    function beginReviewSyncPolling(jobId, status = "pending") {
+        if (activeReviewSyncJobId === jobId && reviewSyncTimer !== null) {
+            return;
+        }
+        stopReviewSyncPolling();
+        activeReviewSyncJobId = jobId;
+        reviewSyncStartedAt = Date.now();
+        setReviewSyncUi(
+            status === "processing" ? "Synchronizing Google reviews…" : "Synchronization queued…",
+            { disabled: true, label: status === "processing" ? "Synchronizing…" : "Queued…" }
+        );
+        scheduleReviewSyncPoll();
+    }
+
+    async function enqueueReviewSync(control) {
+        if (enqueueInProgress || activeReviewSyncJobId) {
+            return;
+        }
+        enqueueInProgress = true;
+        setReviewSyncUi("Starting synchronization…", { disabled: true, label: "Starting…" });
+        try {
+            const data = await postJson(control.dataset.enqueueUrl);
+            beginReviewSyncPolling(data.job_id, data.status === "processing" ? "processing" : "pending");
+            if (!data.created) {
+                setReviewSyncUi(data.message || "Review synchronization is already active.", {
+                    disabled: true,
+                    label: "Synchronizing…"
+                });
+            }
+        } catch (error) {
+            setReviewSyncUi(error.message, { disabled: false, label: "Sync Reviews", error: true });
+        } finally {
+            enqueueInProgress = false;
+        }
+    }
+
+    reviewSyncControls.forEach((control) => {
+        control.querySelector("[data-google-review-sync-button]")?.addEventListener("click", () => {
+            enqueueReviewSync(control);
+        });
+    });
+
+    async function resumeActiveReviewSync() {
+        const activeUrl = reviewSyncControls[0]?.dataset.activeUrl;
+        if (!activeUrl) {
+            return;
+        }
+        try {
+            const response = await fetch(activeUrl, {
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" }
+            });
+            if (response.status === 404) {
+                return;
+            }
+            const data = await response.json().catch(() => ({}));
+            if (response.ok && data.job_id) {
+                beginReviewSyncPolling(data.job_id, data.status);
+            }
+        } catch (_error) {
+            // Discovery is best-effort; clicking Sync remains available.
+        }
+    }
+
+    window.addEventListener("beforeunload", stopReviewSyncPolling, { once: true });
+    resumeActiveReviewSync();
 
     function setStatus(box, status) {
         const statusNode = box.querySelector("[data-reply-status]");
@@ -384,7 +572,8 @@
                     </a>
                 </div>
                 {% else %}
-                <form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="live-performance-form">
+            <form method="POST" action="/businesses/{{ business_id }}/google/sync-performance" class="live-performance-form">
+                {{ csrf_field() }}
                     <div>
                         <label class="form-label small fw-bold" for="hero_start_date">Start</label>
                         <input id="hero_start_date" class="form-control" type="date" name="start_date" value="{{ performance_start }}" required>
@@ -422,12 +611,15 @@
                     Select Location
                 </a>
                 {% else %}
-                <form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews">
-                    <button type="submit" class="btn-solid">
+                <div data-google-review-sync
+                     data-enqueue-url="{{ url_for('google_business.enqueue_google_review_sync_job', business_id=business_id) }}"
+                     data-active-url="{{ url_for('google_business.active_google_review_sync_job', business_id=business_id) }}">
+                    <button type="button" class="btn-solid" data-google-review-sync-button>
                         <i class="bi bi-arrow-repeat"></i>
-                        Sync Reviews
+                        <span data-google-review-sync-label>Sync Reviews</span>
                     </button>
-                </form>
+                    <p class="small text-muted mt-2 mb-0" data-google-review-sync-status aria-live="polite"></p>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -788,12 +980,15 @@
                         Sync Reviews
                     </button>
                     {% else %}
-                    <form method="POST" action="/businesses/{{ business_id }}/google/sync-reviews">
-                        <button type="submit" class="btn-ghost">
+                    <div data-google-review-sync
+                         data-enqueue-url="{{ url_for('google_business.enqueue_google_review_sync_job', business_id=business_id) }}"
+                         data-active-url="{{ url_for('google_business.active_google_review_sync_job', business_id=business_id) }}">
+                        <button type="button" class="btn-ghost" data-google-review-sync-button>
                             <i class="bi bi-arrow-repeat"></i>
-                            Sync Reviews
+                            <span data-google-review-sync-label>Sync Reviews</span>
                         </button>
-                    </form>
+                        <span class="small text-muted" data-google-review-sync-status aria-live="polite"></span>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -1046,6 +1241,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form method="POST" action="/businesses/{{ business_id }}/reply-settings">
+                {{ csrf_field() }}
                 <div class="modal-header">
                     <div>
                         <p class="rs-eyebrow mb-1">Reply settings</p>

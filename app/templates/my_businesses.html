@@ -114,6 +114,7 @@
                     Reconnect Google Account
                 </a>
                 <form method="POST" action="/businesses/{{ business.id }}/google/disconnect" class="d-grid">
+                    {{ csrf_field() }}
                     <button type="submit" class="btn-ghost">
                         <i class="bi bi-x-circle"></i>
                         Disconnect Google Account
@@ -154,6 +155,7 @@
                     Cancel
                 </button>
                 <form id="deleteBusinessForm" method="POST" action="">
+                    {{ csrf_field() }}
                     <button type="submit" class="btn-danger">
                         <i class="bi bi-trash"></i>
                         Delete business

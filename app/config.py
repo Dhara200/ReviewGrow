@@ -10,6 +10,23 @@ def _get_bool(name, default=False):
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
+
+def _get_non_negative_float(name, default):
+    try:
+        value = float(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return float(default)
+    return value if value >= 0 else float(default)
+
+
+def _get_positive_int(name, default, minimum=1):
+    try:
+        value = int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+    return value if value >= minimum else int(default)
+
+
 class Config:
     APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
@@ -57,6 +74,29 @@ class Config:
     AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gemini-2.5-flash")
     AI_BATCH_SIZE = int(os.getenv("AI_BATCH_SIZE", 25))
     AI_WORKER_POLL_SECONDS = int(os.getenv("AI_WORKER_POLL_SECONDS", 5))
+    WORKER_ERROR_BACKOFF_SECONDS = _get_non_negative_float(
+        "WORKER_ERROR_BACKOFF_SECONDS", 5
+    )
+    GOOGLE_REVIEW_SYNC_MAX_RETRIES = int(os.getenv("GOOGLE_REVIEW_SYNC_MAX_RETRIES", 3))
+    GOOGLE_REVIEW_SYNC_BACKOFF_BASE_SECONDS = float(
+        os.getenv("GOOGLE_REVIEW_SYNC_BACKOFF_BASE_SECONDS", 2)
+    )
+    GOOGLE_REVIEW_SYNC_BACKOFF_JITTER_SECONDS = float(
+        os.getenv("GOOGLE_REVIEW_SYNC_BACKOFF_JITTER_SECONDS", 0.5)
+    )
+    GOOGLE_REVIEW_SYNC_STALE_TIMEOUT_MINUTES = int(
+        os.getenv("GOOGLE_REVIEW_SYNC_STALE_TIMEOUT_MINUTES", 30)
+    )
+    GOOGLE_REVIEW_SYNC_LEASE_SECONDS = _get_positive_int(
+        "GOOGLE_REVIEW_SYNC_LEASE_SECONDS", 120, minimum=2
+    )
+    GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS = _get_positive_int(
+        "GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS", 30
+    )
+    if GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS >= GOOGLE_REVIEW_SYNC_LEASE_SECONDS:
+        GOOGLE_REVIEW_SYNC_HEARTBEAT_SECONDS = max(
+            1, GOOGLE_REVIEW_SYNC_LEASE_SECONDS // 4
+        )
     MAX_REVIEWS_PER_MONTH = int(os.getenv("MAX_REVIEWS_PER_MONTH", 0))
     MAX_AI_REQUESTS_PER_MONTH = int(os.getenv("MAX_AI_REQUESTS_PER_MONTH", 0))
     MAX_TOKENS_PER_MONTH = int(os.getenv("MAX_TOKENS_PER_MONTH", 0))

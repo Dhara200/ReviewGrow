@@ -1,5 +1,9 @@
 import json
+import logging
+import re
 import time
+
+import mysql.connector
 
 from app.services.ai_service import AIResult, AIService, AIServiceError, log_ai_usage
 from app.services.database_service import get_connection
@@ -7,6 +11,7 @@ from app.services.database_service import get_connection
 
 ACTIVE_JOB_STATUSES = ("pending", "processing")
 DEFAULT_BATCH_SIZE = 25
+logger = logging.getLogger(__name__)
 
 
 def create_analysis_job(user_id, business_id, force_reanalysis=False):
@@ -221,7 +226,7 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
         )
         job = cursor.fetchone()
         if not job:
-            return
+            return True
 
         cursor.execute(
             """
@@ -310,33 +315,92 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
 
         report_id = _generate_report(cursor, ai_service, job)
         _refresh_job_progress(cursor, job_id, job["business_id"])
-        cursor.execute(
-            """
-            UPDATE analysis_jobs
-            SET status='completed',
-                completed_at=NOW(),
-                latest_report_id=%s
-            WHERE id=%s
-            """,
-            (report_id, job_id)
-        )
-        conn.commit()
+        try:
+            cursor.execute(
+                """
+                UPDATE analysis_jobs
+                SET status='completed',
+                    completed_at=NOW(),
+                    latest_report_id=%s
+                WHERE id=%s
+                """,
+                (report_id, job_id)
+            )
+            conn.commit()
+        except Exception as persistence_error:
+            _rollback_safely(conn, job_id)
+            _log_analysis_persistence_error("completed", job_id, persistence_error)
+            return False
     except Exception as error:
-        conn.rollback()
-        cursor.execute(
-            """
-            UPDATE analysis_jobs
-            SET status='failed',
-                completed_at=NOW(),
-                error_message=%s
-            WHERE id=%s
-            """,
-            (str(error)[:1000], job_id)
-        )
-        conn.commit()
+        _rollback_safely(conn, job_id)
+        if isinstance(error, mysql.connector.Error):
+            _log_analysis_infrastructure_error(job_id, error)
+            return False
+        else:
+            try:
+                cursor.execute(
+                    """
+                    UPDATE analysis_jobs
+                    SET status='failed',
+                        completed_at=NOW(),
+                        error_message=%s
+                    WHERE id=%s
+                    """,
+                    (_safe_analysis_error_message(error), job_id)
+                )
+                conn.commit()
+            except Exception as persistence_error:
+                _rollback_safely(conn, job_id)
+                _log_analysis_persistence_error("failed", job_id, persistence_error)
+                return False
+        return True
     finally:
         cursor.close()
         conn.close()
+    return True
+
+
+def _rollback_safely(connection, job_id):
+    try:
+        connection.rollback()
+    except Exception as rollback_error:
+        _log_analysis_persistence_error("rollback", job_id, rollback_error)
+
+
+def _safe_analysis_error_message(error):
+    message = " ".join(str(error).split()) or error.__class__.__name__
+    patterns = (
+        r"(?i)(bearer\s+)[^\s,;]+",
+        r"(?i)((?:access|refresh)[_-]?token\s*[=:]\s*)[^\s,;]+",
+        r"(?i)(client[_-]?secret\s*[=:]\s*)[^\s,;]+",
+        r"(?i)(password\s*[=:]\s*)[^\s,;]+",
+        r"(?i)(authorization\s*[=:]\s*)[^\s,;]+",
+        r"(?i)(mysql(?:\+\w+)?://)[^\s]+",
+        r"(?i)(dsn\s*[=:]\s*)[^\s,;]+",
+    )
+    for pattern in patterns:
+        message = re.sub(pattern, r"\1[REDACTED]", message)
+    return message[:1000]
+
+
+def _log_analysis_persistence_error(state, job_id, error):
+    safe_exception = RuntimeError(_safe_analysis_error_message(error))
+    logger.error(
+        "Unable to persist AI analysis job state: job_id=%s state=%s "
+        "component=ai_terminal_state",
+        job_id,
+        state,
+        exc_info=(type(safe_exception), safe_exception, error.__traceback__),
+    )
+
+
+def _log_analysis_infrastructure_error(job_id, error):
+    safe_exception = RuntimeError(_safe_analysis_error_message(error))
+    logger.error(
+        "AI analysis infrastructure failure: job_id=%s component=ai_job_execution",
+        job_id,
+        exc_info=(type(safe_exception), safe_exception, error.__traceback__),
+    )
 
 
 def _save_batch_results(cursor, reviews, analysis_rows, auto_generate_replies=True):

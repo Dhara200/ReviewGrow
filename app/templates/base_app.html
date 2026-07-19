@@ -12,8 +12,20 @@
        gtag('config', 'G-724PEY9BS1');
     </script>
     
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-724PEY9BS1"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+     gtag('config', 'G-724PEY9BS1');
+    </script>
+
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
     <title>{% block title %}ReviewGrow App{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
@@ -31,6 +43,21 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    <script>
+        window.reviewGrowCsrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
+        window.reviewGrowCsrfHeaders = () => ({ "X-CSRF-Token": window.reviewGrowCsrfToken });
+        const reviewGrowFetch = window.fetch.bind(window);
+        window.fetch = (input, options = {}) => {
+            const method = (options.method || (typeof input !== "string" && input.method) || "GET").toUpperCase();
+            const url = new URL(typeof input === "string" ? input : input.url, window.location.href);
+            if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && url.origin === window.location.origin) {
+                const headers = new Headers(options.headers || {});
+                headers.set("X-CSRF-Token", window.reviewGrowCsrfToken);
+                options = { ...options, headers };
+            }
+            return reviewGrowFetch(input, options);
+        };
+    </script>
     <aside class="rs-sidebar">
         <div class="rs-sidebar-body">
             <a href="/" class="rs-brand">
@@ -64,6 +91,10 @@
                 <a href="/admin/ai-analysis" class="rs-nav-link {% block nav_admin_ai_analysis %}{% endblock %}">
                     <i class="bi bi-cpu"></i>
                     AI Analysis
+                </a>
+                <a href="/admin/sync-queue" class="rs-nav-link {% block nav_admin_sync_queue %}{% endblock %}">
+                    <i class="bi bi-list-task"></i>
+                    Sync Queue
                 </a>
                 <a href="/admin/payments" class="rs-nav-link {% block nav_admin_payments %}{% endblock %}">
                     <i class="bi bi-receipt"></i>
@@ -119,10 +150,13 @@
                 <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode">
                     <i class="bi bi-moon-stars" data-theme-icon></i>
                 </button>
-                <a href="/logout" class="btn-ghost d-none d-sm-inline-flex">
-                    <i class="bi bi-box-arrow-right"></i>
-                    Logout
-                </a>
+                <form method="POST" action="/logout" class="d-none d-sm-inline-flex m-0">
+                    {{ csrf_field() }}
+                    <button type="submit" class="btn-ghost">
+                        <i class="bi bi-box-arrow-right"></i>
+                        Logout
+                    </button>
+                </form>
             </div>
         </div>
     </nav>
@@ -143,6 +177,7 @@
             {% if session.get("role") == "admin" %}
             <a href="/admin/dashboard" class="rs-nav-link"><i class="bi bi-speedometer2"></i> Admin dashboard</a>
             <a href="/admin/ai-analysis" class="rs-nav-link"><i class="bi bi-cpu"></i> AI Analysis</a>
+            <a href="/admin/sync-queue" class="rs-nav-link"><i class="bi bi-list-task"></i> Sync Queue</a>
             <a href="/admin/payments" class="rs-nav-link"><i class="bi bi-receipt"></i> Admin payments</a>
             <a href="/admin/users" class="rs-nav-link"><i class="bi bi-people"></i> Users</a>
             {% endif %}
