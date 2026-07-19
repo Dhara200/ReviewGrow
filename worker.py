@@ -125,19 +125,56 @@ def _process_google_review_sync_job(job, worker_id=WORKER_ID):
     )
     execution_error = None
     result = None
+    ownership_unconfirmed = False
     heartbeat.start()
     try:
         result = _run_google_review_sync_with_retries(job)
-        perform_google_review_post_sync(
-            job["user_id"],
-            job["business_id"],
-            result,
-            result.get("google_location_id"),
-        )
+        if not heartbeat.ownership_lost:
+            confirmation_failed = False
+            try:
+                ownership_confirmed = (
+                    google_review_sync_jobs.confirm_and_renew_ownership(
+                        job["id"],
+                        worker_id,
+                        Config.GOOGLE_REVIEW_SYNC_LEASE_SECONDS,
+                    )
+                )
+            except Exception:
+                ownership_confirmed = False
+                confirmation_failed = True
+                logger.warning(
+                    "Google review sync ownership confirmation unavailable; "
+                    "post-sync skipped: job_id=%s worker_id=%s",
+                    job.get("id"),
+                    worker_id,
+                )
+
+            if ownership_confirmed:
+                # The database lease is revalidated and renewed immediately
+                # before post-sync work. The heartbeat continues while these
+                # effects run, and guarded completion remains the final check.
+                perform_google_review_post_sync(
+                    job["user_id"],
+                    job["business_id"],
+                    result,
+                    result.get("google_location_id"),
+                )
+            else:
+                ownership_unconfirmed = True
+                if not confirmation_failed:
+                    logger.warning(
+                        "Google review sync ownership not confirmed; post-sync skipped: "
+                        "job_id=%s worker_id=%s",
+                        job.get("id"),
+                        worker_id,
+                    )
     except Exception as error:
         execution_error = error
     finally:
         heartbeat.stop()
+
+    if ownership_unconfirmed:
+        return True
 
     if heartbeat.ownership_lost:
         logger.warning(

@@ -135,10 +135,13 @@
                 <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode">
                     <i class="bi bi-moon-stars" data-theme-icon></i>
                 </button>
-                <a href="/logout" class="btn-ghost d-none d-sm-inline-flex">
-                    <i class="bi bi-box-arrow-right"></i>
-                    Logout
-                </a>
+                <form method="POST" action="/logout" class="d-none d-sm-inline-flex m-0">
+                    {{ csrf_field() }}
+                    <button type="submit" class="btn-ghost">
+                        <i class="bi bi-box-arrow-right"></i>
+                        Logout
+                    </button>
+                </form>
             </div>
         </div>
     </nav>

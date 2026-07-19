@@ -1,9 +1,11 @@
+import logging
 import re
-
-from flask import current_app
 
 from app.services.ai_service import AIService, AIServiceError
 from app.services.database_service import get_connection
+
+
+logger = logging.getLogger(__name__)
 
 
 TOPIC_KEYWORDS = {
@@ -127,10 +129,11 @@ def _detect_topics(review, allow_gemini=True):
             if topics:
                 return topics
         except Exception as error:
-            current_app.logger.warning(
-                "Gemini topic extraction failed for review_id=%s: %s",
+            logger.warning(
+                "Gemini topic extraction failed; using keyword fallback: "
+                "review_id=%s error_type=%s",
                 review.get("id"),
-                error,
+                type(error).__name__,
             )
 
     return _detect_topics_with_keywords(review)

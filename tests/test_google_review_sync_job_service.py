@@ -211,6 +211,41 @@ class GoogleReviewSyncJobServiceTests(unittest.TestCase):
                 self.assertEqual((120, 41, "worker-a"), params)
                 self.assertEqual(1, connection.commits)
 
+    def test_ownership_confirmation_requires_unexpired_owned_processing_lease(self):
+        for rowcount, expected in ((1, True), (0, False)):
+            with self.subTest(rowcount=rowcount):
+                cursor = FakeCursor(rowcounts=[rowcount])
+                service, connection = self.service_for(cursor)
+
+                confirmed = service.confirm_and_renew_ownership(
+                    41, "worker-a", 120
+                )
+
+                self.assertEqual(expected, confirmed)
+                query, params = cursor.executions[0]
+                self.assertIn("AND status='processing'", query)
+                self.assertIn("AND worker_id=%s", query)
+                self.assertIn("lease_expires_at IS NOT NULL", query)
+                self.assertIn("lease_expires_at > UTC_TIMESTAMP(6)", query)
+                self.assertIn("heartbeat_at=UTC_TIMESTAMP(6)", query)
+                self.assertIn("lease_expires_at=DATE_ADD", query)
+                self.assertIn("updated_at=UTC_TIMESTAMP(6)", query)
+                self.assertEqual((120, 41, "worker-a"), params)
+                self.assertEqual(1, connection.commits)
+                self.assertTrue(cursor.closed)
+                self.assertTrue(connection.closed)
+
+    def test_ownership_confirmation_rolls_back_and_closes_on_database_error(self):
+        cursor = FakeCursor(execute_errors=[RuntimeError("database unavailable")])
+        service, connection = self.service_for(cursor)
+
+        with self.assertRaisesRegex(RuntimeError, "database unavailable"):
+            service.confirm_and_renew_ownership(41, "worker-a", 120)
+
+        self.assertEqual(1, connection.rollbacks)
+        self.assertTrue(cursor.closed)
+        self.assertTrue(connection.closed)
+
     def test_completion_is_owner_guarded_and_clears_lease_metadata(self):
         cursor = FakeCursor(rowcounts=[1])
         service, _connection = self.service_for(cursor)

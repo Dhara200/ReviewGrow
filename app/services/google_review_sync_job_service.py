@@ -131,6 +131,39 @@ class GoogleReviewSyncJobService:
             cursor.close()
             connection.close()
 
+    def confirm_and_renew_ownership(self, job_id, worker_id, lease_seconds):
+        """Confirm an unexpired processing lease and renew it atomically."""
+        _validate_lease_arguments(worker_id, lease_seconds)
+        connection = self._connection_factory()
+        cursor = connection.cursor()
+
+        try:
+            cursor.execute(
+                """
+                UPDATE google_review_sync_jobs
+                SET heartbeat_at=UTC_TIMESTAMP(6),
+                    lease_expires_at=DATE_ADD(
+                        UTC_TIMESTAMP(6), INTERVAL %s SECOND
+                    ),
+                    updated_at=UTC_TIMESTAMP(6)
+                WHERE id=%s
+                  AND status='processing'
+                  AND worker_id=%s
+                  AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at > UTC_TIMESTAMP(6)
+                """,
+                (lease_seconds, job_id, worker_id),
+            )
+            confirmed = cursor.rowcount == 1
+            connection.commit()
+            return confirmed
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+
     def complete_job(self, job_id, worker_id, result):
         return self._finalize_job(
             job_id,

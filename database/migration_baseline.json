@@ -1,0 +1,9 @@
+{
+  "baseline": "database/init.sql",
+  "superseded_migrations": [
+    "ai_analysis_jobs_migration.sql"
+  ],
+  "reasons": {
+    "ai_analysis_jobs_migration.sql": "All review columns, analysis job tables, AI usage tables, indexes, defaults, and foreign keys are defined by database/init.sql. The migration contains no data operations."
+  }
+}

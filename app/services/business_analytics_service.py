@@ -1,8 +1,11 @@
-from flask import current_app
+import logging
 
 from app.services.business_metrics_service import calculate_business_metrics
 from app.services.database_service import get_connection
 from app.services.review_topic_service import extract_topics_for_business
+
+
+logger = logging.getLogger(__name__)
 
 
 def refresh_business_review_analytics(
@@ -31,7 +34,7 @@ def refresh_business_review_analytics(
             require_google_review_id=require_google_review_id,
         )
     except Exception:
-        current_app.logger.exception(
+        logger.exception(
             "Business topic analytics refresh failed for business_id=%s",
             business_id,
         )

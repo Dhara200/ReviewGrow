@@ -1,7 +1,9 @@
 import unittest
+from pathlib import Path
 
 from flask import Flask, jsonify, request, session
 
+from app.routes.auth import auth_bp
 from app.services.csrf_service import CSRF_SESSION_KEY, get_csrf_token, init_csrf
 
 
@@ -10,6 +12,7 @@ class CsrfProtectionTests(unittest.TestCase):
         self.app = Flask(__name__)
         self.app.config.update(TESTING=True, SECRET_KEY="csrf-test-secret")
         init_csrf(self.app)
+        self.app.register_blueprint(auth_bp)
 
         @self.app.get("/token")
         def token():
@@ -129,6 +132,37 @@ class CsrfProtectionTests(unittest.TestCase):
         self.assertGreaterEqual(len(token), 40)
         with self.client.session_transaction() as active_session:
             self.assertEqual(token, active_session[CSRF_SESSION_KEY])
+
+    def test_logout_is_post_only_and_requires_valid_csrf(self):
+        token = self.login()
+
+        get_response = self.client.get("/logout")
+        self.assertEqual(405, get_response.status_code)
+        self.assertTrue(self.client.get("/status").get_json()["authenticated"])
+
+        missing = self.client.post("/logout")
+        invalid = self.client.post("/logout", data={"csrf_token": "invalid"})
+        self.assertEqual(403, missing.status_code)
+        self.assertEqual(403, invalid.status_code)
+        self.assertTrue(self.client.get("/status").get_json()["authenticated"])
+
+        valid = self.client.post("/logout", data={"csrf_token": token})
+        self.assertEqual(302, valid.status_code)
+        self.assertTrue(valid.headers["Location"].endswith("/login-page"))
+        self.assertFalse(self.client.get("/status").get_json()["authenticated"])
+
+    def test_unauthenticated_logout_post_is_safe(self):
+        response = self.client.post("/logout")
+        self.assertEqual(302, response.status_code)
+        self.assertTrue(response.headers["Location"].endswith("/login-page"))
+
+    def test_logout_controls_are_post_forms(self):
+        for template_name in ("base_app.html", "pricing.html"):
+            with self.subTest(template=template_name):
+                source = Path(__file__).resolve().parents[1] / "app" / "templates" / template_name
+                content = source.read_text(encoding="utf-8")
+                self.assertIn('method="POST" action="/logout"', content)
+                self.assertNotIn('href="/logout"', content)
 
 
 if __name__ == "__main__":

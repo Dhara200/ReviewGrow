@@ -235,7 +235,7 @@ def sync_google_reviews(cursor, connection, allow_internal_api_retry=True):
                     analysis_status
                 )
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     connection["business_id"],

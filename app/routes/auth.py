@@ -515,7 +515,7 @@ def delete_account():
         cursor.close()
         conn.close()
     
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["POST"])
 def logout():
 
     session.clear()
