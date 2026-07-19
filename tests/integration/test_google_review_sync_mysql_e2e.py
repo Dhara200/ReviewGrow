@@ -24,6 +24,7 @@ from flask import Flask
 import worker
 from app.config import Config
 from app.routes.google_business import google_business_bp
+from app.services.admin_sync_queue_service import AdminSyncQueueService
 from app.services.csrf_service import CSRF_SESSION_KEY, init_csrf
 from app.services.google_review_sync_execution_service import run_google_review_sync
 from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
@@ -936,6 +937,67 @@ class GoogleReviewSyncMySQLE2ETests(unittest.TestCase):
                     self.assertEqual(1, http.call_count)
         finally:
             worker.Config.GOOGLE_REVIEW_SYNC_MAX_RETRIES = original_retries
+
+    def test_admin_sync_queue_metrics_filters_joins_and_health_use_real_mysql(self):
+        connection = self.connection()
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO businesses "
+                "(id,user_id,business_name,business_type,city,country) "
+                "VALUES (10,7,'Processing Business','Other','Chennai','India')"
+            )
+            cursor.execute(
+                "INSERT INTO google_review_sync_jobs "
+                "(user_id,business_id,active_business_id,status,created_at) "
+                "VALUES (7,9,9,'pending',DATE_SUB(UTC_TIMESTAMP(),INTERVAL 181 SECOND))"
+            )
+            cursor.execute(
+                "INSERT INTO google_review_sync_jobs "
+                "(user_id,business_id,active_business_id,status,worker_id,created_at,"
+                "started_at,heartbeat_at,lease_expires_at) "
+                "VALUES (7,10,10,'processing','worker-stale',UTC_TIMESTAMP(),"
+                "DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 5 MINUTE),"
+                "DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 3 MINUTE),"
+                "DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 1 SECOND))"
+            )
+            cursor.execute(
+                "INSERT INTO google_review_sync_jobs "
+                "(user_id,business_id,status,created_at,started_at,completed_at) "
+                "VALUES (7,9,'completed',UTC_TIMESTAMP(),"
+                "DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 120 SECOND),"
+                "DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 60 SECOND))"
+            )
+            cursor.execute(
+                "INSERT INTO google_review_sync_jobs "
+                "(user_id,business_id,status,created_at,started_at,completed_at,error_message) "
+                "VALUES (7,9,'failed',UTC_TIMESTAMP(),"
+                "DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 30 SECOND),UTC_TIMESTAMP(6),"
+                "'Bearer integration-secret-token')"
+            )
+            connection.commit()
+        finally:
+            cursor.close()
+            connection.close()
+
+        monitor = AdminSyncQueueService()
+        summary = monitor.get_sync_queue_summary()
+        self.assertEqual(1, summary["pending_jobs"])
+        self.assertEqual(1, summary["running_jobs"])
+        self.assertEqual(1, summary["completed_today"])
+        self.assertEqual(1, summary["failed_today"])
+        self.assertAlmostEqual(60, summary["average_sync_seconds"], delta=1)
+        self.assertGreaterEqual(summary["oldest_pending_seconds"], 181)
+
+        health = monitor.get_sync_queue_health(summary)
+        self.assertEqual(1, health["expired_leases"])
+        self.assertEqual(1, health["stale_heartbeats"])
+        jobs = monitor.get_recent_sync_jobs("failed", 9, "today")
+        self.assertEqual(1, len(jobs))
+        self.assertEqual("Integration Business", jobs[0]["business_name"])
+        self.assertEqual("Owner", jobs[0]["user_name"])
+        self.assertNotIn("integration-secret-token", jobs[0]["safe_error"])
+        self.assertNotIn("error_message", jobs[0])
 
 
 if __name__ == "__main__":

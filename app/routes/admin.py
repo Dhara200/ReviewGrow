@@ -11,9 +11,15 @@ from flask import (
 
 from app.services.database_service import get_connection
 from app.services.ai_usage_service import refresh_ai_monthly_usage
+from app.services.admin_sync_queue_service import (
+    AdminSyncQueueService,
+    format_duration,
+    normalize_sync_queue_filters,
+)
 from app.services.subscription_service import approve_payment, reject_payment
 
 admin_bp = Blueprint("admin", __name__)
+sync_queue_monitor = AdminSyncQueueService()
 
 
 def _money(value):
@@ -51,6 +57,41 @@ def _admin_required():
         return "Access Denied", 403
 
     return None
+
+
+@admin_bp.route("/admin/sync-queue")
+def admin_sync_queue():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    status, business_id, date_range = normalize_sync_queue_filters(
+        request.args.get("status"),
+        request.args.get("business"),
+        request.args.get("date_range") or "24h",
+    )
+    summary = sync_queue_monitor.get_sync_queue_summary()
+    health = sync_queue_monitor.get_sync_queue_health(summary)
+    jobs = sync_queue_monitor.get_recent_sync_jobs(
+        status=status,
+        business_id=business_id,
+        date_range=date_range,
+    )
+    businesses = sync_queue_monitor.get_business_options()
+
+    return render_template(
+        "admin_sync_queue.html",
+        summary=summary,
+        health=health,
+        jobs=jobs,
+        businesses=businesses,
+        filters={
+            "status": status or "all",
+            "business": business_id,
+            "date_range": date_range,
+        },
+        format_duration=format_duration,
+    )
 
 
 def _selected_month():
