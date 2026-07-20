@@ -1,4 +1,6 @@
 import os
+import math
+from urllib.parse import urlencode
 from uuid import uuid4
 from flask import Blueprint, flash, request, jsonify, redirect, session, render_template
 from werkzeug.utils import secure_filename
@@ -15,6 +17,34 @@ from app.services.subscription_service import subscription_required
 review_bp = Blueprint("reviews", __name__)
 
 ALLOWED_REVIEW_EXTENSIONS = {".xlsx", ".xls"}
+DEFAULT_REVIEW_PAGE_SIZE = 25
+ALLOWED_REVIEW_PAGE_SIZES = {25, 50, 100}
+
+
+def _positive_int_arg(name, default):
+    try:
+        value = int(request.args.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return max(value, 1)
+
+
+def _review_page_size():
+    try:
+        value = int(request.args.get("per_page", DEFAULT_REVIEW_PAGE_SIZE))
+    except (TypeError, ValueError):
+        return DEFAULT_REVIEW_PAGE_SIZE
+    return value if value in ALLOWED_REVIEW_PAGE_SIZES else DEFAULT_REVIEW_PAGE_SIZE
+
+
+def _query_url(path, **updates):
+    values = request.args.to_dict(flat=True)
+    for key, value in updates.items():
+        if value in (None, ""):
+            values.pop(key, None)
+        else:
+            values[key] = str(value)
+    return f"{path}?{urlencode(values)}" if values else path
 
 
 def _safe_upload_path(filename):
@@ -175,7 +205,57 @@ def review_history(business_id):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("""
+    page = _positive_int_arg("page", 1)
+    per_page = _review_page_size()
+    filters = {
+        "search": (request.args.get("search") or "").strip(),
+        "status": request.args.get("status") or "",
+        "rating": request.args.get("rating") or "",
+        "source": request.args.get("source") or "",
+        "sentiment": request.args.get("sentiment") or "",
+        "reply_status": request.args.get("reply_status") or "",
+        "date_from": request.args.get("date_from") or "",
+        "date_to": request.args.get("date_to") or "",
+    }
+    clauses = ["business_id=%s"]
+    params = [business_id]
+
+    if filters["search"]:
+        clauses.append("(review_text LIKE %s OR reviewer_name LIKE %s OR source LIKE %s)")
+        like = f"%{filters['search']}%"
+        params.extend([like, like, like])
+    if filters["status"] in {"pending", "analyzed", "failed"}:
+        clauses.append("analysis_status=%s")
+        params.append(filters["status"])
+    if filters["rating"] in {"1", "2", "3", "4", "5"}:
+        clauses.append("ROUND(COALESCE(review_rating, rating))=%s")
+        params.append(int(filters["rating"]))
+    if filters["source"]:
+        clauses.append("source=%s")
+        params.append(filters["source"])
+    if filters["sentiment"].lower() in {"positive", "neutral", "negative"}:
+        clauses.append("LOWER(COALESCE(sentiment, ''))=%s")
+        params.append(filters["sentiment"].lower())
+    if filters["reply_status"] in {"pending", "approved", "posted", "failed"}:
+        clauses.append("reply_status=%s")
+        params.append(filters["reply_status"])
+    if filters["date_from"]:
+        clauses.append("COALESCE(review_created_at, review_date, created_at) >= %s")
+        params.append(filters["date_from"])
+    if filters["date_to"]:
+        clauses.append("COALESCE(review_created_at, review_date, created_at) < DATE_ADD(%s, INTERVAL 1 DAY)")
+        params.append(filters["date_to"])
+
+    where_sql = " AND ".join(clauses)
+    cursor.execute(
+        f"SELECT COUNT(*) AS total_count FROM reviews WHERE {where_sql}",
+        tuple(params)
+    )
+    total_count = int(cursor.fetchone()["total_count"] or 0)
+    total_pages = math.ceil(total_count / per_page) if total_count else 0
+    offset = (page - 1) * per_page
+
+    cursor.execute(f"""
         SELECT
             id,
             source,
@@ -190,42 +270,58 @@ def review_history(business_id):
             ai_reply,
             analyzed_at
         FROM reviews
-        WHERE business_id=%s
-        ORDER BY review_date DESC
-    """, (business_id,))
+        WHERE {where_sql}
+        ORDER BY COALESCE(review_updated_at, review_created_at, review_date, created_at) DESC,
+                 id DESC
+        LIMIT %s OFFSET %s
+    """, tuple([*params, per_page, offset]))
 
     reviews = cursor.fetchall()
 
-    rating_counts = {
-        "5": 0,
-        "4": 0,
-        "3": 0,
-        "2": 0,
-        "1": 0
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS total_count,
+            SUM(analysis_status='pending') AS pending_count,
+            SUM(analysis_status='analyzed') AS analyzed_count,
+            SUM(ROUND(COALESCE(review_rating, rating))=5) AS rating_5,
+            SUM(ROUND(COALESCE(review_rating, rating))=4) AS rating_4,
+            SUM(ROUND(COALESCE(review_rating, rating))=3) AS rating_3,
+            SUM(ROUND(COALESCE(review_rating, rating))=2) AS rating_2,
+            SUM(ROUND(COALESCE(review_rating, rating))=1) AS rating_1
+        FROM reviews WHERE business_id=%s
+        """,
+        (business_id,)
+    )
+    counts = cursor.fetchone() or {}
+    rating_counts = {str(value): int(counts.get(f"rating_{value}") or 0) for value in range(1, 6)}
+    cursor.execute(
+        """
+        SELECT COALESCE(source, 'Unknown') AS source, COUNT(*) AS source_count
+        FROM reviews WHERE business_id=%s
+        GROUP BY COALESCE(source, 'Unknown') ORDER BY source ASC
+        """,
+        (business_id,)
+    )
+    source_counts = {row["source"]: int(row["source_count"] or 0) for row in cursor.fetchall()}
+    pending_count = int(counts.get("pending_count") or 0)
+    analyzed_count = int(counts.get("analyzed_count") or 0)
+    all_review_count = int(counts.get("total_count") or 0)
+
+    pagination = {
+        "page": page, "per_page": per_page, "total": total_count,
+        "total_pages": total_pages,
+        "start": offset + 1 if reviews else 0,
+        "end": offset + len(reviews),
+        "previous_url": _query_url(request.path, page=page - 1) if page > 1 else None,
+        "next_url": _query_url(request.path, page=page + 1) if page < total_pages else None,
+        "page_size_urls": {size: _query_url(request.path, page=1, per_page=size) for size in sorted(ALLOWED_REVIEW_PAGE_SIZES)},
     }
-
-    source_counts = {}
-
-    pending_count = 0
-    analyzed_count = 0
-
-    for review in reviews:
-
-        if review["rating"] is not None:
-
-            rating = str(int(review["rating"]))
-
-            if rating in rating_counts:
-                rating_counts[rating] += 1
-
-        source = review["source"] or "Unknown"
-        source_counts[source] = source_counts.get(source, 0) + 1
-
-        if review["analysis_status"] == "pending":
-            pending_count += 1
-
-        elif review["analysis_status"] == "analyzed":
-            analyzed_count += 1
+    filter_urls = {
+        "all": _query_url(request.path, page=1, status=None, rating=None, source=None),
+        "status": {value: _query_url(request.path, page=1, status=value) for value in ("pending", "analyzed")},
+        "rating": {str(value): _query_url(request.path, page=1, rating=value) for value in range(1, 6)},
+        "source": {value: _query_url(request.path, page=1, source=value) for value in source_counts},
+    }
 
     cursor.close()
     conn.close()
@@ -234,6 +330,10 @@ def review_history(business_id):
         "review_history.html",
         business_id=business_id,
         reviews=reviews,
+        filters=filters,
+        pagination=pagination,
+        filter_urls=filter_urls,
+        all_review_count=all_review_count,
         rating_counts=rating_counts,
         source_counts=source_counts,
         pending_count=pending_count,

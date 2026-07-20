@@ -726,14 +726,49 @@ def _google_review_filters_from_request():
     }
 
 
-def _google_review_stats(business_id, google_location_id=None, filters=None):
+def _review_pagination_from_request():
+    try:
+        page = max(int(request.args.get("page", 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = int(request.args.get("per_page", 25))
+    except (TypeError, ValueError):
+        per_page = 25
+    if per_page not in {25, 50, 100}:
+        per_page = 25
+    return page, per_page
+
+
+def _live_dashboard_query_url(business_id, **updates):
+    from urllib.parse import urlencode
+
+    values = request.args.to_dict(flat=True)
+    values.setdefault("tab", "reviews")
+    for key, value in updates.items():
+        if value in (None, ""):
+            values.pop(key, None)
+        else:
+            values[key] = str(value)
+    return f"/businesses/{business_id}/live-dashboard?{urlencode(values)}"
+
+
+def _google_review_stats(
+    business_id,
+    google_location_id=None,
+    filters=None,
+    page=1,
+    per_page=25,
+):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     stats, reviews, review_summary, urgent_reviews = get_google_review_snapshot(
         business_id,
         google_location_id=google_location_id,
-        limit=25,
+        limit=per_page,
+        offset=(page - 1) * per_page,
+        page=page,
         filters=filters,
     )
 
@@ -1154,11 +1189,36 @@ def live_dashboard(business_id):
         else None
     )
     review_filters = _google_review_filters_from_request()
+    review_page, review_per_page = _review_pagination_from_request()
     business, stats, reviews, review_summary, urgent_reviews = _google_review_stats(
         business_id,
         google_location_id,
         filters=review_filters,
+        page=review_page,
+        per_page=review_per_page,
     )
+    review_total_pages = review_summary.get("total_pages", 0)
+    review_offset = (review_page - 1) * review_per_page
+    review_pagination = {
+        "page": review_page,
+        "per_page": review_per_page,
+        "total": review_summary.get("filtered_reviews", 0),
+        "total_pages": review_total_pages,
+        "start": review_offset + 1 if reviews else 0,
+        "end": review_offset + len(reviews),
+        "previous_url": (
+            _live_dashboard_query_url(business_id, page=review_page - 1)
+            if review_page > 1 else None
+        ),
+        "next_url": (
+            _live_dashboard_query_url(business_id, page=review_page + 1)
+            if review_page < review_total_pages else None
+        ),
+        "page_size_urls": {
+            size: _live_dashboard_query_url(business_id, page=1, per_page=size)
+            for size in (25, 50, 100)
+        },
+    }
     performance = None
     needs_location = bool(connection and not _connection_has_location(connection))
     try:
@@ -1200,6 +1260,7 @@ def live_dashboard(business_id):
         urgent_reviews=urgent_reviews,
         review_filters=review_filters,
         reviews=reviews,
+        review_pagination=review_pagination,
         active_tab=active_tab,
         performance=performance,
         performance_start=performance_start,

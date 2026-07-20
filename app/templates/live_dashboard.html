@@ -1150,8 +1150,19 @@
                 </table>
             </div>
             {% else %}
-            <p class="text-muted mb-0">No Google reviews synced yet. Click Sync Reviews to import the latest reviews.</p>
+            <p class="text-muted mb-0">No Google reviews match this page and filter selection.</p>
             {% endif %}
+
+            <nav class="mt-4 d-flex flex-column flex-md-row align-items-center justify-content-between gap-3" aria-label="Google review pagination">
+                <p class="text-muted mb-0">Showing {{ review_pagination.start }}–{{ review_pagination.end }} of {{ review_pagination.total }} reviews</p>
+                <div class="d-flex flex-wrap align-items-center justify-content-center gap-2">
+                    {% if review_pagination.previous_url %}<a class="btn-ghost" href="{{ review_pagination.previous_url }}">Previous</a>{% else %}<span class="btn-ghost disabled" aria-disabled="true">Previous</span>{% endif %}
+                    <span class="fw-semibold">Page {{ review_pagination.page }}{% if review_pagination.total_pages %} of {{ review_pagination.total_pages }}{% endif %}</span>
+                    {% if review_pagination.next_url %}<a class="btn-ghost" href="{{ review_pagination.next_url }}">Next</a>{% else %}<span class="btn-ghost disabled" aria-disabled="true">Next</span>{% endif %}
+                    <span class="text-muted small">Per page:</span>
+                    {% for size, url in review_pagination.page_size_urls.items() %}<a class="btn-ghost {% if review_pagination.per_page == size %}active{% endif %}" href="{{ url }}">{{ size }}</a>{% endfor %}
+                </div>
+            </nav>
         </div>
     </div>
     {% endif %}
@@ -1162,6 +1173,7 @@
         <div class="modal-content">
             <form method="GET" action="/businesses/{{ business_id }}/live-dashboard">
                 <input type="hidden" name="tab" value="reviews">
+                <input type="hidden" name="per_page" value="{{ review_pagination.per_page }}">
                 <div class="modal-header">
                     <div>
                         <p class="rs-eyebrow mb-1">Google review inbox</p>

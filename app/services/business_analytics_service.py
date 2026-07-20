@@ -91,7 +91,14 @@ def get_business_review_metrics(
     )
 
 
-def get_google_review_snapshot(business_id, google_location_id=None, limit=25, filters=None):
+def get_google_review_snapshot(
+    business_id,
+    google_location_id=None,
+    limit=25,
+    offset=0,
+    page=1,
+    filters=None,
+):
     if not google_location_id:
         return _empty_google_review_stats(), [], _empty_review_filter_summary(), []
 
@@ -130,10 +137,11 @@ def get_google_review_snapshot(business_id, google_location_id=None, limit=25, f
             FROM reviews r
             {scope_sql}
             {filter_sql}
-            ORDER BY COALESCE(review_updated_at, review_created_at, review_date, created_at) DESC
-            LIMIT %s
+            ORDER BY COALESCE(review_updated_at, review_created_at, review_date, created_at) DESC,
+                     r.id DESC
+            LIMIT %s OFFSET %s
             """,
-            tuple([*scope_params, *filter_params, limit])
+            tuple([*scope_params, *filter_params, limit, offset])
         )
         reviews = cursor.fetchall()
         cursor.execute(
@@ -148,6 +156,11 @@ def get_google_review_snapshot(business_id, google_location_id=None, limit=25, f
         filtered_count = int((cursor.fetchone() or {}).get("filtered_count") or 0)
         summary = _google_review_filter_summary(cursor, business_id, google_location_id)
         summary["filtered_reviews"] = filtered_count
+        summary["page"] = page
+        summary["per_page"] = limit
+        summary["total_pages"] = (
+            (filtered_count + limit - 1) // limit if filtered_count else 0
+        )
         urgent_reviews = _urgent_google_reviews(cursor, business_id, google_location_id)
     finally:
         cursor.close()

@@ -204,67 +204,71 @@
     <aside class="review-filter-panel rs-card">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <h2 class="h6 fw-bold mb-0">Filters</h2>
-            <span class="badge-soft-primary">{{ reviews|length }}</span>
+            <span class="badge-soft-primary">{{ pagination.total }}</span>
         </div>
 
         <div class="review-filter-scroll">
-        <div class="mb-4">
+        <form class="mb-4" method="GET" action="{{ request.path }}">
             <label class="form-label" for="searchInput">Search Reviews</label>
             <div class="input-group">
                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                <input type="text" id="searchInput" class="form-control" placeholder="Review, reviewer, source">
+                <input type="search" id="searchInput" name="search" value="{{ filters.search }}" class="form-control" placeholder="Review, reviewer, source">
+                <button class="btn-solid" type="submit">Search</button>
             </div>
-        </div>
+            {% for name in ["status", "rating", "source", "sentiment", "reply_status", "date_from", "date_to", "per_page"] %}
+                {% if request.args.get(name) %}<input type="hidden" name="{{ name }}" value="{{ request.args.get(name) }}">{% endif %}
+            {% endfor %}
+        </form>
 
         <div class="mb-4">
             <p class="rs-nav-label ms-0">Status</p>
-            <button class="filter-btn status-filter active" data-status="all">All <span>{{ reviews|length }}</span></button>
-            <button class="filter-btn status-filter" data-status="pending">Pending <span>{{ pending_count }}</span></button>
-            <button class="filter-btn status-filter" data-status="analyzed">Analyzed <span>{{ analyzed_count }}</span></button>
+            <a class="filter-btn status-filter {% if not filters.status %}active{% endif %}" href="{{ filter_urls.all }}">All <span>{{ all_review_count }}</span></a>
+            <a class="filter-btn status-filter {% if filters.status == 'pending' %}active{% endif %}" href="{{ filter_urls.status.pending }}">Pending <span>{{ pending_count }}</span></a>
+            <a class="filter-btn status-filter {% if filters.status == 'analyzed' %}active{% endif %}" href="{{ filter_urls.status.analyzed }}">Analyzed <span>{{ analyzed_count }}</span></a>
         </div>
 
         <div class="mb-4">
             <p class="rs-nav-label ms-0">Rating</p>
-            <button class="filter-btn rating-filter active" data-rating="all">
+            <a class="filter-btn rating-filter {% if not filters.rating %}active{% endif %}" href="{{ filter_urls.all }}">
                 <span>All Ratings</span>
-            </button>
-            <button class="filter-btn rating-filter" data-rating="5" aria-label="5 star reviews">
+            </a>
+            <a class="filter-btn rating-filter {% if filters.rating == '5' %}active{% endif %}" href="{{ filter_urls.rating['5'] }}" aria-label="5 star reviews">
                 <span class="rating-stars" aria-hidden="true">
                     {% for i in range(5) %}<i class="bi bi-star-fill"></i>{% endfor %}
                 </span>
                 <span>{{ rating_counts["5"] }}</span>
-            </button>
-            <button class="filter-btn rating-filter" data-rating="4" aria-label="4 star reviews">
+            </a>
+            <a class="filter-btn rating-filter {% if filters.rating == '4' %}active{% endif %}" href="{{ filter_urls.rating['4'] }}" aria-label="4 star reviews">
                 <span class="rating-stars" aria-hidden="true">
                     {% for i in range(4) %}<i class="bi bi-star-fill"></i>{% endfor %}
                 </span>
                 <span>{{ rating_counts["4"] }}</span>
-            </button>
-            <button class="filter-btn rating-filter" data-rating="3" aria-label="3 star reviews">
+            </a>
+            <a class="filter-btn rating-filter {% if filters.rating == '3' %}active{% endif %}" href="{{ filter_urls.rating['3'] }}" aria-label="3 star reviews">
                 <span class="rating-stars" aria-hidden="true">
                     {% for i in range(3) %}<i class="bi bi-star-fill"></i>{% endfor %}
                 </span>
                 <span>{{ rating_counts["3"] }}</span>
-            </button>
-            <button class="filter-btn rating-filter" data-rating="2" aria-label="2 star reviews">
+            </a>
+            <a class="filter-btn rating-filter {% if filters.rating == '2' %}active{% endif %}" href="{{ filter_urls.rating['2'] }}" aria-label="2 star reviews">
                 <span class="rating-stars" aria-hidden="true">
                     {% for i in range(2) %}<i class="bi bi-star-fill"></i>{% endfor %}
                 </span>
                 <span>{{ rating_counts["2"] }}</span>
-            </button>
-            <button class="filter-btn rating-filter" data-rating="1" aria-label="1 star reviews">
+            </a>
+            <a class="filter-btn rating-filter {% if filters.rating == '1' %}active{% endif %}" href="{{ filter_urls.rating['1'] }}" aria-label="1 star reviews">
                 <span class="rating-stars" aria-hidden="true">
                     <i class="bi bi-star-fill"></i>
                 </span>
                 <span>{{ rating_counts["1"] }}</span>
-            </button>
+            </a>
         </div>
 
         <div>
             <p class="rs-nav-label ms-0">Source</p>
-            <button class="filter-btn source-filter active" data-source="all">All Sources <span>{{ reviews|length }}</span></button>
+            <a class="filter-btn source-filter {% if not filters.source %}active{% endif %}" href="{{ filter_urls.all }}">All Sources <span>{{ all_review_count }}</span></a>
             {% for source, count in source_counts.items() %}
-            <button class="filter-btn source-filter" data-source="{{ source|lower }}">{{ source }} <span>{{ count }}</span></button>
+            <a class="filter-btn source-filter {% if filters.source == source %}active{% endif %}" href="{{ filter_urls.source[source] }}">{{ source }} <span>{{ count }}</span></a>
             {% endfor %}
         </div>
         </div>
@@ -274,8 +278,8 @@
         <div class="rs-kpi-grid mb-4">
             <div class="rs-card rs-kpi">
                 <div class="rs-kpi-icon"><i class="bi bi-chat-square-text"></i></div>
-                <p class="rs-kpi-value">{{ reviews|length }}</p>
-                <p class="rs-kpi-label">Total Reviews</p>
+                <p class="rs-kpi-value">{{ pagination.total }}</p>
+                <p class="rs-kpi-label">Matching Reviews</p>
             </div>
             <div class="rs-card rs-kpi">
                 <div class="rs-kpi-icon" style="background:#fffbeb;color:var(--rs-warning);"><i class="bi bi-hourglass-split"></i></div>
@@ -353,7 +357,24 @@
                 </div>
             </article>
             {% endfor %}
+            {% if not reviews %}
+            <div class="rs-card text-center py-5">
+                <h2 class="h5 fw-bold">No reviews found</h2>
+                <p class="text-muted mb-0">Try changing the filters or return to the first page.</p>
+            </div>
+            {% endif %}
         </div>
+
+        <nav class="rs-card mt-4 d-flex flex-column flex-md-row align-items-center justify-content-between gap-3" aria-label="Review pagination">
+            <p class="text-muted mb-0">Showing {{ pagination.start }}–{{ pagination.end }} of {{ pagination.total }} reviews</p>
+            <div class="d-flex flex-wrap align-items-center justify-content-center gap-2">
+                {% if pagination.previous_url %}<a class="btn-ghost" href="{{ pagination.previous_url }}">Previous</a>{% else %}<span class="btn-ghost disabled" aria-disabled="true">Previous</span>{% endif %}
+                <span class="fw-semibold">Page {{ pagination.page }}{% if pagination.total_pages %} of {{ pagination.total_pages }}{% endif %}</span>
+                {% if pagination.next_url %}<a class="btn-ghost" href="{{ pagination.next_url }}">Next</a>{% else %}<span class="btn-ghost disabled" aria-disabled="true">Next</span>{% endif %}
+                <span class="text-muted small">Per page:</span>
+                {% for size, url in pagination.page_size_urls.items() %}<a class="btn-ghost {% if pagination.per_page == size %}active{% endif %}" href="{{ url }}">{{ size }}</a>{% endfor %}
+            </div>
+        </nav>
     </main>
 </div>
 
@@ -404,65 +425,6 @@ let reviewToDelete = null;
 const confirmModal = document.getElementById("confirmModal");
 const confirmActionBtn = document.getElementById("confirmActionBtn");
 const reviewCards = document.querySelectorAll(".review-card");
-const searchInput = document.getElementById("searchInput");
-const statusButtons = document.querySelectorAll(".status-filter");
-const ratingButtons = document.querySelectorAll(".rating-filter");
-const sourceButtons = document.querySelectorAll(".source-filter");
-
-let currentSearch = "";
-let currentStatus = "all";
-let currentRating = "all";
-let currentSource = "all";
-
-searchInput.addEventListener("keyup", function () {
-    currentSearch = this.value.toLowerCase();
-    applyFilters();
-});
-
-statusButtons.forEach(button => {
-    button.onclick = function () {
-        statusButtons.forEach(btn => btn.classList.remove("active"));
-        this.classList.add("active");
-        currentStatus = this.dataset.status;
-        applyFilters();
-    };
-});
-
-ratingButtons.forEach(button => {
-    button.onclick = function () {
-        ratingButtons.forEach(btn => btn.classList.remove("active"));
-        this.classList.add("active");
-        currentRating = this.dataset.rating;
-        applyFilters();
-    };
-});
-
-sourceButtons.forEach(button => {
-    button.onclick = function () {
-        sourceButtons.forEach(btn => btn.classList.remove("active"));
-        this.classList.add("active");
-        currentSource = this.dataset.source;
-        applyFilters();
-    };
-});
-
-function applyFilters() {
-    reviewCards.forEach(card => {
-        const review = card.dataset.review || "";
-        const reviewer = card.dataset.reviewer || "";
-        const source = card.dataset.source || "";
-        const status = card.dataset.status || "";
-        const rating = card.dataset.rating || "";
-
-        const searchMatch = review.includes(currentSearch) || reviewer.includes(currentSearch) || source.includes(currentSearch);
-        const statusMatch = currentStatus === "all" || status === currentStatus;
-        const ratingMatch = currentRating === "all" || rating === currentRating;
-        const sourceMatch = currentSource === "all" || source === currentSource;
-
-        card.style.display = searchMatch && statusMatch && ratingMatch && sourceMatch ? "block" : "none";
-    });
-}
-
 document.querySelectorAll(".analyze-btn").forEach(button => {
     button.addEventListener("click", async function () {
         const reviewId = this.dataset.reviewId;
