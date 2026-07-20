@@ -211,6 +211,37 @@ class AdminSyncQueueService:
             cursor.close()
             connection.close()
 
+    def get_recent_ai_jobs(self, limit=RECENT_JOB_LIMIT):
+        connection = self._connection_factory()
+        cursor = connection.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT j.id,j.business_id,b.business_name,j.user_id,
+                    u.name AS user_name,j.job_type,j.status,j.attempt_count,
+                    j.worker_id,j.created_at,j.started_at,j.completed_at,
+                    j.lease_expires_at,j.error_message,
+                    CASE
+                        WHEN j.status<>'processing' THEN NULL
+                        WHEN j.lease_expires_at > UTC_TIMESTAMP(6) THEN 'healthy'
+                        ELSE 'expired'
+                    END AS lease_health
+                FROM analysis_jobs j
+                JOIN businesses b ON b.id=j.business_id
+                JOIN users u ON u.id=j.user_id
+                ORDER BY j.created_at DESC,j.id DESC LIMIT %s
+                """, (min(max(int(limit), 1), RECENT_JOB_LIMIT),)
+            )
+            jobs = cursor.fetchall()
+            for job in jobs:
+                job["safe_error"] = sanitize_sync_job_error(
+                    job.pop("error_message", None)
+                )
+            return jobs
+        finally:
+            cursor.close()
+            connection.close()
+
 
 def normalize_sync_queue_filters(status=None, business_id=None, date_range="24h"):
     normalized_status = status if status in SYNC_JOB_STATUSES else None

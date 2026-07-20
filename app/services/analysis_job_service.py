@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import time
-
 import mysql.connector
 
 from app.services.ai_service import AIResult, AIService, AIServiceError, log_ai_usage
@@ -11,6 +10,7 @@ from app.services.database_service import get_connection
 
 ACTIVE_JOB_STATUSES = ("pending", "processing")
 DEFAULT_BATCH_SIZE = 25
+DEFAULT_LEASE_SECONDS = 120
 logger = logging.getLogger(__name__)
 
 
@@ -19,20 +19,7 @@ def create_analysis_job(user_id, business_id, force_reanalysis=False):
     cursor = conn.cursor(dictionary=True)
 
     try:
-        cursor.execute(
-            """
-            SELECT id, status
-            FROM analysis_jobs
-            WHERE business_id=%s
-            AND status IN ('pending', 'processing')
-            ORDER BY created_at DESC
-            LIMIT 1
-            """,
-            (business_id,)
-        )
-        active_job = cursor.fetchone()
-        if active_job:
-            return active_job["id"], False
+        operation_key = f"review_analysis:{business_id}"
 
         if force_reanalysis:
             cursor.execute(
@@ -69,22 +56,80 @@ def create_analysis_job(user_id, business_id, force_reanalysis=False):
             (
                 user_id,
                 business_id,
+                job_type,
+                operation_key,
+                active_operation_key,
                 status,
                 total_reviews,
                 processed_reviews,
                 failed_reviews,
                 force_reanalysis
             )
-            VALUES (%s,%s,'pending',%s,0,0,%s)
+            VALUES (%s,%s,'review_analysis',%s,%s,'pending',%s,0,0,%s)
             """,
-            (user_id, business_id, total_reviews, force_reanalysis)
+            (user_id, business_id, operation_key, operation_key, total_reviews, force_reanalysis)
         )
         job_id = cursor.lastrowid
         conn.commit()
         return job_id, True
+    except mysql.connector.IntegrityError as error:
+        conn.rollback()
+        if getattr(error, "errno", None) != 1062:
+            raise
+        cursor.execute(
+            """
+            SELECT id FROM analysis_jobs
+            WHERE active_operation_key=%s
+            AND status IN ('pending','processing')
+            LIMIT 1
+            """,
+            (f"review_analysis:{business_id}",)
+        )
+        active = cursor.fetchone()
+        if not active:
+            raise
+        return active["id"], False
     except Exception:
         conn.rollback()
         raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def create_consultant_job(user_id, business_id, max_attempts=3):
+    operation_key = f"ai_consultant:{business_id}"
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            INSERT INTO analysis_jobs
+                (user_id,business_id,job_type,operation_key,active_operation_key,
+                 status,max_attempts,total_reviews)
+            VALUES (%s,%s,'ai_consultant',%s,%s,'pending',%s,0)
+            """,
+            (user_id, business_id, operation_key, operation_key, max_attempts)
+        )
+        job_id = cursor.lastrowid
+        conn.commit()
+        return job_id, True
+    except mysql.connector.IntegrityError as error:
+        conn.rollback()
+        if getattr(error, "errno", None) != 1062:
+            raise
+        cursor.execute(
+            """
+            SELECT id FROM analysis_jobs
+            WHERE active_operation_key=%s
+            AND status IN ('pending','processing') LIMIT 1
+            """,
+            (operation_key,)
+        )
+        active = cursor.fetchone()
+        if not active:
+            raise
+        return active["id"], False
     finally:
         cursor.close()
         conn.close()
@@ -130,13 +175,16 @@ def get_job_status_for_user(job_id, user_id, is_admin=False):
             "failed_reviews": job["failed_reviews"] or 0,
             "error_message": job["error_message"],
             "report_id": job["latest_report_id"] if job["status"] == "completed" else None,
+            "consultant_report_id": job.get("result_consultant_report_id") if job["status"] == "completed" else None,
+            "job_type": job.get("job_type", "review_analysis"),
+            "attempt_count": job.get("attempt_count", 0),
         }
     finally:
         cursor.close()
         conn.close()
 
 
-def claim_next_job():
+def claim_next_job(worker_id, lease_seconds=DEFAULT_LEASE_SECONDS):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -147,7 +195,8 @@ def claim_next_job():
             SELECT *
             FROM analysis_jobs
             WHERE status='pending'
-            ORDER BY created_at ASC
+            AND (next_attempt_at IS NULL OR next_attempt_at <= UTC_TIMESTAMP(6))
+            ORDER BY created_at ASC, id ASC
             LIMIT 1
             FOR UPDATE SKIP LOCKED
             """
@@ -161,14 +210,22 @@ def claim_next_job():
             """
             UPDATE analysis_jobs
             SET status='processing',
-                started_at=COALESCE(started_at, NOW()),
+                worker_id=%s,
+                started_at=COALESCE(started_at, UTC_TIMESTAMP(6)),
+                heartbeat_at=UTC_TIMESTAMP(6),
+                lease_expires_at=DATE_ADD(UTC_TIMESTAMP(6), INTERVAL %s SECOND),
+                attempt_count=attempt_count+1,
+                next_attempt_at=NULL,
                 error_message=NULL
             WHERE id=%s
+            AND status='pending'
             """,
-            (job["id"],)
+            (worker_id, lease_seconds, job["id"])
         )
         conn.commit()
         job["status"] = "processing"
+        job["worker_id"] = worker_id
+        job["attempt_count"] = int(job.get("attempt_count", 0)) + 1
         return job
     except Exception:
         conn.rollback()
@@ -185,15 +242,135 @@ def reset_stale_processing_jobs(timeout_minutes=30):
         cursor.execute(
             """
             UPDATE analysis_jobs
-            SET status='pending',
-                error_message='Worker stopped before completing this job.'
+            SET status=CASE WHEN attempt_count>=max_attempts THEN 'failed' ELSE 'pending' END,
+                completed_at=CASE WHEN attempt_count>=max_attempts THEN UTC_TIMESTAMP(6) ELSE completed_at END,
+                active_operation_key=CASE WHEN attempt_count>=max_attempts THEN NULL ELSE active_operation_key END,
+                worker_id=NULL,
+                lease_expires_at=NULL,
+                heartbeat_at=NULL,
+                next_attempt_at=CASE WHEN attempt_count>=max_attempts THEN NULL ELSE UTC_TIMESTAMP(6) END,
+                error_message='Worker lease expired before completing this job.'
             WHERE status='processing'
-            AND started_at < DATE_SUB(NOW(), INTERVAL %s MINUTE)
+            AND (lease_expires_at < UTC_TIMESTAMP(6)
+                 OR (lease_expires_at IS NULL AND started_at < DATE_SUB(NOW(), INTERVAL %s MINUTE)))
             """,
             (timeout_minutes,)
         )
         conn.commit()
         return cursor.rowcount
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_active_job_for_business(business_id, job_type):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT * FROM analysis_jobs
+            WHERE business_id=%s AND job_type=%s
+            ORDER BY created_at DESC,id DESC LIMIT 1
+            """,
+            (business_id, job_type)
+        )
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def heartbeat_job(job_id, worker_id, lease_seconds=DEFAULT_LEASE_SECONDS):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE analysis_jobs
+            SET heartbeat_at=UTC_TIMESTAMP(6),
+                lease_expires_at=DATE_ADD(UTC_TIMESTAMP(6), INTERVAL %s SECOND)
+            WHERE id=%s AND status='processing' AND worker_id=%s
+              AND lease_expires_at > UTC_TIMESTAMP(6)
+            """,
+            (lease_seconds, job_id, worker_id)
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def confirm_job_ownership(job_id, worker_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT id FROM analysis_jobs
+            WHERE id=%s AND status='processing' AND worker_id=%s
+              AND lease_expires_at > UTC_TIMESTAMP(6)
+            LIMIT 1
+            """,
+            (job_id, worker_id)
+        )
+        return cursor.fetchone() is not None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def complete_owned_job(job_id, worker_id, report_id=None, consultant_report_id=None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE analysis_jobs
+            SET status='completed', completed_at=UTC_TIMESTAMP(6),
+                latest_report_id=COALESCE(%s,latest_report_id),
+                result_consultant_report_id=COALESCE(%s,result_consultant_report_id),
+                active_operation_key=NULL, worker_id=NULL,
+                lease_expires_at=NULL, heartbeat_at=NULL, error_message=NULL
+            WHERE id=%s AND status='processing' AND worker_id=%s
+              AND lease_expires_at > UTC_TIMESTAMP(6)
+            """,
+            (report_id, consultant_report_id, job_id, worker_id)
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def fail_or_retry_owned_job(job, worker_id, error_message, retryable, delay_seconds=0):
+    terminal = (not retryable) or int(job.get("attempt_count", 0)) >= int(job.get("max_attempts", 3))
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if terminal:
+            cursor.execute(
+                """
+                UPDATE analysis_jobs SET status='failed',completed_at=UTC_TIMESTAMP(6),
+                    active_operation_key=NULL,worker_id=NULL,lease_expires_at=NULL,
+                    heartbeat_at=NULL,error_message=%s
+                WHERE id=%s AND status='processing' AND worker_id=%s
+                """, (error_message[:500], job["id"], worker_id)
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE analysis_jobs SET status='pending',worker_id=NULL,
+                    lease_expires_at=NULL,heartbeat_at=NULL,
+                    next_attempt_at=DATE_ADD(UTC_TIMESTAMP(6), INTERVAL %s SECOND),
+                    error_message=%s
+                WHERE id=%s AND status='processing' AND worker_id=%s
+                """, (int(delay_seconds), error_message[:500], job["id"], worker_id)
+            )
+        conn.commit()
+        return cursor.rowcount == 1
     finally:
         cursor.close()
         conn.close()
@@ -210,10 +387,11 @@ def run_worker_forever(poll_seconds=5, batch_size=DEFAULT_BATCH_SIZE):
         process_analysis_job(job["id"], batch_size=batch_size)
 
 
-def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
+def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE, worker_id=None):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     ai_service = AIService()
+    job = None
 
     try:
         cursor.execute(
@@ -227,6 +405,7 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
         job = cursor.fetchone()
         if not job:
             return True
+        worker_id = worker_id or job.get("worker_id")
 
         cursor.execute(
             """
@@ -282,6 +461,9 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
                     business=business,
                     settings=business
                 )
+                if worker_id and not confirm_job_ownership(job_id, worker_id):
+                    conn.rollback()
+                    return True
                 log_ai_usage(cursor, job["user_id"], job["business_id"], result)
                 _save_batch_results(
                     cursor,
@@ -313,20 +495,34 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
             _refresh_job_progress(cursor, job_id, job["business_id"])
             conn.commit()
 
+        if worker_id and not confirm_job_ownership(job_id, worker_id):
+            return True
         report_id = _generate_report(cursor, ai_service, job)
         _refresh_job_progress(cursor, job_id, job["business_id"])
         try:
-            cursor.execute(
-                """
-                UPDATE analysis_jobs
-                SET status='completed',
-                    completed_at=NOW(),
-                    latest_report_id=%s
-                WHERE id=%s
-                """,
-                (report_id, job_id)
-            )
-            conn.commit()
+            if worker_id:
+                cursor.execute(
+                    """
+                    UPDATE analysis_jobs
+                    SET status='completed',completed_at=UTC_TIMESTAMP(6),
+                        latest_report_id=%s,active_operation_key=NULL,
+                        worker_id=NULL,lease_expires_at=NULL,heartbeat_at=NULL,
+                        error_message=NULL
+                    WHERE id=%s AND status='processing' AND worker_id=%s
+                      AND lease_expires_at > UTC_TIMESTAMP(6)
+                    """,
+                    (report_id, job_id, worker_id),
+                )
+                if cursor.rowcount != 1:
+                    conn.rollback()
+                    return True
+                conn.commit()
+            else:
+                cursor.execute(
+                    """UPDATE analysis_jobs SET status='completed',completed_at=NOW(),
+                       latest_report_id=%s WHERE id=%s""", (report_id, job_id)
+                )
+                conn.commit()
         except Exception as persistence_error:
             _rollback_safely(conn, job_id)
             _log_analysis_persistence_error("completed", job_id, persistence_error)
@@ -338,17 +534,19 @@ def process_analysis_job(job_id, batch_size=DEFAULT_BATCH_SIZE):
             return False
         else:
             try:
-                cursor.execute(
-                    """
-                    UPDATE analysis_jobs
-                    SET status='failed',
-                        completed_at=NOW(),
-                        error_message=%s
-                    WHERE id=%s
-                    """,
-                    (_safe_analysis_error_message(error), job_id)
-                )
-                conn.commit()
+                if job and worker_id:
+                    fail_or_retry_owned_job(
+                        job, worker_id, _safe_analysis_error_message(error),
+                        retryable=isinstance(error, AIServiceError),
+                        delay_seconds=2 ** max(int(job.get("attempt_count", 1)) - 1, 0),
+                    )
+                else:
+                    cursor.execute(
+                        """UPDATE analysis_jobs SET status='failed',completed_at=NOW(),
+                           error_message=%s WHERE id=%s""",
+                        (_safe_analysis_error_message(error), job_id)
+                    )
+                    conn.commit()
             except Exception as persistence_error:
                 _rollback_safely(conn, job_id)
                 _log_analysis_persistence_error("failed", job_id, persistence_error)

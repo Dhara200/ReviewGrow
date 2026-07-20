@@ -78,12 +78,14 @@ def admin_sync_queue():
         date_range=date_range,
     )
     businesses = sync_queue_monitor.get_business_options()
+    ai_jobs = sync_queue_monitor.get_recent_ai_jobs()
 
     return render_template(
         "admin_sync_queue.html",
         summary=summary,
         health=health,
         jobs=jobs,
+        ai_jobs=ai_jobs,
         businesses=businesses,
         filters={
             "status": status or "all",

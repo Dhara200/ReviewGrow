@@ -12,9 +12,15 @@ import requests
 from app.config import Config
 from app.services.analysis_job_service import (
     claim_next_job,
+    confirm_job_ownership,
+    fail_or_retry_owned_job,
+    heartbeat_job,
     process_analysis_job,
     reset_stale_processing_jobs,
 )
+from app.services.ai_consultant_service import generate_consultant_report
+from app.services.business_analytics_service import refresh_business_review_analytics
+from app.services.database_service import get_connection
 from app.services.database_service import ensure_mvp_schema
 from app.services.google_review_sync_execution_service import run_google_review_sync
 from app.services.google_review_post_sync_service import perform_google_review_post_sync
@@ -31,6 +37,8 @@ logger = logging.getLogger(__name__)
 shutdown_requested = False
 shutdown_event = threading.Event()
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex}"[:255]
+AI_LEASE_SECONDS = 120
+AI_HEARTBEAT_SECONDS = 30
 
 
 class WorkerInfrastructureError(Exception):
@@ -66,12 +74,9 @@ def run_worker_iteration():
         processed_job = True
 
     if not shutdown_requested:
-        analysis_job = claim_next_job()
+        analysis_job = claim_next_job(WORKER_ID, AI_LEASE_SECONDS)
         if analysis_job:
-            analysis_result = process_analysis_job(
-                analysis_job["id"],
-                batch_size=Config.AI_BATCH_SIZE,
-            )
+            analysis_result = _process_ai_job(analysis_job)
             if analysis_result is False:
                 raise WorkerInfrastructureError(
                     "AI analysis job state or infrastructure operation failed."
@@ -79,6 +84,73 @@ def run_worker_iteration():
             processed_job = True
 
     return processed_job
+
+
+class _AIHeartbeatService:
+    @staticmethod
+    def heartbeat_job(job_id, worker_id, lease_seconds):
+        return heartbeat_job(job_id, worker_id, lease_seconds)
+
+
+def _process_ai_job(job):
+    heartbeat = GoogleReviewSyncHeartbeat(
+        _AIHeartbeatService(), job, WORKER_ID,
+        AI_HEARTBEAT_SECONDS, AI_LEASE_SECONDS,
+    )
+    heartbeat.start()
+    try:
+        if job.get("job_type", "review_analysis") == "ai_consultant":
+            return _process_consultant_job(job, heartbeat)
+        return process_analysis_job(
+            job["id"], batch_size=Config.AI_BATCH_SIZE
+        )
+    finally:
+        heartbeat.stop()
+
+
+def _process_consultant_job(job, heartbeat):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT b.id,gbc.google_location_id
+            FROM businesses b
+            LEFT JOIN google_business_connections gbc ON gbc.business_id=b.id
+            WHERE b.id=%s AND b.user_id=%s LIMIT 1
+            """, (job["business_id"], job["user_id"])
+        )
+        owned = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not owned or not owned.get("google_location_id"):
+            raise ValueError("Connected Google Business Profile location is required.")
+        refresh_business_review_analytics(
+            job["business_id"], mark_consultant_outdated=False,
+            source="google", google_location_id=owned["google_location_id"],
+            require_google_review_id=True,
+        )
+        report = generate_consultant_report(
+            job["business_id"], job["user_id"], owned["google_location_id"],
+            ownership_check=lambda: (
+                not heartbeat.ownership_lost
+                and confirm_job_ownership(job["id"], WORKER_ID)
+            ),
+            job_context={"id": job["id"], "worker_id": WORKER_ID},
+            fallback_on_provider_error=False,
+        )
+        return bool(report)
+    except Exception as error:
+        retryable = (
+            isinstance(error, (requests.Timeout, requests.ConnectionError))
+            or bool(getattr(error, "retryable", False))
+        )
+        base_delay = min(2 ** max(int(job.get("attempt_count", 1)) - 1, 0), 60)
+        delay = base_delay + random.randint(1, max(1, base_delay // 4))
+        fail_or_retry_owned_job(
+            job, WORKER_ID, _safe_error_message(error), retryable, delay
+        )
+        return True
 
 
 def run_worker_forever():

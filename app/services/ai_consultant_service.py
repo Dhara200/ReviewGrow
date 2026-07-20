@@ -40,6 +40,7 @@ def get_latest_consultant_report(business_id):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
+    usage_result = None
     try:
         cursor.execute(
             """
@@ -131,7 +132,14 @@ def get_command_center_snapshot(business_id, report=None, google_location_id=Non
     }
 
 
-def generate_consultant_report(business_id, user_id, google_location_id=None):
+def generate_consultant_report(
+    business_id,
+    user_id,
+    google_location_id=None,
+    ownership_check=None,
+    job_context=None,
+    fallback_on_provider_error=True,
+):
     snapshot = get_command_center_snapshot(business_id, google_location_id=google_location_id)
     metrics = snapshot["metrics"]
     samples = _sample_reviews(business_id, google_location_id=google_location_id)
@@ -162,11 +170,12 @@ def generate_consultant_report(business_id, user_id, google_location_id=None):
             "AI consultant Gemini generation failed for business_id=%s",
             business_id,
         )
+        if not fallback_on_provider_error:
+            raise
         result = getattr(error, "result", None)
         if isinstance(error, AIServiceError) and error.result:
             result = error.result
-        if result:
-            _safe_log_ai_usage(user_id, business_id, result)
+        usage_result = result
 
         report = _fallback_report(business, snapshot)
         report["raw_ai_response"] = {
@@ -175,9 +184,19 @@ def generate_consultant_report(business_id, user_id, google_location_id=None):
         }
         report["ai_fallback_used"] = True
     else:
-        _safe_log_ai_usage(user_id, business_id, ai_result)
+        usage_result = ai_result
 
-    saved_report = _save_report(business_id, report)
+    if ownership_check is not None and not ownership_check():
+        raise RuntimeError("AI job ownership was lost before consultant persistence.")
+
+    if job_context:
+        saved_report = _save_owned_job_result(
+            business_id, user_id, report, usage_result, job_context
+        )
+    else:
+        if usage_result:
+            _safe_log_ai_usage(user_id, business_id, usage_result)
+        saved_report = _save_report(business_id, report)
     saved_report["ai_fallback_used"] = report.get("ai_fallback_used", False)
     return saved_report
 
@@ -444,7 +463,21 @@ def _save_report(business_id, report):
     cursor = conn.cursor(dictionary=True)
 
     try:
+        report_id = _insert_report(cursor, business_id, report)
+        conn.commit()
+
         cursor.execute(
+            "SELECT * FROM ai_consultant_reports WHERE id=%s",
+            (report_id,)
+        )
+        return _decode_report(cursor.fetchone())
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _insert_report(cursor, business_id, report):
+    cursor.execute(
             """
             INSERT INTO ai_consultant_reports
             (
@@ -499,14 +532,55 @@ def _save_report(business_id, report):
                 CONSULTANT_REPORT_SOURCE,
             )
         )
-        report_id = cursor.lastrowid
-        conn.commit()
+    return cursor.lastrowid
 
+
+def _save_owned_job_result(business_id, user_id, report, usage_result, job_context):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        conn.start_transaction()
         cursor.execute(
-            "SELECT * FROM ai_consultant_reports WHERE id=%s",
-            (report_id,)
+            """
+            SELECT id FROM analysis_jobs
+            WHERE id=%s AND business_id=%s AND user_id=%s
+              AND status='processing' AND worker_id=%s
+              AND lease_expires_at > UTC_TIMESTAMP(6)
+            FOR UPDATE
+            """,
+            (
+                job_context["id"], business_id, user_id,
+                job_context["worker_id"],
+            ),
         )
-        return _decode_report(cursor.fetchone())
+        if not cursor.fetchone():
+            conn.rollback()
+            raise RuntimeError("AI job ownership was lost before consultant persistence.")
+
+        if usage_result:
+            log_ai_usage(cursor, user_id, business_id, usage_result)
+        report_id = _insert_report(cursor, business_id, report)
+        cursor.execute(
+            """
+            UPDATE analysis_jobs
+            SET status='completed',completed_at=UTC_TIMESTAMP(6),
+                result_consultant_report_id=%s,active_operation_key=NULL,
+                worker_id=NULL,lease_expires_at=NULL,heartbeat_at=NULL,
+                error_message=NULL
+            WHERE id=%s AND status='processing' AND worker_id=%s
+            """,
+            (report_id, job_context["id"], job_context["worker_id"]),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            raise RuntimeError("AI job ownership was lost before consultant completion.")
+        cursor.execute("SELECT * FROM ai_consultant_reports WHERE id=%s", (report_id,))
+        saved_report = _decode_report(cursor.fetchone())
+        conn.commit()
+        return saved_report
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cursor.close()
         conn.close()

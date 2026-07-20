@@ -100,4 +100,20 @@
         </table>
     </div>
 </div>
+
+<div class="rs-card rs-card-lg mt-4">
+    <div class="mb-3"><p class="rs-eyebrow">AI queue</p><h2 class="h5 fw-bold mb-0">Latest AI jobs</h2></div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Job</th><th>Business</th><th>User</th><th>Type</th><th>Status</th><th>Attempts</th><th>Worker</th><th>Lease</th><th>Created</th><th>Started</th><th>Completed</th><th>Error</th></tr></thead>
+            <tbody>{% for job in ai_jobs %}<tr>
+                <td>#{{ job.id }}</td><td>{{ job.business_name }} ({{ job.business_id }})</td>
+                <td>{{ job.user_name }} ({{ job.user_id }})</td><td>{{ job.job_type|replace('_',' ')|title }}</td>
+                <td>{{ job.status }}</td><td>{{ job.attempt_count }}</td><td class="small">{{ job.worker_id or '—' }}</td><td>{{ job.lease_health or '—' }}</td>
+                <td>{{ job.created_at or '—' }}</td><td>{{ job.started_at or '—' }}</td><td>{{ job.completed_at or '—' }}</td>
+                <td class="small">{{ job.safe_error or '—' }}</td>
+            </tr>{% else %}<tr><td colspan="12" class="text-center text-muted py-4">No AI jobs found.</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}

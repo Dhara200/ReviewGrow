@@ -1,13 +1,15 @@
 from flask import Blueprint, current_app, flash, redirect, render_template, request, session
 
 from app.services.ai_consultant_service import (
-    generate_consultant_report,
     get_command_center_snapshot,
     get_latest_consultant_report,
 )
+from app.services.analysis_job_service import (
+    create_consultant_job,
+    get_active_job_for_business,
+)
 from app.services.business_analytics_service import (
     get_business_review_metrics,
-    refresh_business_review_analytics,
 )
 from app.services.business_metrics_service import get_google_review_count_trend
 from app.services.consultant_action_service import (
@@ -42,6 +44,7 @@ def ai_consultant_page(business_id):
         require_google_review_id=True,
     )
     report = get_latest_consultant_report(business_id)
+    consultant_job = get_active_job_for_business(business_id, "ai_consultant")
     command_center = get_command_center_snapshot(
         business_id,
         report=report,
@@ -80,6 +83,7 @@ def ai_consultant_page(business_id):
         action_state=action_state,
         can_generate=can_generate,
         google_review_trend_data=google_review_trend_data,
+        consultant_job=consultant_job,
         minimum_review_message="Need at least 5 live Google reviews to generate reliable consultant insights.",
     )
 
@@ -108,39 +112,13 @@ def generate_ai_consultant_report(business_id):
         flash("Need at least 5 live Google reviews to generate reliable consultant insights.", "warning")
         return redirect(f"/business/{business_id}/ai-consultant")
 
-    try:
-        refresh_business_review_analytics(
-            business_id,
-            mark_consultant_outdated=False,
-            source="google",
-            google_location_id=google_location_id,
-            require_google_review_id=True,
-        )
-        report = generate_consultant_report(
-            business_id,
-            session["user_id"],
-            google_location_id=google_location_id,
-        )
-        if report.get("ai_fallback_used"):
-            flash(
-                "Generated consultant insights using fallback rules because AI was temporarily unavailable.",
-                "info",
-            )
-        else:
-            flash("AI Business Consultant report generated.", "success")
-    except ValueError as error:
-        flash(str(error), "warning")
-    except Exception:
-        current_app.logger.exception(
-            "AI consultant report generation failed for business_id=%s",
-            business_id,
-        )
-        flash(
-            "We could not generate the consultant report right now. Please try again later.",
-            "danger",
-        )
-
-    return redirect(f"/business/{business_id}/ai-consultant")
+    job_id, created = create_consultant_job(session["user_id"], business_id)
+    flash(
+        "AI Business Consultant generation queued."
+        if created else "AI Business Consultant generation is already in progress.",
+        "success" if created else "info",
+    )
+    return redirect(f"/business/{business_id}/ai-consultant?job={job_id}")
 
 
 @ai_consultant_bp.route(

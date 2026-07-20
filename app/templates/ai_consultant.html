@@ -147,6 +147,7 @@
     <p class="text-muted mb-0">No clear pattern detected yet.</p>
     {% endif %}
 </div>
+
 {% endmacro %}
 
 {% block content %}
@@ -163,6 +164,26 @@
 {% set emotion_breakdown = (report.emotion_breakdown if report and report.emotion_breakdown else command_center.emotion_breakdown) %}
 {% set daily_briefing = (report.daily_briefing if report and report.daily_briefing else command_center.daily_briefing) %}
 {% set executive_summary = (report.executive_summary if report else command_center.executive_summary) %}
+
+{% if consultant_job and consultant_job.status in ['pending', 'processing', 'completed', 'failed'] %}
+<div class="alert {% if consultant_job.status == 'failed' %}alert-danger{% elif consultant_job.status == 'completed' %}alert-success{% else %}alert-info{% endif %}"
+     role="status" data-consultant-job data-job-id="{{ consultant_job.id }}">
+    <strong data-consultant-job-label>
+        {% if consultant_job.status == 'pending' %}Queued{% elif consultant_job.status == 'processing' %}Processing{% elif consultant_job.status == 'completed' %}Completed{% else %}Failed{% endif %}
+    </strong>
+    {% if consultant_job.status == 'failed' %}
+    <span>{{ consultant_job.error_message or 'Consultant generation could not be completed.' }}</span>
+    <form method="post" action="{{ url_for('ai_consultant.generate', business_id=business.id) }}" class="d-inline ms-2">
+        {{ csrf_field() }}
+        <button class="btn btn-sm btn-outline-danger" type="submit">Retry</button>
+    </form>
+    {% elif consultant_job.status == 'completed' %}
+    <span>Your latest AI Business Consultant report is ready.</span>
+    {% else %}
+    <span>Your AI Business Consultant report is being generated. You can safely leave this page.</span>
+    {% endif %}
+</div>
+{% endif %}
 
 <div class="rs-page-header">
     <div>
@@ -783,4 +804,19 @@
 })();
 </script>
 {% endif %}
+<script>
+const consultantJob = document.querySelector("[data-consultant-job]");
+if (consultantJob && consultantJob.dataset.jobId) {
+    const pollConsultantJob = async () => {
+        const response = await fetch(`/analysis-jobs/${consultantJob.dataset.jobId}/status`);
+        if (!response.ok) return;
+        const job = await response.json();
+        const label = consultantJob.querySelector("[data-consultant-job-label]");
+        if (label) label.textContent = job.status === "pending" ? "Queued" : job.status[0].toUpperCase() + job.status.slice(1);
+        if (job.status === "completed") window.location.reload();
+        if (job.status === "pending" || job.status === "processing") setTimeout(pollConsultantJob, 3000);
+    };
+    setTimeout(pollConsultantJob, 1500);
+}
+</script>
 {% endblock %}
