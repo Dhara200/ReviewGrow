@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import ipaddress
 
 from flask import (
     Blueprint,
@@ -25,12 +26,10 @@ RECAPTCHA_ERROR_MESSAGE = "Security verification failed. Please try again."
 
 
 def get_client_ip():
-    forwarded_for = request.headers.get("X-Forwarded-For", "")
-
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-
-    return request.remote_addr or "unknown"
+    try:
+        return str(ipaddress.ip_address(request.remote_addr or ""))[:100]
+    except ValueError:
+        return "unknown"
 
 
 def _login_error_response(message, email="", status_code=401, locked_until=None):

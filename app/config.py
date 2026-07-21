@@ -37,6 +37,11 @@ class Config:
     DB_NAME = os.getenv("DB_NAME")
     DB_USER = os.getenv("DB_USER")
     DB_PASSWORD = os.getenv("DB_PASSWORD")
+    TRUSTED_PROXY_IPS = tuple(
+        value.strip()
+        for value in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",")
+        if value.strip()
+    )
 
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 

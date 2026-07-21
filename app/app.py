@@ -18,10 +18,12 @@ from app.routes.ai_consultant_routes import ai_consultant_bp
 from app.routes.legal import legal_bp
 from app.routes.seo import seo_bp
 from app.services.csrf_service import init_csrf
+from app.services.trusted_proxy_service import TrustedProxyFix
 
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
+app.wsgi_app = TrustedProxyFix(app.wsgi_app, app.config["TRUSTED_PROXY_IPS"])
 init_csrf(app)
 
 
