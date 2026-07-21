@@ -402,3 +402,46 @@ CREATE TABLE consultant_action_events (
         REFERENCES businesses(id)
         ON DELETE CASCADE
 );
+
+CREATE TABLE subscriptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    plan_name VARCHAR(50) NOT NULL,
+    status ENUM('active','expired','cancelled','disabled') DEFAULT 'expired',
+    subscription_start_date DATETIME NULL,
+    subscription_end_date DATETIME NULL,
+    review_credits INT DEFAULT 500,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_subscriptions_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subscription_id INT NULL,
+    plan_code VARCHAR(50) NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    amount_paise BIGINT UNSIGNED NULL,
+    currency VARCHAR(10) DEFAULT 'INR',
+    payment_method VARCHAR(50) DEFAULT 'UPI',
+    payment_status ENUM('pending','success','failed','rejected','created','attempted','paid','refunded','needs_review') DEFAULT 'pending',
+    transaction_id VARCHAR(255) NOT NULL,
+    payment_gateway VARCHAR(50) DEFAULT 'manual_upi',
+    razorpay_order_id VARCHAR(255) NULL,
+    razorpay_payment_id VARCHAR(255) NULL,
+    paid_at DATETIME NULL,
+    failure_code VARCHAR(100) NULL,
+    failure_reason VARCHAR(255) NULL,
+    processed_at DATETIME NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_payments_razorpay_order_id (razorpay_order_id),
+    UNIQUE KEY uniq_payments_razorpay_payment_id (razorpay_payment_id),
+    INDEX idx_payments_user_status (user_id, payment_status),
+    INDEX idx_payments_created_at (created_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL
+);

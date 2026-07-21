@@ -6,13 +6,14 @@ __pycache__/
 
 uploads/*
 
-docs/
+docs/*
+!docs/razorpay-integration.md
 
 .vscode/
 
 .idea/
 
-.env.example
+!.env.example
 
 docker-compose.local.yml
 

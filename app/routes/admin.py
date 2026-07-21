@@ -214,7 +214,7 @@ def admin_dashboard():
         """
         SELECT COALESCE(SUM(amount), 0) AS total_income
         FROM payments
-        WHERE payment_status='success'
+        WHERE payment_status IN ('success','paid')
         """
     )
     total_income = _money(cursor.fetchone()["total_income"])
@@ -223,7 +223,7 @@ def admin_dashboard():
         """
         SELECT COALESCE(SUM(amount), 0) AS monthly_revenue
         FROM payments
-        WHERE payment_status='success'
+        WHERE payment_status IN ('success','paid')
         AND YEAR(COALESCE(paid_at, created_at)) = YEAR(CURRENT_DATE())
         AND MONTH(COALESCE(paid_at, created_at)) = MONTH(CURRENT_DATE())
         """
@@ -235,7 +235,7 @@ def admin_dashboard():
         """
         SELECT COUNT(*) AS pending_payment_count
         FROM payments
-        WHERE payment_status='pending'
+        WHERE payment_status IN ('pending','needs_review')
         """
     )
     pending_payment_count = cursor.fetchone()["pending_payment_count"]
@@ -249,7 +249,7 @@ def admin_dashboard():
             COALESCE(SUM(amount), 0) AS revenue,
             COUNT(*) AS successful_payment_count
         FROM payments
-        WHERE payment_status='success'
+        WHERE payment_status IN ('success','paid')
         AND COALESCE(paid_at, created_at) >= %s
         GROUP BY revenue_month
         ORDER BY revenue_month ASC
@@ -854,6 +854,10 @@ def admin_payments():
             p.amount,
             p.currency,
             p.transaction_id,
+            p.payment_gateway,
+            p.razorpay_order_id,
+            p.razorpay_payment_id,
+            p.plan_code,
             p.payment_status,
             p.created_at,
             p.notes,
@@ -880,7 +884,15 @@ def admin_approve_payment(payment_id):
     if guard:
         return guard
 
-    if approve_payment(payment_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT payment_gateway FROM payments WHERE id=%s", (payment_id,))
+    payment = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if payment and payment.get("payment_gateway") == "razorpay":
+        flash("Razorpay payments are verified automatically and cannot be manually approved.", "warning")
+    elif approve_payment(payment_id):
         flash("Payment approved and subscription activated.", "success")
     else:
         flash("Payment was not found.", "danger")
@@ -894,7 +906,15 @@ def admin_reject_payment(payment_id):
     if guard:
         return guard
 
-    if reject_payment(payment_id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT payment_gateway FROM payments WHERE id=%s", (payment_id,))
+    payment = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if payment and payment.get("payment_gateway") == "razorpay":
+        flash("Razorpay payments are managed automatically and cannot be manually rejected.", "warning")
+    elif reject_payment(payment_id):
         flash("Payment rejected.", "warning")
     else:
         flash("Payment was not found.", "danger")

@@ -90,85 +90,6 @@ def create_expired_subscription(user_id):
     conn.close()
 
 
-def pending_payment(user_id):
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(
-        """
-        SELECT *
-        FROM payments
-        WHERE user_id=%s
-        AND payment_status='pending'
-        ORDER BY created_at DESC
-        LIMIT 1
-        """,
-        (user_id,)
-    )
-    payment = cursor.fetchone()
-    cursor.close()
-    conn.close()
-
-    return payment
-
-
-def submit_manual_upi_payment(user_id, amount, transaction_id, notes):
-    existing = pending_payment(user_id)
-
-    if existing:
-        return existing, False
-
-    subscription = latest_subscription(user_id)
-    subscription_id = subscription["id"] if subscription else None
-
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(
-        """
-        INSERT INTO payments
-        (
-            user_id,
-            subscription_id,
-            amount,
-            currency,
-            payment_method,
-            payment_status,
-            transaction_id,
-            payment_gateway,
-            notes
-        )
-        VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """,
-        (
-            user_id,
-            subscription_id,
-            amount,
-            "INR",
-            "UPI",
-            "pending",
-            transaction_id,
-            "manual_upi",
-            notes
-        )
-    )
-    payment_id = cursor.lastrowid
-    conn.commit()
-
-    cursor.execute(
-        """
-        SELECT *
-        FROM payments
-        WHERE id=%s
-        """,
-        (payment_id,)
-    )
-    payment = cursor.fetchone()
-    cursor.close()
-    conn.close()
-
-    return payment, True
-
-
 def approve_payment(payment_id):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -245,6 +166,48 @@ def approve_payment(payment_id):
     conn.close()
 
     return True
+
+
+def activate_or_extend_subscription(cursor, user_id, plan_name="starter", duration_days=30):
+    """Activate/extend a user's subscription using the caller's transaction."""
+    cursor.execute(
+        """
+        SELECT * FROM subscriptions
+        WHERE user_id=%s
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1 FOR UPDATE
+        """,
+        (user_id,)
+    )
+    subscription = cursor.fetchone()
+    now = datetime.utcnow()
+    current_end = subscription.get("subscription_end_date") if subscription else None
+    start_from = current_end if current_end and current_end > now else now
+    new_end = start_from + timedelta(days=duration_days)
+
+    if subscription:
+        cursor.execute(
+            """
+            UPDATE subscriptions
+            SET plan_name=%s, status='active',
+                subscription_start_date=COALESCE(subscription_start_date, %s),
+                subscription_end_date=%s, review_credits=500
+            WHERE id=%s
+            """,
+            (plan_name, now, new_end, subscription["id"])
+        )
+        return subscription["id"], new_end
+
+    cursor.execute(
+        """
+        INSERT INTO subscriptions
+        (user_id, plan_name, status, subscription_start_date,
+         subscription_end_date, review_credits)
+        VALUES (%s,%s,'active',%s,%s,500)
+        """,
+        (user_id, plan_name, now, new_end)
+    )
+    return cursor.lastrowid, new_end
 
 
 def reject_payment(payment_id):

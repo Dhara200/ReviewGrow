@@ -156,7 +156,7 @@ def ensure_mvp_schema():
             amount DECIMAL(10,2) NOT NULL,
             currency VARCHAR(10) DEFAULT 'INR',
             payment_method VARCHAR(50) DEFAULT 'UPI',
-            payment_status ENUM('pending','success','failed','rejected') DEFAULT 'pending',
+            payment_status ENUM('pending','success','failed','rejected','created','attempted','paid','refunded','needs_review') DEFAULT 'pending',
             transaction_id VARCHAR(255) NOT NULL,
             payment_gateway VARCHAR(50) DEFAULT 'manual_upi',
             paid_at DATETIME NULL,
@@ -174,6 +174,13 @@ def ensure_mvp_schema():
         )
         """
     )
+    _add_column_if_missing(cursor, "payments", "plan_code", "VARCHAR(50) NULL")
+    _add_column_if_missing(cursor, "payments", "amount_paise", "BIGINT UNSIGNED NULL")
+    _add_column_if_missing(cursor, "payments", "razorpay_order_id", "VARCHAR(255) NULL")
+    _add_column_if_missing(cursor, "payments", "razorpay_payment_id", "VARCHAR(255) NULL")
+    _add_column_if_missing(cursor, "payments", "failure_code", "VARCHAR(100) NULL")
+    _add_column_if_missing(cursor, "payments", "failure_reason", "VARCHAR(255) NULL")
+    _add_column_if_missing(cursor, "payments", "processed_at", "DATETIME NULL")
     _create_table_if_missing(
         cursor,
         "login_attempts",
