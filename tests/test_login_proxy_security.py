@@ -116,13 +116,22 @@ class LoginProxySecurityTests(unittest.TestCase):
             "app.routes.auth.get_connection",
             side_effect=[FakeConnection(user=user), FakeConnection(user=user, business={"id": 3})],
         ):
-            response = self.login_app().test_client().post(
+            client = self.login_app().test_client()
+            with client.session_transaction() as pre_auth_session:
+                pre_auth_session["stale_value"] = "must-not-survive"
+                pre_auth_session["role"] = "admin"
+            response = client.post(
                 "/login-page", data={"email": " OWNER@example.com ", "password": "correct-password"},
                 environ_base={"REMOTE_ADDR": "198.51.100.20"},
                 headers={"X-Forwarded-For": "203.0.113.200"},
             )
         self.assertEqual(302, response.status_code)
         reset.assert_called_once_with("owner@example.com", "198.51.100.20")
+        with client.session_transaction() as authenticated_session:
+            self.assertTrue(authenticated_session.permanent)
+            self.assertEqual(7, authenticated_session["user_id"])
+            self.assertEqual("owner", authenticated_session["role"])
+            self.assertNotIn("stale_value", authenticated_session)
 
     @patch("app.routes.auth.verify_recaptcha", return_value=SimpleNamespace(success=True))
     @patch("app.routes.auth.record_failed_login")

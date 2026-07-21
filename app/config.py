@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -66,6 +67,15 @@ class Config:
     LOGIN_WINDOW_MINUTES = int(os.getenv("LOGIN_WINDOW_MINUTES", 15))
 
     SECRET_KEY = os.getenv("SECRET_KEY")
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = (
+        True if APP_ENV == "production" else _get_bool("SESSION_COOKIE_SECURE", False)
+    )
+    SESSION_COOKIE_SAMESITE = "Lax"
+    PERMANENT_SESSION_LIFETIME = timedelta(
+        hours=_get_positive_int("SESSION_LIFETIME_HOURS", 12)
+    )
+    SESSION_REFRESH_EACH_REQUEST = False
 
     RECAPTCHA_ENABLED = _get_bool("RECAPTCHA_ENABLED", True)
     RECAPTCHA_SITE_KEY = (os.getenv("RECAPTCHA_SITE_KEY") or "").strip()

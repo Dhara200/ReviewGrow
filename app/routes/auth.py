@@ -238,6 +238,8 @@ def register_form():
     cursor.close()
     conn.close()
     create_expired_subscription(user_id)
+    session.clear()
+    session.permanent = True
     session["user_id"] = user_id
     session["user_name"] = name
     session["role"] = "owner"
@@ -337,7 +339,9 @@ def login_form():
 
         reset_failed_login(email, ip_address)
 
-        # Save login session
+        # Discard all pre-authentication state before creating a fresh session.
+        session.clear()
+        session.permanent = True
         session["user_id"] = user["id"]
         session["user_name"] = user["name"]
         session["role"] = user.get("role") or "owner"
