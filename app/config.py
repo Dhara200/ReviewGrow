@@ -48,9 +48,11 @@ class Config:
         "openid email profile https://www.googleapis.com/auth/business.manage"
     )
 
-    UPI_ID = os.getenv("UPI_ID", "dharaprasath52@okhdfcbank")
     SUBSCRIPTION_PRICE = float(os.getenv("SUBSCRIPTION_PRICE", 1999))
     ORIGINAL_SUBSCRIPTION_PRICE = float(os.getenv("ORIGINAL_SUBSCRIPTION_PRICE", 2999))
+    RAZORPAY_KEY_ID = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
+    RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
+    RAZORPAY_WEBHOOK_SECRET = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()
     CONTACT_PHONE = (os.getenv("CONTACT_PHONE") or "8778358580").strip()
     WHATSAPP_NUMBER = (os.getenv("WHATSAPP_NUMBER") or "8778358580").strip()
 

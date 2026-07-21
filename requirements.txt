@@ -12,3 +12,4 @@ google-auth
 google-auth-oauthlib
 google-api-python-client
 gunicorn
+razorpay==1.4.2

@@ -106,27 +106,19 @@
                         {% endfor %}
                     </div>
                     <a href="#payment" class="btn-solid w-100">Subscribe Now</a>
-                    <p class="text-muted mt-4 mb-0">
-                        Pay via UPI and submit your payment reference. Admin will verify and activate your subscription.
-                    </p>
+                    <p class="text-muted mt-4 mb-0">Secure one-time payment powered by Razorpay. Access is activated after server verification.</p>
                 </div>
             </div>
 
             <div class="col-lg-6" id="payment">
                 <div class="rs-card rs-card-lg h-100">
-                    <p class="rs-eyebrow">Manual UPI payment</p>
-                    <h2 class="h4 fw-bold mb-3">Submit payment reference</h2>
-
-                    {% if upi_qr_exists %}
-                    <div class="text-center mb-4">
-                        <img src="{{ url_for('static', filename='images/GooglePay_QR.png') }}" alt="UPI QR code" class="img-fluid rounded-3 border" style="max-width: 240px;">
-                    </div>
-                    {% endif %}
+                    <p class="rs-eyebrow">Secure checkout</p>
+                    <h2 class="h4 fw-bold mb-3">Purchase {{ plan_name }}</h2>
 
                     <div class="p-3 rounded-3 bg-light mb-4">
                         <div class="d-flex justify-content-between gap-3 mb-2">
-                            <span class="text-muted">UPI ID</span>
-                            <strong>{{ upi_id }}</strong>
+                            <span class="text-muted">Plan</span>
+                            <strong>{{ plan_name }}</strong>
                         </div>
                         <div class="d-flex justify-content-between gap-3">
                             <span class="text-muted">Amount</span>
@@ -134,47 +126,89 @@
                         </div>
                     </div>
 
-                    <div class="alert alert-info mb-4">
-                        <strong>Steps to complete payment:</strong>
-                        Pay the amount shown above to the UPI ID, copy the UPI transaction/reference ID from your payment app, paste it below, add notes if needed, then click <strong>Yes, I paid</strong>. Admin will verify and activate your subscription.
-                    </div>
+                    <div id="payment-message" class="alert alert-info mb-4">Razorpay Checkout supports UPI, cards and other available payment methods. This purchase does not auto-renew.</div>
 
                     {% if not session.get("user_id") %}
-                    <p class="text-muted">Create an account or login before submitting your UPI payment reference.</p>
+                    <p class="text-muted">Create an account or login before purchasing a subscription.</p>
                     <div class="d-flex flex-column flex-sm-row gap-3">
                         <a href="/register-page" class="btn-solid flex-fill">Register</a>
                         <a href="/login-page" class="btn-ghost flex-fill">Login</a>
-                    </div>
-                    {% elif pending_payment and pending_payment.payment_status == "pending" %}
-                    <div class="alert alert-info mb-0">
-                        You already have a pending payment. Admin will verify it soon.
                     </div>
                     {% elif is_subscribed %}
                     <div class="alert alert-success mb-0">
                         Your subscription is active.
                     </div>
                     {% else %}
-                    <form method="POST" action="/pricing/submit-payment">
-                        {{ csrf_field() }}
-                        <div class="mb-3">
-                            <label for="transaction_id" class="form-label">Transaction/reference ID</label>
-                            <input id="transaction_id" name="transaction_id" class="form-control" required>
-                        </div>
-                        <div class="mb-4">
-                            <label for="notes" class="form-label">Notes</label>
-                            <textarea id="notes" name="notes" class="form-control" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn-solid w-100">Yes, I paid</button>
+                    <div>
+                        <button id="razorpay-button" type="button" class="btn-solid w-100">Pay ₹{{ "%.0f"|format(subscription_price) }} securely with Razorpay</button>
                         <p class="small text-muted text-center mt-3 mb-0">
                             By submitting payment details, you acknowledge the
                             <a href="/terms-of-service">Terms of Service</a> and
                             <a href="/privacy-policy">Privacy Policy</a>.
                         </p>
-                    </form>
+                    </div>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+{% if session.get("user_id") and not is_subscribed and session.get("role") != "admin" %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+(() => {
+    const button = document.getElementById("razorpay-button");
+    const message = document.getElementById("payment-message");
+    const csrfToken = {{ csrf_token()|tojson }};
+    const setMessage = (text, kind = "info") => {
+        message.className = `alert alert-${kind} mb-4`;
+        message.textContent = text;
+    };
+    button.addEventListener("click", async () => {
+        button.disabled = true;
+        setMessage("Preparing secure checkout…");
+        try {
+            const orderResponse = await fetch("/payments/razorpay/create-order", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+                body: JSON.stringify({plan_code: {{ plan_code|tojson }}})
+            });
+            const order = await orderResponse.json();
+            if (!orderResponse.ok) throw new Error(order.message || "Could not create payment order.");
+            const checkout = new Razorpay({
+                key: order.key_id, order_id: order.order_id, amount: order.amount,
+                currency: order.currency, name: order.name, description: order.description,
+                prefill: {name: {{ customer.get('name', '')|tojson }}, email: {{ customer.get('email', '')|tojson }}},
+                handler: async (result) => {
+                    setMessage("Verifying your payment…");
+                    try {
+                        const verifyResponse = await fetch("/payments/razorpay/verify", {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json", "X-CSRF-Token": csrfToken},
+                            body: JSON.stringify(result)
+                        });
+                        const verified = await verifyResponse.json();
+                        if (!verifyResponse.ok || !verified.success) throw new Error(verified.message || "Payment verification failed.");
+                        setMessage("Payment verified. Your subscription is active.", "success");
+                        window.location.assign("/pricing");
+                    } catch (error) {
+                        button.disabled = false;
+                        setMessage(error.message, "danger");
+                    }
+                },
+                modal: {ondismiss: () => { button.disabled = false; setMessage("Checkout was closed. If payment completed, it may still be reconciled automatically.", "warning"); }}
+            });
+            checkout.on("payment.failed", () => { button.disabled = false; setMessage("The payment could not be completed. No subscription was activated.", "danger"); });
+            checkout.open();
+        } catch (error) {
+            button.disabled = false;
+            setMessage(error.message, "danger");
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

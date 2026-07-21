@@ -1,67 +1,84 @@
-import os
+from flask import Blueprint, current_app, jsonify, render_template, request, session
 
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session
-
-from app.config import Config
-from app.services.subscription_service import (
-    has_active_subscription,
-    latest_subscription,
-    pending_payment,
-    submit_manual_upi_payment
+from app.services.database_service import get_connection
+from app.services.razorpay_service import (
+    PaymentError, create_order, handle_webhook, resolve_plan, verify_checkout,
 )
+from app.services.subscription_service import has_active_subscription, latest_subscription
 
 
 subscription_bp = Blueprint("subscription", __name__)
 
 
+def _json_error(error):
+    if isinstance(error, PaymentError):
+        return jsonify({"success": False, "message": str(error)}), error.status_code
+    current_app.logger.exception("Razorpay request failed")
+    return jsonify({"success": False, "message": "Payment processing is temporarily unavailable."}), 500
+
+
 @subscription_bp.route("/pricing")
 def pricing_page():
     subscription = None
-    payment = None
     is_subscribed = False
-
+    customer = {}
     if "user_id" in session:
         subscription = latest_subscription(session["user_id"])
-        payment = pending_payment(session["user_id"])
         is_subscribed = has_active_subscription(session["user_id"])
-
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT name, email FROM users WHERE id=%s", (session["user_id"],))
+        customer = cursor.fetchone() or {}
+        cursor.close()
+        conn.close()
+    plan = resolve_plan("starter_monthly")
     return render_template(
-        "pricing.html",
-        upi_id=Config.UPI_ID,
-        subscription_price=Config.SUBSCRIPTION_PRICE,
-        original_subscription_price=Config.ORIGINAL_SUBSCRIPTION_PRICE,
-        upi_qr_exists=os.path.exists(
-            os.path.join(current_app.static_folder, "images", "upi_qr.png")
-        ),
-        subscription=subscription,
-        pending_payment=payment,
-        is_subscribed=is_subscribed
+        "pricing.html", subscription_price=plan.amount_paise / 100,
+        original_subscription_price=current_app.config["ORIGINAL_SUBSCRIPTION_PRICE"],
+        subscription=subscription, is_subscribed=is_subscribed,
+        plan_code=plan.code, plan_name=plan.name, customer=customer,
     )
 
 
-@subscription_bp.route("/pricing/submit-payment", methods=["POST"])
-def submit_payment_reference():
+@subscription_bp.post("/payments/razorpay/create-order")
+def razorpay_create_order():
     if "user_id" not in session:
-        flash("Please login before submitting payment details.", "warning")
-        return redirect("/login-page")
+        return jsonify({"success": False, "message": "Please login to continue."}), 401
+    payload = request.get_json(silent=True) or {}
+    if set(payload) - {"plan_code"}:
+        return jsonify({"success": False, "message": "Only a plan identifier is accepted."}), 400
+    try:
+        plan, order_id = create_order(session["user_id"], payload.get("plan_code"))
+        return jsonify({
+            "success": True, "key_id": current_app.config["RAZORPAY_KEY_ID"],
+            "order_id": order_id, "amount": plan.amount_paise,
+            "currency": plan.currency, "name": "ReviewGrow",
+            "description": plan.name,
+        })
+    except Exception as exc:
+        return _json_error(exc)
 
-    transaction_id = (request.form.get("transaction_id") or "").strip()
-    notes = (request.form.get("notes") or "").strip()
 
-    if not transaction_id:
-        flash("Please enter your UPI transaction or reference ID.", "danger")
-        return redirect("/pricing")
+@subscription_bp.post("/payments/razorpay/verify")
+def razorpay_verify():
+    if "user_id" not in session:
+        return jsonify({"success": False, "message": "Please login to continue."}), 401
+    try:
+        _, duplicate = verify_checkout(session["user_id"], request.get_json(silent=True) or {})
+        return jsonify({
+            "success": True,
+            "message": "Payment verified and subscription activated.",
+            "already_processed": duplicate,
+        })
+    except Exception as exc:
+        return _json_error(exc)
 
-    payment, created = submit_manual_upi_payment(
-        session["user_id"],
-        Config.SUBSCRIPTION_PRICE,
-        transaction_id,
-        notes
-    )
 
-    if created:
-        flash("Payment submitted. Admin will verify and activate your subscription.", "success")
-    else:
-        flash("You already have a pending payment. Admin will verify it soon.", "info")
-
-    return redirect("/pricing")
+@subscription_bp.post("/webhooks/razorpay")
+def razorpay_webhook():
+    raw_body = request.get_data(cache=True)
+    try:
+        result = handle_webhook(raw_body, request.headers.get("X-Razorpay-Signature"))
+        return jsonify({"success": True, "result": result})
+    except Exception as exc:
+        return _json_error(exc)

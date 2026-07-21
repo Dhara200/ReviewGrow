@@ -361,6 +361,10 @@ Planned improvements include:
 * Review notification automation
 * Advanced usage analytics
 * Enhanced subscription and billing workflows
+
+## Razorpay payments
+
+Razorpay Standard Checkout setup, environment placeholders, migration steps, webhook configuration, go-live checks, troubleshooting, and rollback guidance are documented in [docs/razorpay-integration.md](docs/razorpay-integration.md). This integration provides one-time subscription purchases; automatic recurring Razorpay Subscriptions are not included.
 * Expanded observability and monitoring
 * Infrastructure scaling as customer usage grows
 
