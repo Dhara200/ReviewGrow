@@ -54,7 +54,7 @@
         <div class="rs-card h-100">
             <p class="rs-eyebrow">Subscription</p>
             {% if subscription %}
-            <h2 class="h5 fw-bold mb-3">{{ subscription.plan_name or "No plan" }}</h2>
+            <h2 class="h5 fw-bold mb-3">{{ "ReviewGrow Premium" if subscription.plan_name == "starter" else (subscription.plan_name or "No plan") }}</h2>
             <div class="d-flex justify-content-between gap-3 mb-2">
                 <span class="text-muted">Status</span>
                 {{ status_badge(subscription.status) }}

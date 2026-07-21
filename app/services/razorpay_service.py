@@ -30,7 +30,7 @@ class Plan:
 def resolve_plan(plan_code):
     plans = {
         "starter_monthly": Plan(
-            "starter_monthly", "ReviewGrow Starter",
+            "starter_monthly", "ReviewGrow Premium",
             int(round(Config.SUBSCRIPTION_PRICE * 100))
         )
     }

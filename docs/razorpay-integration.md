@@ -1,6 +1,6 @@
 # Razorpay Standard Checkout
 
-ReviewGrow uses Razorpay Orders and Standard Checkout for one-time, 30-day Starter plan purchases. It does not use Razorpay Subscriptions, mandates, or automatic renewal.
+ReviewGrow uses Razorpay Orders and Standard Checkout for one-time, 30-day ReviewGrow Premium plan purchases. It does not use Razorpay Subscriptions, mandates, or automatic renewal.
 
 ## Flow and configuration
 

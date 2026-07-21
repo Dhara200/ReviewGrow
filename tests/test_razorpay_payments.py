@@ -23,9 +23,32 @@ class FakeSubscriptionCursor:
         return self.subscription
 
 
+class FakeUserCursor:
+    def execute(self, sql, params):
+        pass
+
+    def fetchone(self):
+        return {"name": "Test Owner", "email": "owner@example.com"}
+
+    def close(self):
+        pass
+
+
+class FakeUserConnection:
+    def cursor(self, dictionary=False):
+        return FakeUserCursor()
+
+    def close(self):
+        pass
+
+
 class RazorpayRouteTests(unittest.TestCase):
     def setUp(self):
-        self.app = Flask(__name__)
+        template_dir = Path(__file__).resolve().parents[1] / "app" / "templates"
+        static_dir = Path(__file__).resolve().parents[1] / "app" / "static"
+        self.app = Flask(
+            __name__, template_folder=str(template_dir), static_folder=str(static_dir)
+        )
         self.app.config.update(
             TESTING=True, SECRET_KEY="test", RAZORPAY_KEY_ID="rzp_test_public",
             ORIGINAL_SUBSCRIPTION_PRICE=2999,
@@ -69,7 +92,23 @@ class RazorpayRouteTests(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(plan.amount_paise, body["amount"])
         self.assertEqual("rzp_test_public", body["key_id"])
+        self.assertEqual("ReviewGrow Premium", body["description"])
+        self.assertNotIn("ReviewGrow Starter", response.get_data(as_text=True))
         self.assertNotIn("key_secret", body)
+
+    @patch("app.routes.subscription.get_connection", return_value=FakeUserConnection())
+    @patch("app.routes.subscription.has_active_subscription", return_value=False)
+    @patch("app.routes.subscription.latest_subscription", return_value=None)
+    def test_pricing_and_checkout_display_premium_plan(self, latest, active, connection):
+        self.login()
+        response = self.client.get("/pricing")
+        page = response.get_data(as_text=True)
+        self.assertEqual(200, response.status_code)
+        self.assertIn("ReviewGrow Premium", page)
+        self.assertIn("Purchase ReviewGrow Premium", page)
+        self.assertIn("<span class=\"text-muted\">Plan</span>", page)
+        self.assertIn("<strong>ReviewGrow Premium</strong>", page)
+        self.assertNotIn("ReviewGrow Starter", page)
 
     @patch("app.routes.subscription.verify_checkout", return_value=(True, False))
     def test_verified_checkout_returns_success(self, mocked):
