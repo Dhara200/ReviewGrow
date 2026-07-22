@@ -1,4 +1,5 @@
 import unittest
+import time
 from unittest.mock import Mock, patch
 
 import requests
@@ -6,6 +7,11 @@ from flask import Flask
 
 from app.routes.auth import auth_bp
 from app.services.recaptcha_service import verify_recaptcha
+from app.services.csrf_service import (
+    REGISTRATION_CSRF_ISSUED_AT_KEY,
+    REGISTRATION_CSRF_SESSION_KEY,
+    init_csrf,
+)
 
 
 class RecaptchaServiceTests(unittest.TestCase):
@@ -139,6 +145,7 @@ class RecaptchaRouteTests(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__, template_folder="../app/templates")
         self.app.config.update(TESTING=True, SECRET_KEY="test")
+        init_csrf(self.app)
         self.app.register_blueprint(auth_bp)
         self.client = self.app.test_client()
 
@@ -146,6 +153,9 @@ class RecaptchaRouteTests(unittest.TestCase):
     @patch("app.routes.auth.get_connection")
     def test_registration_is_blocked_before_database_access(self, connection, verify):
         verify.return_value = Mock(success=False)
+        with self.client.session_transaction() as active_session:
+            active_session[REGISTRATION_CSRF_SESSION_KEY] = "valid-registration-csrf"
+            active_session[REGISTRATION_CSRF_ISSUED_AT_KEY] = int(time.time())
         response = self.client.post(
             "/register-page",
             data={
@@ -153,6 +163,7 @@ class RecaptchaRouteTests(unittest.TestCase):
                 "email": "test@example.com",
                 "password": "password",
                 "confirm_password": "password",
+                "csrf_token": "valid-registration-csrf",
             },
         )
         self.assertEqual(response.status_code, 400)

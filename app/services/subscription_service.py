@@ -59,35 +59,45 @@ def subscription_required(view_func):
     return wrapper
 
 
-def create_expired_subscription(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO subscriptions
-        (
-            user_id,
-            plan_name,
-            status,
-            subscription_start_date,
-            subscription_end_date,
-            review_credits
+def create_expired_subscription(user_id, connection=None, cursor=None):
+    owns_connection = connection is None
+    conn = connection or get_connection()
+    active_cursor = cursor or conn.cursor()
+    try:
+        active_cursor.execute(
+            """
+            INSERT INTO subscriptions
+            (
+                user_id,
+                plan_name,
+                status,
+                subscription_start_date,
+                subscription_end_date,
+                review_credits
+            )
+            VALUES
+            (%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                user_id,
+                "starter",
+                "expired",
+                None,
+                None,
+                0
+            )
         )
-        VALUES
-        (%s,%s,%s,%s,%s,%s)
-        """,
-        (
-            user_id,
-            "starter",
-            "expired",
-            None,
-            None,
-            0
-        )
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
+        if owns_connection:
+            conn.commit()
+    except Exception:
+        if owns_connection:
+            conn.rollback()
+        raise
+    finally:
+        if cursor is None:
+            active_cursor.close()
+        if owns_connection:
+            conn.close()
 
 
 def approve_payment(payment_id):

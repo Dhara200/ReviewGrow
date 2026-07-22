@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 import ipaddress
+import re
+import unicodedata
 
+import mysql.connector
 from flask import (
     Blueprint,
     current_app,
@@ -23,6 +26,119 @@ auth_bp = Blueprint("auth", __name__)
 INVALID_LOGIN_MESSAGE = "Invalid email or password."
 LOCKED_LOGIN_MESSAGE = "Too many failed login attempts. Please try again after 15 minutes."
 RECAPTCHA_ERROR_MESSAGE = "Security verification failed. Please try again."
+EMAIL_LOCAL_PATTERN = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$")
+
+
+def _registration_validation_error(name, email, password, confirm_password):
+    if not name:
+        return "Full name is required."
+    if len(name) < 2:
+        return "Full name must be at least 2 characters."
+    if len(name) > 100:
+        return "Full name must be no more than 100 characters."
+    if any(unicodedata.category(character) == "Cc" for character in name):
+        return "Full name cannot contain control characters."
+    if not all(
+        character.isalpha()
+        or unicodedata.category(character).startswith("M")
+        or unicodedata.category(character) in {"Zs", "Pd"}
+        or character in {"'", "’", "."}
+        for character in name
+    ):
+        return "Full name may contain letters, spaces, apostrophes, hyphens, and periods only."
+
+    if not email:
+        return "Email address is required."
+    if len(email) > 254:
+        return "Email address must be no more than 254 characters."
+    if any(unicodedata.category(character) == "Cc" for character in email):
+        return "Enter a valid email address."
+    if email.count("@") != 1:
+        return "Enter a valid email address."
+    local_part, domain = email.rsplit("@", 1)
+    if (
+        not local_part
+        or len(local_part) > 64
+        or not EMAIL_LOCAL_PATTERN.fullmatch(local_part)
+        or local_part.startswith(".")
+        or local_part.endswith(".")
+        or ".." in local_part
+        or not _valid_email_domain(domain)
+    ):
+        return "Enter a valid email address."
+
+    if not password:
+        return "Password is required."
+    if len(password) < 12:
+        return "Password must be at least 12 characters."
+    if len(password) > 128:
+        return "Password must be no more than 128 characters."
+    if not confirm_password:
+        return "Please confirm your password."
+    if password != confirm_password:
+        return "Passwords do not match."
+    return None
+
+
+def _valid_email_domain(domain):
+    if not domain or "." not in domain or domain.startswith(".") or domain.endswith("."):
+        return False
+    try:
+        ascii_domain = domain.encode("idna").decode("ascii")
+    except UnicodeError:
+        return False
+    if len(ascii_domain) > 253:
+        return False
+    labels = ascii_domain.split(".")
+    return all(
+        label
+        and len(label) <= 63
+        and not label.startswith("-")
+        and not label.endswith("-")
+        and all(character.isalnum() or character == "-" for character in label)
+        for label in labels
+    )
+
+
+def _create_registered_user(name, email, password_hash):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        conn.start_transaction()
+        cursor.execute(
+            """
+            INSERT INTO users
+            (name, email, password_hash)
+            VALUES (%s, %s, %s)
+            """,
+            (name, email, password_hash)
+        )
+        user_id = cursor.lastrowid
+        create_expired_subscription(
+            user_id, connection=conn, cursor=cursor
+        )
+        conn.commit()
+        return user_id
+    except Exception:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def get_client_ip():
@@ -202,50 +318,58 @@ def register_form():
     password = request.form.get("password") or ""
     confirm_password = request.form.get("confirm_password") or ""
 
-    if not all([name, email, password, confirm_password]):
+    validation_error = _registration_validation_error(
+        name, email, password, confirm_password
+    )
+    if validation_error:
         return render_template(
             "register.html",
-            register_error="All fields are required.",
-            name=name,
-            email=email
-        ), 400
-
-    if password != confirm_password:
-        return render_template(
-            "register.html",
-            register_error="Passwords do not match.",
+            register_error=validation_error,
             name=name,
             email=email
         ), 400
 
     password_hash = generate_password_hash(password)
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO users
-        (name, email, password_hash)
-        VALUES (%s, %s, %s)
-        """,
-        (
-            name,
-            email,
-            password_hash
-        )
-    )
-    user_id = cursor.lastrowid
-    conn.commit()
-    cursor.close()
-    conn.close()
-    create_expired_subscription(user_id)
+    user_id = _create_registered_user(name, email, password_hash)
     session.clear()
     session.permanent = True
     session["user_id"] = user_id
     session["user_name"] = name
     session["role"] = "owner"
     return redirect("/pricing")
-  except Exception as e:
-     return str(e), 500
+  except mysql.connector.IntegrityError as error:
+     if error.errno == 1062:
+        current_app.logger.info(
+            "Registration rejected because normalized email already exists"
+        )
+        return render_template(
+            "register.html",
+            register_error="An account with this email already exists.",
+            name=name if "name" in locals() else "",
+            email=email if "email" in locals() else ""
+        ), 409
+     current_app.logger.error(
+         "Registration database failure error_type=%s db_errno=%s",
+         type(error).__name__,
+         error.errno
+     )
+     return render_template(
+         "register.html",
+         register_error="We could not create your account right now. Please try again.",
+         name=name if "name" in locals() else "",
+         email=email if "email" in locals() else ""
+     ), 500
+  except Exception as error:
+     current_app.logger.error(
+         "Registration failure error_type=%s",
+         type(error).__name__
+     )
+     return render_template(
+         "register.html",
+         register_error="We could not create your account right now. Please try again.",
+         name=name if "name" in locals() else "",
+         email=email if "email" in locals() else ""
+     ), 500
 
 #LOGIN PAGE ROUTE AUTHENTICATION
 

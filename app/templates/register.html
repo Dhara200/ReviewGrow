@@ -20,6 +20,7 @@
                     </div>
 
                     <form method="POST" action="/register-page" data-recaptcha-form data-recaptcha-action="register" data-recaptcha-site-key="{{ recaptcha_site_key }}">
+                        {{ registration_csrf_field() }}
                         <input type="hidden" name="recaptcha_token" data-recaptcha-token>
                         <div class="alert alert-danger d-none" role="alert" data-recaptcha-error>
                             Security verification failed. Please try again.
@@ -34,7 +35,7 @@
                             <label for="name">Full name</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-person text-muted"></i></span>
-                                <input id="name" class="form-control border-start-0 rounded-end-4" type="text" name="name" value="{{ name or '' }}" placeholder="Your name" autocomplete="name" required>
+                                <input id="name" class="form-control border-start-0 rounded-end-4" type="text" name="name" value="{{ name or '' }}" placeholder="Your name" autocomplete="name" minlength="2" maxlength="100" required>
                             </div>
                         </div>
 
@@ -42,7 +43,7 @@
                             <label for="email">Email address</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-envelope text-muted"></i></span>
-                                <input id="email" class="form-control border-start-0 rounded-end-4" type="email" name="email" value="{{ email or '' }}" placeholder="you@company.com" autocomplete="email" required>
+                                <input id="email" class="form-control border-start-0 rounded-end-4" type="email" name="email" value="{{ email or '' }}" placeholder="you@company.com" autocomplete="email" maxlength="254" required>
                             </div>
                         </div>
 
@@ -71,7 +72,7 @@
                             <label for="password">Password</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-lock text-muted"></i></span>
-                                <input id="password" class="form-control border-start-0 rounded-end-4" type="password" name="password" placeholder="Create a password" autocomplete="new-password" required>
+                                <input id="password" class="form-control border-start-0 rounded-end-4" type="password" name="password" placeholder="Create a password" autocomplete="new-password" minlength="12" maxlength="128" required>
                             </div>
                             <div class="form-hint">Use a password that is unique to ReviewGrow.</div>
                         </div>
@@ -80,7 +81,7 @@
                             <label for="confirm_password">Confirm password</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-shield-lock text-muted"></i></span>
-                                <input id="confirm_password" class="form-control border-start-0 rounded-end-4" type="password" name="confirm_password" placeholder="Re-enter your password" autocomplete="new-password" required>
+                                <input id="confirm_password" class="form-control border-start-0 rounded-end-4" type="password" name="confirm_password" placeholder="Re-enter your password" autocomplete="new-password" minlength="12" maxlength="128" required>
                             </div>
                             <div class="form-hint" id="passwordMatchHint">Passwords must match.</div>
                         </div>
