@@ -214,6 +214,10 @@ class LoginRateLimitingTests(unittest.TestCase):
         self.assertNotIn(self.memory.identity("ip_account", (ip, email)), self.memory.rows)
 
     def test_limiter_failure_returns_generic_503_without_sensitive_logs(self):
+        self.app.config.update(
+            SECURITY_AUDIT_ENABLED=True,
+            SECURITY_AUDIT_HMAC_KEY="audit-test-key-with-at-least-32-distinct-chars-123",
+        )
         failing = MagicMock()
         failing.check_ip.side_effect = RuntimeError(
             "database password=secret email=user@example.com token=sensitive"
@@ -229,7 +233,7 @@ class LoginRateLimitingTests(unittest.TestCase):
         for secret in ("user@example.com", "sensitive-password", "token=sensitive", "database password"):
             self.assertNotIn(secret, body)
             self.assertNotIn(secret, logs)
-        self.assertIn("error_type=RuntimeError", logs)
+        self.assertIn('"event_name":"login_limiter_unavailable"', logs)
 
     def test_unknown_and_existing_accounts_share_throttle_response(self):
         for email in ("known@example.com", "unknown@example.com"):

@@ -12,6 +12,18 @@ def _get_bool(name, default=False):
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _get_strict_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return bool(default)
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"{name} must be a boolean.")
+
+
 def _get_non_negative_float(name, default):
     try:
         value = float(os.getenv(name, default))
@@ -48,6 +60,10 @@ class Config:
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
     DEBUG = _get_bool("APP_DEBUG", False)
     TESTING = False
+    SECURITY_AUDIT_ENABLED = _get_strict_bool(
+        "SECURITY_AUDIT_ENABLED", APP_ENV == "production"
+    )
+    SECURITY_AUDIT_HMAC_KEY = os.getenv("SECURITY_AUDIT_HMAC_KEY", "").strip()
     DB_HOST = os.getenv("DB_HOST")
     DB_PORT = int(os.getenv("DB_PORT", 3306))
     DB_NAME = os.getenv("DB_NAME")

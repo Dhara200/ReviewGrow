@@ -22,6 +22,7 @@ from app.services.trusted_proxy_service import TrustedProxyFix
 from app.services.session_security_service import init_session_security
 from app.services.login_limiter_service import validate_login_limiter_config
 from app.services.login_security_service import validate_login_dummy_hash
+from app.services.security_audit_service import validate_security_audit_config
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -29,6 +30,7 @@ app.secret_key = Config.SECRET_KEY
 app.wsgi_app = TrustedProxyFix(app.wsgi_app, app.config["TRUSTED_PROXY_IPS"])
 validate_login_limiter_config(app)
 validate_login_dummy_hash(app)
+validate_security_audit_config(app)
 init_session_security(app)
 init_csrf(app)
 

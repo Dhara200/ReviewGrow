@@ -33,7 +33,12 @@ from app.services.login_security_service import (
     LOGIN_APPLICATION_ERROR_MESSAGE,
     LOGIN_CSRF_ERROR_MESSAGE,
     normalize_login_email,
+    login_input_failure,
     validate_login_input,
+)
+from app.services.security_audit_service import (
+    SecurityAuditService,
+    recaptcha_failure_category,
 )
 
 auth_bp = Blueprint("auth", __name__)
@@ -181,8 +186,19 @@ def _login_error_response(
     ), status_code
 
 
-def _throttled_login_response(retry_after_seconds):
+def _throttled_login_response(
+    retry_after_seconds, audit, email, ip_address, *, account_valid, limiter_scope
+):
     retry_after_seconds = max(1, int(retry_after_seconds))
+    audit.emit(
+        "login_rate_limited",
+        email=email,
+        account_valid=account_valid,
+        client_ip=ip_address,
+        limiter_scope=limiter_scope,
+        retry_after_seconds=retry_after_seconds,
+        http_status=429,
+    )
     response = current_app.make_response(
         _login_error_response(
             THROTTLED_LOGIN_MESSAGE,
@@ -194,9 +210,16 @@ def _throttled_login_response(retry_after_seconds):
     return response
 
 
-def _limiter_unavailable_response(error):
-    current_app.logger.error(
-        "Login limiter unavailable error_type=%s", type(error).__name__
+def _limiter_unavailable_response(
+    audit, email, ip_address, *, account_valid, failure_category
+):
+    audit.emit(
+        "login_limiter_unavailable",
+        email=email,
+        account_valid=account_valid,
+        client_ip=ip_address,
+        failure_category=failure_category,
+        http_status=503,
     )
     return _login_error_response(
         LOGIN_LIMITER_UNAVAILABLE_MESSAGE,
@@ -204,10 +227,17 @@ def _limiter_unavailable_response(error):
     )
 
 
-def _login_application_error_response(error, *, unavailable=False):
-    current_app.logger.error(
-        "Login authentication backend failure error_type=%s",
-        type(error).__name__,
+def _login_application_error_response(
+    audit, email, ip_address, *, account_valid, unavailable=False,
+    failure_category="unexpected_failure",
+):
+    audit.emit(
+        "login_backend_unavailable" if unavailable else "login_internal_error",
+        email=email,
+        account_valid=account_valid,
+        client_ip=ip_address,
+        failure_category=failure_category,
+        http_status=503 if unavailable else 500,
     )
     if unavailable:
         return _login_error_response(
@@ -222,6 +252,14 @@ def _login_application_error_response(error, *, unavailable=False):
 
 def _get_login_limiter():
     return LoginLimiter(LoginLimiterPolicy.from_config(current_app.config))
+
+
+def _get_security_audit():
+    return SecurityAuditService(
+        current_app.logger,
+        enabled=current_app.config.get("SECURITY_AUDIT_ENABLED", False),
+        hmac_key=current_app.config.get("SECURITY_AUDIT_HMAC_KEY", ""),
+    )
 
 
 def _find_login_user(email):
@@ -337,13 +375,6 @@ def record_failed_login(email, ip_address):
     # Lock the email + IP pair as soon as the configured attempt limit is reached.
     if failed_attempts >= Config.MAX_LOGIN_ATTEMPTS:
         locked_until = now + timedelta(minutes=Config.LOGIN_LOCK_MINUTES)
-        current_app.logger.warning(
-            "Login locked for email=%s ip=%s until=%s",
-            email,
-            ip_address,
-            locked_until
-        )
-
     if attempt:
         cursor.execute(
             """
@@ -509,22 +540,43 @@ def login_form():
         email = normalize_login_email(request.form.get("email"))
         password = request.form.get("password")
         ip_address = get_client_ip()
+        audit = _get_security_audit()
+        email_identity_valid = bool(
+            email
+            and len(email) <= 254
+            and validate_login_input(email, "valid")
+        )
 
         limiter = _get_login_limiter()
         try:
             ip_status = limiter.check_ip(ip_address)
-        except Exception as error:
-            return _limiter_unavailable_response(error)
+        except Exception:
+            return _limiter_unavailable_response(
+                audit, email, ip_address,
+                account_valid=email_identity_valid,
+                failure_category="ip_check",
+            )
         if ip_status.blocked:
-            return _throttled_login_response(ip_status.retry_after_seconds)
+            return _throttled_login_response(
+                ip_status.retry_after_seconds, audit, email, ip_address,
+                account_valid=email_identity_valid, limiter_scope="ip",
+            )
 
         if not validate_login_csrf():
+            audit.emit(
+                "login_csrf_rejected",
+                email=email,
+                account_valid=email_identity_valid,
+                client_ip=ip_address,
+                http_status=403,
+            )
             return _login_error_response(
                 LOGIN_CSRF_ERROR_MESSAGE,
                 status_code=403,
             )
 
-        input_is_valid = validate_login_input(email, password)
+        input_failure = login_input_failure(email, password)
+        input_is_valid = input_failure is None
 
         recaptcha_result = verify_recaptcha(
             request.form.get("recaptcha_token"),
@@ -532,6 +584,16 @@ def login_form():
             ip_address
         )
         if not recaptcha_result.success:
+            audit.emit(
+                "login_recaptcha_rejected",
+                email=email,
+                account_valid=email_identity_valid,
+                client_ip=ip_address,
+                failure_category=recaptcha_failure_category(
+                    getattr(recaptcha_result, "reason", "")
+                ),
+                http_status=400,
+            )
             return _login_error_response(
                 RECAPTCHA_ERROR_MESSAGE,
                 email=email,
@@ -541,11 +603,25 @@ def login_form():
         if input_is_valid:
             try:
                 account_statuses = limiter.check_account_and_pair(email, ip_address)
-            except Exception as error:
-                return _limiter_unavailable_response(error)
+            except Exception:
+                return _limiter_unavailable_response(
+                    audit, email, ip_address, account_valid=True,
+                    failure_category="account_check",
+                )
             retry_after = longest_retry_after(account_statuses)
             if retry_after:
-                return _throttled_login_response(retry_after)
+                blocked_scopes = []
+                if account_statuses[0].blocked:
+                    blocked_scopes.append("account")
+                if account_statuses[1].blocked:
+                    blocked_scopes.append("ip_account")
+                limiter_scope = (
+                    blocked_scopes[0] if len(blocked_scopes) == 1 else "multiple"
+                )
+                return _throttled_login_response(
+                    retry_after, audit, email, ip_address,
+                    account_valid=True, limiter_scope=limiter_scope,
+                )
 
         if not input_is_valid:
             email_is_safe = bool(
@@ -558,8 +634,21 @@ def login_form():
                     limiter.record_failure(email, ip_address)
                 else:
                     limiter.record_ip_failure(ip_address)
-            except Exception as error:
-                return _limiter_unavailable_response(error)
+            except Exception:
+                return _limiter_unavailable_response(
+                    audit, email, ip_address,
+                    account_valid=email_is_safe,
+                    failure_category="failure_recording",
+                )
+
+            audit.emit(
+                "login_input_rejected",
+                email=email,
+                account_valid=email_is_safe,
+                client_ip=ip_address,
+                failure_category="_".join(input_failure),
+                http_status=401,
+            )
 
             return _login_error_response(
                 INVALID_LOGIN_MESSAGE,
@@ -568,8 +657,11 @@ def login_form():
 
         try:
             user = _find_login_user(email)
-        except Exception as error:
-            return _login_application_error_response(error, unavailable=True)
+        except Exception:
+            return _login_application_error_response(
+                audit, email, ip_address, account_valid=True,
+                unavailable=True, failure_category="user_lookup",
+            )
 
         password_hash = (
             user.get("password_hash") if user
@@ -577,14 +669,28 @@ def login_form():
         )
         try:
             password_matches = check_password_hash(password_hash, password)
-        except Exception as error:
-            return _login_application_error_response(error)
+        except Exception:
+            return _login_application_error_response(
+                audit, email, ip_address, account_valid=True,
+                failure_category="password_verification",
+            )
 
         if not user or not password_matches:
             try:
                 limiter.record_failure(email, ip_address)
-            except Exception as error:
-                return _limiter_unavailable_response(error)
+            except Exception:
+                return _limiter_unavailable_response(
+                    audit, email, ip_address, account_valid=True,
+                    failure_category="failure_recording",
+                )
+
+            audit.emit(
+                "login_invalid_credentials",
+                email=email,
+                account_valid=True,
+                client_ip=ip_address,
+                http_status=401,
+            )
 
             return _login_error_response(
                 INVALID_LOGIN_MESSAGE,
@@ -593,8 +699,11 @@ def login_form():
 
         try:
             limiter.reset_after_success(email, ip_address)
-        except Exception as error:
-            return _limiter_unavailable_response(error)
+        except Exception:
+            return _limiter_unavailable_response(
+                audit, email, ip_address, account_valid=True,
+                failure_category="success_reset",
+            )
 
         # Discard all pre-authentication state before creating a fresh session.
         session.clear()
@@ -605,27 +714,49 @@ def login_form():
 
         # Admin users go directly to Admin Dashboard
         if session["role"] == "admin":
+            audit.emit(
+                "login_success", email=email, client_ip=ip_address, http_status=302
+            )
             return redirect("/admin/dashboard")
 
         try:
             if not has_active_subscription(session["user_id"]):
+                audit.emit(
+                    "login_success", email=email, client_ip=ip_address, http_status=302
+                )
                 return redirect("/pricing")
 
             # Normal owners continue existing flow.
             business = _find_user_business(session["user_id"])
-        except Exception as error:
+        except Exception:
             session.clear()
-            return _login_application_error_response(error, unavailable=True)
+            return _login_application_error_response(
+                audit, email, ip_address, account_valid=True,
+                unavailable=True, failure_category="post_auth_lookup",
+            )
 
         if business:
+            audit.emit(
+                "login_success", email=email, client_ip=ip_address, http_status=302
+            )
             return redirect("/my-businesses")
 
+        audit.emit(
+            "login_success", email=email, client_ip=ip_address, http_status=302
+        )
         return redirect("/create-business")
 
-    except Exception as error:
+    except Exception:
         if "user_id" in session:
             session.clear()
-        return _login_application_error_response(error)
+        audit = locals().get("audit") or _get_security_audit()
+        return _login_application_error_response(
+            audit,
+            locals().get("email", ""),
+            locals().get("ip_address", "unknown"),
+            account_valid=locals().get("email_identity_valid", False),
+            failure_category="unexpected_failure",
+        )
 
     
 #LOGOUT ROUTE AUTHENTICATION

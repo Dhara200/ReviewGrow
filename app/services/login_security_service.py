@@ -17,13 +17,23 @@ def normalize_login_email(value):
 
 
 def validate_login_input(email, password):
-    if not email or len(email) > 254 or _has_unsafe_control(email):
-        return False
-    if password is None or password == "" or len(password) > 128:
-        return False
+    return login_input_failure(email, password) is None
+
+
+def login_input_failure(email, password):
+    if not email:
+        return "email", "missing"
+    if len(email) > 254:
+        return "email", "oversized"
+    if _has_unsafe_control(email):
+        return "email", "unsafe_control"
+    if password is None or password == "":
+        return "password", "missing"
+    if len(password) > 128:
+        return "password", "oversized"
     if _has_unsafe_control(password):
-        return False
-    return True
+        return "password", "unsafe_control"
+    return None
 
 
 def validate_login_dummy_hash(app):
