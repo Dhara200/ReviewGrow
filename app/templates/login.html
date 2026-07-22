@@ -52,6 +52,7 @@
                     </div>
 
                     <form id="loginForm" method="POST" action="/login-page" data-lock-seconds="{{ login_lock_seconds or '' }}" data-recaptcha-form data-recaptcha-action="login" data-recaptcha-site-key="{{ recaptcha_site_key }}">
+                        {{ login_csrf_field() }}
                         <input type="hidden" name="recaptcha_token" data-recaptcha-token>
                         <div class="alert alert-danger d-none" role="alert" data-recaptcha-error>
                             Security verification failed. Please try again.
@@ -65,7 +66,7 @@
                             <label for="email">Email address</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-envelope text-muted"></i></span>
-                                <input id="email" class="form-control border-start-0 rounded-end-4" type="email" name="email" value="{{ email or '' }}" placeholder="you@company.com" autocomplete="email" required>
+                                <input id="email" class="form-control border-start-0 rounded-end-4" type="email" name="email" value="{{ email or '' }}" placeholder="you@company.com" autocomplete="email" maxlength="254" required>
                             </div>
                         </div>
 
@@ -73,7 +74,7 @@
                             <label for="password">Password</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0 rounded-start-4"><i class="bi bi-lock text-muted"></i></span>
-                                <input id="password" class="form-control border-start-0 rounded-end-4" type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+                                <input id="password" class="form-control border-start-0 rounded-end-4" type="password" name="password" placeholder="Enter your password" autocomplete="current-password" maxlength="128" required>
                             </div>
                         </div>
 

@@ -21,6 +21,20 @@ from app.config import Config
 from app.services.database_service import get_connection
 from app.services.subscription_service import create_expired_subscription, has_active_subscription
 from app.services.recaptcha_service import verify_recaptcha
+from app.services.login_limiter_service import (
+    LOGIN_LIMITER_UNAVAILABLE_MESSAGE,
+    THROTTLED_LOGIN_MESSAGE,
+    LoginLimiter,
+    LoginLimiterPolicy,
+    longest_retry_after,
+)
+from app.services.csrf_service import validate_login_csrf
+from app.services.login_security_service import (
+    LOGIN_APPLICATION_ERROR_MESSAGE,
+    LOGIN_CSRF_ERROR_MESSAGE,
+    normalize_login_email,
+    validate_login_input,
+)
 
 auth_bp = Blueprint("auth", __name__)
 INVALID_LOGIN_MESSAGE = "Invalid email or password."
@@ -148,10 +162,12 @@ def get_client_ip():
         return "unknown"
 
 
-def _login_error_response(message, email="", status_code=401, locked_until=None):
-    lock_seconds = None
+def _login_error_response(
+    message, email="", status_code=401, locked_until=None, retry_after_seconds=None
+):
+    lock_seconds = retry_after_seconds
 
-    if locked_until:
+    if lock_seconds is None and locked_until:
         lock_seconds = max(
             0,
             int((locked_until - datetime.utcnow()).total_seconds())
@@ -163,6 +179,111 @@ def _login_error_response(message, email="", status_code=401, locked_until=None)
         email=email,
         login_lock_seconds=lock_seconds
     ), status_code
+
+
+def _throttled_login_response(retry_after_seconds):
+    retry_after_seconds = max(1, int(retry_after_seconds))
+    response = current_app.make_response(
+        _login_error_response(
+            THROTTLED_LOGIN_MESSAGE,
+            status_code=429,
+            retry_after_seconds=retry_after_seconds,
+        )
+    )
+    response.headers["Retry-After"] = str(retry_after_seconds)
+    return response
+
+
+def _limiter_unavailable_response(error):
+    current_app.logger.error(
+        "Login limiter unavailable error_type=%s", type(error).__name__
+    )
+    return _login_error_response(
+        LOGIN_LIMITER_UNAVAILABLE_MESSAGE,
+        status_code=503,
+    )
+
+
+def _login_application_error_response(error, *, unavailable=False):
+    current_app.logger.error(
+        "Login authentication backend failure error_type=%s",
+        type(error).__name__,
+    )
+    if unavailable:
+        return _login_error_response(
+            LOGIN_LIMITER_UNAVAILABLE_MESSAGE,
+            status_code=503,
+        )
+    return _login_error_response(
+        LOGIN_APPLICATION_ERROR_MESSAGE,
+        status_code=500,
+    )
+
+
+def _get_login_limiter():
+    return LoginLimiter(LoginLimiterPolicy.from_config(current_app.config))
+
+
+def _find_login_user(email):
+    connection = None
+    cursor = None
+    try:
+        connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM users WHERE email=%s",
+            (email,),
+        )
+        return cursor.fetchone()
+    except Exception:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+
+def _find_user_business(user_id):
+    connection = None
+    cursor = None
+    try:
+        connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id FROM businesses WHERE user_id=%s LIMIT 1",
+            (user_id,),
+        )
+        return cursor.fetchone()
+    except Exception:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        raise
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
 
 
 def is_login_locked(email, ip_address):
@@ -385,9 +506,25 @@ def login_form():
 
     try:
 
-        email = (request.form.get("email") or "").strip().lower()
+        email = normalize_login_email(request.form.get("email"))
         password = request.form.get("password")
         ip_address = get_client_ip()
+
+        limiter = _get_login_limiter()
+        try:
+            ip_status = limiter.check_ip(ip_address)
+        except Exception as error:
+            return _limiter_unavailable_response(error)
+        if ip_status.blocked:
+            return _throttled_login_response(ip_status.retry_after_seconds)
+
+        if not validate_login_csrf():
+            return _login_error_response(
+                LOGIN_CSRF_ERROR_MESSAGE,
+                status_code=403,
+            )
+
+        input_is_valid = validate_login_input(email, password)
 
         recaptcha_result = verify_recaptcha(
             request.form.get("recaptcha_token"),
@@ -401,67 +538,63 @@ def login_form():
                 status_code=400
             )
 
-        locked_until = is_login_locked(email, ip_address) if email else None
+        if input_is_valid:
+            try:
+                account_statuses = limiter.check_account_and_pair(email, ip_address)
+            except Exception as error:
+                return _limiter_unavailable_response(error)
+            retry_after = longest_retry_after(account_statuses)
+            if retry_after:
+                return _throttled_login_response(retry_after)
 
-        if locked_until:
-            current_app.logger.warning(
-                "Blocked locked login attempt for email=%s ip=%s",
-                email,
-                ip_address
+        if not input_is_valid:
+            email_is_safe = bool(
+                email
+                and len(email) <= 254
+                and validate_login_input(email, "valid")
             )
-            return _login_error_response(
-                LOCKED_LOGIN_MESSAGE,
-                email=email,
-                status_code=429,
-                locked_until=locked_until
-            )
-
-        if not email or not password:
-            if email:
-                record_failed_login(email, ip_address)
+            try:
+                if email_is_safe:
+                    limiter.record_failure(email, ip_address)
+                else:
+                    limiter.record_ip_failure(ip_address)
+            except Exception as error:
+                return _limiter_unavailable_response(error)
 
             return _login_error_response(
                 INVALID_LOGIN_MESSAGE,
-                email=email
+                email=email if email_is_safe else ""
             )
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+        try:
+            user = _find_login_user(email)
+        except Exception as error:
+            return _login_application_error_response(error, unavailable=True)
 
-        cursor.execute(
-            """
-            SELECT *
-            FROM users
-            WHERE email=%s
-            """,
-            (email,)
+        password_hash = (
+            user.get("password_hash") if user
+            else current_app.config["LOGIN_DUMMY_PASSWORD_HASH"]
         )
+        try:
+            password_matches = check_password_hash(password_hash, password)
+        except Exception as error:
+            return _login_application_error_response(error)
 
-        user = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        if not user:
-            record_failed_login(email, ip_address)
-
-            return _login_error_response(
-                INVALID_LOGIN_MESSAGE,
-                email=email
-            )
-
-        if not check_password_hash(
-            user["password_hash"],
-            password
-        ):
-            record_failed_login(email, ip_address)
+        if not user or not password_matches:
+            try:
+                limiter.record_failure(email, ip_address)
+            except Exception as error:
+                return _limiter_unavailable_response(error)
 
             return _login_error_response(
                 INVALID_LOGIN_MESSAGE,
                 email=email
             )
 
-        reset_failed_login(email, ip_address)
+        try:
+            limiter.reset_after_success(email, ip_address)
+        except Exception as error:
+            return _limiter_unavailable_response(error)
 
         # Discard all pre-authentication state before creating a fresh session.
         session.clear()
@@ -474,35 +607,25 @@ def login_form():
         if session["role"] == "admin":
             return redirect("/admin/dashboard")
 
-        if not has_active_subscription(session["user_id"]):
-            return redirect("/pricing")
+        try:
+            if not has_active_subscription(session["user_id"]):
+                return redirect("/pricing")
 
-        # Normal owners continue existing flow
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(
-            """
-            SELECT id
-            FROM businesses
-            WHERE user_id=%s
-            LIMIT 1
-            """,
-            (session["user_id"],)
-        )
-
-        business = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
+            # Normal owners continue existing flow.
+            business = _find_user_business(session["user_id"])
+        except Exception as error:
+            session.clear()
+            return _login_application_error_response(error, unavailable=True)
 
         if business:
             return redirect("/my-businesses")
 
         return redirect("/create-business")
 
-    except Exception as e:
-        return str(e), 500
+    except Exception as error:
+        if "user_id" in session:
+            session.clear()
+        return _login_application_error_response(error)
 
     
 #LOGOUT ROUTE AUTHENTICATION

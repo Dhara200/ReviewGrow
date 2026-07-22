@@ -28,6 +28,21 @@ def _get_positive_int(name, default, minimum=1):
     return value if value >= minimum else int(default)
 
 
+def _get_bounded_login_int(name, default, minimum, maximum):
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(f"{name} must be an integer.") from error
+    if not minimum <= value <= maximum:
+        raise RuntimeError(
+            f"{name} must be between {minimum} and {maximum}."
+        )
+    return value
+
+
 class Config:
     APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
@@ -65,6 +80,38 @@ class Config:
     MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", 5))
     LOGIN_LOCK_MINUTES = int(os.getenv("LOGIN_LOCK_MINUTES", 15))
     LOGIN_WINDOW_MINUTES = int(os.getenv("LOGIN_WINDOW_MINUTES", 15))
+
+    LOGIN_IP_MAX_ATTEMPTS = _get_bounded_login_int(
+        "LOGIN_IP_MAX_ATTEMPTS", 20, 1, 1000
+    )
+    LOGIN_IP_WINDOW_SECONDS = _get_bounded_login_int(
+        "LOGIN_IP_WINDOW_SECONDS", 900, 1, 86400
+    )
+    LOGIN_IP_BLOCK_SECONDS = _get_bounded_login_int(
+        "LOGIN_IP_BLOCK_SECONDS", 900, 1, 604800
+    )
+    LOGIN_ACCOUNT_MAX_ATTEMPTS = _get_bounded_login_int(
+        "LOGIN_ACCOUNT_MAX_ATTEMPTS", 15, 1, 1000
+    )
+    LOGIN_ACCOUNT_WINDOW_SECONDS = _get_bounded_login_int(
+        "LOGIN_ACCOUNT_WINDOW_SECONDS", 900, 1, 86400
+    )
+    LOGIN_ACCOUNT_BLOCK_SECONDS = _get_bounded_login_int(
+        "LOGIN_ACCOUNT_BLOCK_SECONDS", 900, 1, 604800
+    )
+    LOGIN_IP_ACCOUNT_MAX_ATTEMPTS = _get_bounded_login_int(
+        "LOGIN_IP_ACCOUNT_MAX_ATTEMPTS", 5, 1, 1000
+    )
+    LOGIN_IP_ACCOUNT_WINDOW_SECONDS = _get_bounded_login_int(
+        "LOGIN_IP_ACCOUNT_WINDOW_SECONDS", 900, 1, 86400
+    )
+    LOGIN_IP_ACCOUNT_BLOCK_SECONDS = _get_bounded_login_int(
+        "LOGIN_IP_ACCOUNT_BLOCK_SECONDS", 900, 1, 604800
+    )
+    LOGIN_DUMMY_PASSWORD_HASH = os.getenv(
+        "LOGIN_DUMMY_PASSWORD_HASH",
+        "scrypt:32768:8:1$SC9DeIHdvl1JAzbZ$34c779c9d15d375aca021df371beeec79dbf6311def2026e05108916e8dda1e9c7135e94c54ad7a50701db9b3446f4e4e8890ca2503ab4c45addb68bf2c58f79",
+    )
 
     SECRET_KEY = os.getenv("SECRET_KEY")
     SESSION_COOKIE_HTTPONLY = True

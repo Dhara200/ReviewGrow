@@ -13,6 +13,9 @@ CSRF_HEADER_NAME = "X-CSRF-Token"
 REGISTRATION_CSRF_SESSION_KEY = "_registration_csrf_token"
 REGISTRATION_CSRF_ISSUED_AT_KEY = "_registration_csrf_issued_at"
 REGISTRATION_CSRF_MAX_AGE_SECONDS = 3600
+LOGIN_CSRF_SESSION_KEY = "_login_csrf_token"
+LOGIN_CSRF_ISSUED_AT_KEY = "_login_csrf_issued_at"
+LOGIN_CSRF_MAX_AGE_SECONDS = 3600
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
@@ -22,6 +25,7 @@ def init_csrf(app):
         "csrf_token": get_csrf_token,
         "csrf_field": csrf_field,
         "registration_csrf_field": registration_csrf_field,
+        "login_csrf_field": login_csrf_field,
     })
 
 
@@ -64,6 +68,55 @@ def registration_csrf_field():
         f'<input type="hidden" name="{CSRF_FIELD_NAME}" '
         f'value="{escape(token)}">'
     )
+
+
+def login_csrf_field():
+    token = _get_fresh_pre_auth_token(
+        LOGIN_CSRF_SESSION_KEY,
+        LOGIN_CSRF_ISSUED_AT_KEY,
+        LOGIN_CSRF_MAX_AGE_SECONDS,
+    )
+    return Markup(
+        f'<input type="hidden" name="{CSRF_FIELD_NAME}" '
+        f'value="{escape(token)}">'
+    )
+
+
+def validate_login_csrf():
+    """Validate only the POST form token; query/header values are not accepted."""
+    expected = session.get(LOGIN_CSRF_SESSION_KEY)
+    issued_at = session.get(LOGIN_CSRF_ISSUED_AT_KEY)
+    supplied = request.form.get(CSRF_FIELD_NAME)
+    if not _valid_token_age(issued_at, LOGIN_CSRF_MAX_AGE_SECONDS):
+        return False
+    return bool(
+        expected
+        and supplied
+        and hmac.compare_digest(expected, supplied)
+        and _same_origin_when_supplied()
+    )
+
+
+def invalidate_login_csrf():
+    session.pop(LOGIN_CSRF_SESSION_KEY, None)
+    session.pop(LOGIN_CSRF_ISSUED_AT_KEY, None)
+
+
+def _get_fresh_pre_auth_token(token_key, issued_at_key, max_age_seconds):
+    token = session.get(token_key)
+    if not token or not _valid_token_age(session.get(issued_at_key), max_age_seconds):
+        token = secrets.token_urlsafe(32)
+        session[token_key] = token
+        session[issued_at_key] = int(time.time())
+    return token
+
+
+def _valid_token_age(issued_at, max_age_seconds):
+    try:
+        token_age = int(time.time()) - int(issued_at)
+    except (TypeError, ValueError):
+        return False
+    return 0 <= token_age <= max_age_seconds
 
 
 def _protect_authenticated_mutation():

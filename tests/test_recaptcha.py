@@ -1,5 +1,6 @@
 import unittest
 import time
+import re
 from unittest.mock import Mock, patch
 
 import requests
@@ -12,6 +13,7 @@ from app.services.csrf_service import (
     REGISTRATION_CSRF_SESSION_KEY,
     init_csrf,
 )
+from app.services.limiter_service import LimitStatus
 
 
 class RecaptchaServiceTests(unittest.TestCase):
@@ -148,6 +150,19 @@ class RecaptchaRouteTests(unittest.TestCase):
         init_csrf(self.app)
         self.app.register_blueprint(auth_bp)
         self.client = self.app.test_client()
+        self.login_limiter_patcher = patch("app.routes.auth._get_login_limiter")
+        self.login_limiter = self.login_limiter_patcher.start().return_value
+        self.login_limiter.check_ip.return_value = LimitStatus(False, 0, 0)
+        self.login_limiter.check_account_and_pair.return_value = (
+            LimitStatus(False, 0, 0), LimitStatus(False, 0, 0)
+        )
+
+    def tearDown(self):
+        self.login_limiter_patcher.stop()
+
+    def login_token(self):
+        page = self.client.get("/login-page").get_data(as_text=True)
+        return re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
 
     @patch("app.routes.auth.verify_recaptcha")
     @patch("app.routes.auth.get_connection")
@@ -176,25 +191,31 @@ class RecaptchaRouteTests(unittest.TestCase):
         verify.return_value = Mock(success=False)
         response = self.client.post(
             "/login-page",
-            data={"email": "test@example.com", "password": "password"},
+            data={
+                "email": "test@example.com", "password": "password",
+                "csrf_token": self.login_token(),
+            },
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn(b"Security verification failed", response.data)
         connection.assert_not_called()
 
     @patch("app.routes.auth.verify_recaptcha")
-    @patch("app.routes.auth.is_login_locked")
-    def test_existing_login_lockout_still_returns_rate_limit(self, locked, verify):
-        from datetime import datetime, timedelta
-
+    def test_layered_login_limiter_returns_rate_limit(self, verify):
         verify.return_value = Mock(success=True)
-        locked.return_value = datetime.utcnow() + timedelta(minutes=1)
+        self.login_limiter.check_account_and_pair.return_value = (
+            LimitStatus(True, 15, 60), LimitStatus(True, 5, 30)
+        )
         response = self.client.post(
             "/login-page",
-            data={"email": "test@example.com", "password": "password"},
+            data={
+                "email": "test@example.com", "password": "password",
+                "csrf_token": self.login_token(),
+            },
         )
         self.assertEqual(response.status_code, 429)
-        self.assertIn(b"Too many failed login attempts", response.data)
+        self.assertIn(b"Too many login attempts", response.data)
+        self.assertEqual("60", response.headers["Retry-After"])
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ import mysql.connector
 
 from app.config import Config
 from app.services.limiter_service import LimiterService, MySQLLimiterBackend
+from app.services.login_limiter_service import LoginLimiter, LoginLimiterPolicy
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -173,6 +174,34 @@ class MySQLLimiterTests(unittest.TestCase):
         for column in ("window_started_at", "created_at", "updated_at"):
             self.assertLessEqual(before, row[column])
             self.assertLessEqual(row[column], after)
+
+    def test_login_limiter_state_is_shared_across_instances_and_reinstantiation(self):
+        policy = LoginLimiterPolicy(
+            ip_threshold=2, ip_window_seconds=60, ip_block_seconds=120,
+            account_threshold=3, account_window_seconds=60,
+            account_block_seconds=120, ip_account_threshold=2,
+            ip_account_window_seconds=60, ip_account_block_seconds=120,
+        )
+        first_app_limiter = LoginLimiter(
+            policy, LimiterService(MySQLLimiterBackend(self.connect))
+        )
+        second_app_limiter = LoginLimiter(
+            policy, LimiterService(MySQLLimiterBackend(self.connect))
+        )
+        first_app_limiter.record_failure("user@example.com", "198.51.100.9")
+        second_app_limiter.record_failure("user@example.com", "198.51.100.9")
+
+        # A newly constructed service represents a restarted Flask/Gunicorn process.
+        restarted_limiter = LoginLimiter(
+            policy, LimiterService(MySQLLimiterBackend(self.connect))
+        )
+        ip_status = restarted_limiter.check_ip("198.51.100.9")
+        account_status, pair_status = restarted_limiter.check_account_and_pair(
+            "user@example.com", "198.51.100.9"
+        )
+        self.assertTrue(ip_status.blocked)
+        self.assertFalse(account_status.blocked)
+        self.assertTrue(pair_status.blocked)
 
 
 if __name__ == "__main__":
