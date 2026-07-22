@@ -1,5 +1,44 @@
 # MySQL integration tests
 
+## Atomic login limiter suite
+
+The limiter suite never creates or drops a database. Create a disposable local
+database and least-privileged test user explicitly. The name must end in
+`_test` or `_testing` and must not resemble an application database.
+
+Example as a local MySQL administrator (replace both passwords):
+
+```sql
+CREATE DATABASE reviewgrow_limiter_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'reviewgrow_limiter_test'@'%' IDENTIFIED BY '<disposable-test-password>';
+GRANT ALL PRIVILEGES ON reviewgrow_limiter_test.* TO 'reviewgrow_limiter_test'@'%';
+```
+
+Then opt in explicitly from PowerShell:
+
+```powershell
+$env:TEST_MYSQL_HOST = "127.0.0.1"
+$env:TEST_MYSQL_PORT = "3306"
+$env:TEST_MYSQL_USER = "reviewgrow_limiter_test"
+$env:TEST_MYSQL_PASSWORD = "<disposable-test-password>"
+$env:TEST_MYSQL_DATABASE = "reviewgrow_limiter_test"
+python -m unittest tests.integration.test_limiter_mysql -v
+```
+
+The suite prints only the validated database name, applies the real
+`20260722_001_create_rate_limit_counters.sql` migration, and creates, truncates,
+and drops only `rate_limit_counters` within that configured database. It never
+prints credentials and never falls back to the normal application database.
+
+Cleanup, performed separately by a local administrator after testing:
+
+```sql
+DROP DATABASE reviewgrow_limiter_test;
+DROP USER 'reviewgrow_limiter_test'@'%';
+```
+
+## Google review sync suite
+
 These tests require the local MySQL 8 service and an isolated database whose
 name ends in `_test`. They never fall back to an in-memory repository.
 

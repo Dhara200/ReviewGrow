@@ -5,6 +5,7 @@ from app.services.limiter_service import (
     LimiterService,
     hash_key,
     normalize_key,
+    MySQLLimiterBackend,
 )
 
 
@@ -86,6 +87,55 @@ class LimiterFacadeTests(unittest.TestCase):
                 self.service.record_failure("account", "a@b.com", **options)
         with self.assertRaises(ValueError):
             self.service.cleanup(older_than_seconds=0)
+
+
+class FailingCursor:
+    def __init__(self):
+        self.closed = False
+
+    def execute(self, query, params):
+        raise RuntimeError("simulated cursor failure with database details")
+
+    def close(self):
+        self.closed = True
+
+
+class FailingConnection:
+    def __init__(self):
+        self.cursor_instance = FailingCursor()
+        self.rolled_back = False
+        self.closed = False
+
+    def cursor(self, dictionary=False):
+        return self.cursor_instance
+
+    def rollback(self):
+        self.rolled_back = True
+
+    def close(self):
+        self.closed = True
+
+
+class MySQLBackendFaultTests(unittest.TestCase):
+    def test_cursor_failure_rolls_back_and_closes_without_memory_fallback(self):
+        connection = FailingConnection()
+        service = LimiterService(MySQLLimiterBackend(lambda: connection))
+        with self.assertRaisesRegex(RuntimeError, "simulated cursor failure"):
+            service.check_limit("account", "user@example.com")
+        self.assertTrue(connection.rolled_back)
+        self.assertTrue(connection.cursor_instance.closed)
+        self.assertTrue(connection.closed)
+
+    def test_connection_failure_propagates_without_fallback(self):
+        def unavailable():
+            raise RuntimeError("connection unavailable")
+
+        service = LimiterService(MySQLLimiterBackend(unavailable))
+        with self.assertRaisesRegex(RuntimeError, "connection unavailable"):
+            service.record_failure(
+                "account", "user@example.com", threshold=5,
+                window_seconds=60, block_seconds=120,
+            )
 
 
 if __name__ == "__main__":
