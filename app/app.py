@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from flask import Flask
@@ -26,6 +27,9 @@ from app.services.security_audit_service import validate_security_audit_config
 
 app = Flask(__name__)
 app.config.from_object(Config)
+# Keep Flask application events visible under Gunicorn's default WARNING root
+# level without changing handlers, access logging, or enabling DEBUG output.
+app.logger.setLevel(logging.INFO)
 app.secret_key = Config.SECRET_KEY
 app.wsgi_app = TrustedProxyFix(app.wsgi_app, app.config["TRUSTED_PROXY_IPS"])
 validate_login_limiter_config(app)
