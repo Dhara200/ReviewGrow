@@ -6,7 +6,8 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY app/ app/
+COPY worker.py .
 
 EXPOSE 5000
 
