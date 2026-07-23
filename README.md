@@ -163,6 +163,21 @@ The worker overrides the default container command to run:
 python worker.py
 ```
 
+### Database migrations before startup
+
+The Flask application and background worker never create or repair database
+schema at runtime. Apply all versioned migrations explicitly before starting or
+restarting either process:
+
+```bash
+./scripts/run_migrations.sh
+```
+
+The runtime database account only needs application data and read-only metadata
+permissions; schema-changing privileges belong to the deployment migration
+process. Startup fails safely when the database is unavailable or required
+migration-managed columns are missing.
+
 The web application runs through Gunicorn.
 
 ## CI/CD Pipeline

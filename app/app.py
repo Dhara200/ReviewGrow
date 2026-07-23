@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from flask import Flask
-from app.services.database_service import get_connection, ensure_mvp_schema
+from app.services.database_service import get_connection
 from app.routes.auth import auth_bp
 from app.routes.business import business_bp
 from app.routes.reviews import review_bp
@@ -24,6 +24,7 @@ from app.services.session_security_service import init_session_security
 from app.services.login_limiter_service import validate_login_limiter_config
 from app.services.login_security_service import validate_login_dummy_hash
 from app.services.security_audit_service import validate_security_audit_config
+from app.services.schema_compatibility_service import validate_runtime_schema
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -37,6 +38,7 @@ validate_login_dummy_hash(app)
 validate_security_audit_config(app)
 init_session_security(app)
 init_csrf(app)
+validate_runtime_schema()
 
 
 @app.context_processor
@@ -59,12 +61,6 @@ app.register_blueprint(subscription_bp)
 app.register_blueprint(ai_consultant_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(seo_bp)
-
-try:
-    ensure_mvp_schema()
-except Exception as e:
-    print(f"Schema check skipped: {e}")
-
 
 def get_landing_hero_images():
     allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".avif"}

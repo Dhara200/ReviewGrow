@@ -21,7 +21,7 @@ from app.services.analysis_job_service import (
 from app.services.ai_consultant_service import generate_consultant_report
 from app.services.business_analytics_service import refresh_business_review_analytics
 from app.services.database_service import get_connection
-from app.services.database_service import ensure_mvp_schema
+from app.services.schema_compatibility_service import validate_runtime_schema
 from app.services.google_review_sync_execution_service import run_google_review_sync
 from app.services.google_review_post_sync_service import perform_google_review_post_sync
 from app.services.google_review_sync_job_service import GoogleReviewSyncJobService
@@ -508,12 +508,12 @@ def _safe_error_message(error):
     return message[:500]
 
 
-if __name__ == "__main__":
+def main():
     _install_signal_handlers()
-    try:
-        ensure_mvp_schema()
-    except Exception as error:
-        print(f"Schema check skipped: {error}", flush=True)
-
+    validate_runtime_schema()
     print("Background worker started.", flush=True)
     run_worker_forever()
+
+
+if __name__ == "__main__":
+    main()

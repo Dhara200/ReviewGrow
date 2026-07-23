@@ -17,10 +17,11 @@ class ApplicationLoggingTests(unittest.TestCase):
         # Import the real Gunicorn target while preventing its unrelated startup
         # schema compatibility check from opening a database connection.
         sys.modules.pop("app.app", None)
-        cls.ensure_patch = patch(
-            "app.services.database_service.ensure_mvp_schema", return_value=None
+        cls.schema_patch = patch(
+            "app.services.schema_compatibility_service.validate_runtime_schema",
+            return_value=None,
         )
-        cls.ensure_patch.start()
+        cls.schema_patch.start()
         cls.config_patches = (
             patch.object(Config, "APP_ENV", "production"),
             patch.object(Config, "SECRET_KEY", "s" * 32),
@@ -37,7 +38,7 @@ class ApplicationLoggingTests(unittest.TestCase):
     def tearDownClass(cls):
         for active_patch in reversed(cls.config_patches):
             active_patch.stop()
-        cls.ensure_patch.stop()
+        cls.schema_patch.stop()
 
     def test_production_application_logger_effective_level_is_info(self):
         self.assertEqual(logging.INFO, self.app.logger.level)
