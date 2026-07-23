@@ -2,7 +2,7 @@ import os
 import math
 from urllib.parse import urlencode
 from uuid import uuid4
-from flask import Blueprint, flash, request, jsonify, redirect, session, render_template
+from flask import Blueprint, current_app, flash, request, jsonify, redirect, session, render_template
 from werkzeug.utils import secure_filename
 from app.services.database_service import (
     get_connection,
@@ -74,6 +74,7 @@ def upload_reviews_ui():
 
     business_id = request.form.get("business_id")
     upload_redirect = f"/upload-reviews/{business_id}" if business_id else "/my-businesses"
+    upload_path = None
 
     try:
 
@@ -187,6 +188,13 @@ def upload_reviews_ui():
 
         flash("Review upload failed. Please check the Excel file and try again.", "danger")
         return redirect(upload_redirect)
+
+    finally:
+        if upload_path:
+            try:
+                os.remove(upload_path)
+            except OSError:
+                current_app.logger.exception("Failed to delete temporary review upload")
 
 # ==========================================
 # REVIEW HISTORY

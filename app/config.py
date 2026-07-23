@@ -60,6 +60,8 @@ class Config:
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
     DEBUG = _get_bool("APP_DEBUG", False)
     TESTING = False
+    # Allow bounded multipart framing around the separately enforced 10 MiB file.
+    MAX_CONTENT_LENGTH = 11 * 1024 * 1024
     SECURITY_AUDIT_ENABLED = _get_strict_bool(
         "SECURITY_AUDIT_ENABLED", APP_ENV == "production"
     )
