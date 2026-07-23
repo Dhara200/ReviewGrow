@@ -20,8 +20,11 @@ class SchemaCompatibilityServiceTests(unittest.TestCase):
             for column in columns
         ]
 
-    def _connection(self, rows):
+    def _connection(self, rows, active_database="reviewgrow_test"):
         cursor = MagicMock()
+        cursor.fetchone.return_value = {
+            "ACTIVE_DATABASE": active_database,
+        }
         cursor.fetchall.return_value = rows
         connection = MagicMock()
         connection.cursor.return_value = cursor
@@ -33,10 +36,17 @@ class SchemaCompatibilityServiceTests(unittest.TestCase):
         with patch.object(database_service, "get_connection", return_value=connection):
             schema.validate_runtime_schema()
 
-        sql = cursor.execute.call_args.args[0].upper()
+        self.assertEqual(cursor.execute.call_count, 2)
+        sql = cursor.execute.call_args_list[1].args[0].upper()
         self.assertIn("INFORMATION_SCHEMA.COLUMNS", sql)
-        for ddl in ("CREATE ", "ALTER ", "DROP ", "TRUNCATE ", "RENAME "):
-            self.assertNotIn(ddl, sql)
+        for call in cursor.execute.call_args_list:
+            statement = call.args[0].upper()
+            for ddl in ("CREATE ", "ALTER ", "DROP ", "TRUNCATE ", "RENAME "):
+                self.assertNotIn(ddl, statement)
+        self.assertEqual(
+            cursor.execute.call_args_list[1].args[1][0],
+            "reviewgrow_test",
+        )
         connection.commit.assert_not_called()
         connection.rollback.assert_not_called()
         cursor.close.assert_called_once_with()
@@ -87,7 +97,7 @@ class SchemaCompatibilityServiceTests(unittest.TestCase):
             schema.validate_runtime_schema()
 
         get_connection.assert_called_once_with()
-        cursor.execute.assert_called_once()
+        self.assertEqual(cursor.execute.call_count, 2)
 
     def test_failed_validation_is_not_cached_and_next_attempt_retries(self):
         valid_connection, _ = self._connection(self._valid_rows())
@@ -108,6 +118,70 @@ class SchemaCompatibilityServiceTests(unittest.TestCase):
 
         self.assertTrue(schema._validated)
         self.assertEqual(get_connection.call_count, 2)
+
+    def test_wrong_active_schema_fails_with_all_required_metadata_missing(self):
+        connection, cursor = self._connection([], active_database="wrong_schema")
+
+        with patch.object(database_service, "get_connection", return_value=connection):
+            with self.assertRaisesRegex(
+                schema.SchemaCompatibilityError,
+                "Database schema is incompatible",
+            ):
+                schema.validate_runtime_schema()
+
+        self.assertEqual(
+            cursor.execute.call_args_list[1].args[1][0],
+            "wrong_schema",
+        )
+        self.assertEqual(
+            len(schema._missing_required_metadata([])),
+            sum(len(columns) for columns in schema.REQUIRED_SCHEMA.values()),
+        )
+
+    def test_missing_one_column_reports_only_that_column(self):
+        rows = self._valid_rows()
+        rows.remove({"table_name": "businesses", "column_name": "id"})
+
+        self.assertEqual(
+            schema._missing_required_metadata(rows),
+            ["businesses.id"],
+        )
+
+    def test_tuple_and_dictionary_metadata_rows_are_both_supported(self):
+        tuple_rows = [
+            (row["table_name"], row["column_name"])
+            for row in self._valid_rows()
+        ]
+        uppercase_dictionary_rows = [
+            {
+                "TABLE_NAME": row["table_name"],
+                "COLUMN_NAME": row["column_name"],
+            }
+            for row in self._valid_rows()
+        ]
+
+        self.assertEqual(schema._missing_required_metadata(tuple_rows), [])
+        self.assertEqual(
+            schema._missing_required_metadata(uppercase_dictionary_rows),
+            [],
+        )
+        with self.assertRaisesRegex(
+            schema.SchemaCompatibilityError,
+            "metadata response format",
+        ):
+            schema._missing_required_metadata([{"unexpected": "shape"}])
+
+    def test_empty_active_database_fails_clearly_and_is_not_cached(self):
+        connection, _ = self._connection([], active_database=None)
+
+        with patch.object(database_service, "get_connection", return_value=connection):
+            with self.assertRaisesRegex(
+                schema.SchemaCompatibilityError,
+                "no active schema selected",
+            ):
+                schema.validate_runtime_schema()
+
+        self.assertFalse(schema._validated)
 
     def test_legacy_schema_initializer_has_been_removed(self):
         self.assertFalse(hasattr(database_service, "ensure_mvp_schema"))

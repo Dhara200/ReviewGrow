@@ -1,7 +1,11 @@
+import logging
 import threading
+from collections.abc import Mapping
 
-from app.config import Config
 from app.services import database_service
+
+
+logger = logging.getLogger(__name__)
 
 
 class SchemaCompatibilityError(RuntimeError):
@@ -77,18 +81,43 @@ def _validate_runtime_schema_uncached():
     try:
         connection = database_service.get_connection()
         cursor = connection.cursor(dictionary=True)
+        logger.info(
+            "Schema compatibility validation: stage=connection "
+            "active_database_selected=unknown"
+        )
+        cursor.execute("SELECT DATABASE() AS active_database")
+        active_database = _row_values(
+            cursor.fetchone(),
+            ("active_database",),
+        )[0]
+        if not isinstance(active_database, str) or not active_database.strip():
+            raise SchemaCompatibilityError(
+                "Database connection has no active schema selected."
+            )
+        logger.info(
+            "Schema compatibility validation: stage=database_selection "
+            "active_database_selected=true"
+        )
+
         table_names = tuple(sorted(REQUIRED_SCHEMA))
         placeholders = ",".join(["%s"] * len(table_names))
         cursor.execute(
             f"""
-            SELECT table_name, column_name
+            SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name
             FROM information_schema.columns
-            WHERE table_schema=%s
-            AND table_name IN ({placeholders})
+            WHERE TABLE_SCHEMA=%s
+            AND TABLE_NAME IN ({placeholders})
             """,
-            (Config.DB_NAME, *table_names),
+            (active_database, *table_names),
         )
         rows = cursor.fetchall()
+        logger.info(
+            "Schema compatibility validation: stage=metadata "
+            "metadata_row_count=%d",
+            len(rows),
+        )
+    except SchemaCompatibilityError:
+        raise
     except Exception:
         raise SchemaCompatibilityError(
             "Database unavailable during schema compatibility check."
@@ -105,21 +134,7 @@ def _validate_runtime_schema_uncached():
             except Exception:
                 pass
 
-    present = {table: set() for table in REQUIRED_SCHEMA}
-    for row in rows:
-        if isinstance(row, dict):
-            table_name = row.get("table_name")
-            column_name = row.get("column_name")
-        else:
-            table_name, column_name = row
-        if table_name in present and column_name:
-            present[table_name].add(column_name)
-
-    missing = sorted(
-        f"{table}.{column}"
-        for table, columns in REQUIRED_SCHEMA.items()
-        for column in columns - present[table]
-    )
+    missing = _missing_required_metadata(rows)
     if missing:
         summary = ", ".join(missing[:8])
         if len(missing) > 8:
@@ -128,6 +143,44 @@ def _validate_runtime_schema_uncached():
             "Database schema is incompatible; apply pending migrations. "
             f"Missing required metadata: {summary}."
         )
+
+
+def _row_values(row, expected_names):
+    if isinstance(row, Mapping):
+        normalized = {
+            str(key).casefold(): value
+            for key, value in row.items()
+        }
+        try:
+            return tuple(normalized[name.casefold()] for name in expected_names)
+        except KeyError:
+            raise SchemaCompatibilityError(
+                "Database metadata response format is incompatible."
+            ) from None
+
+    if isinstance(row, (tuple, list)) and len(row) >= len(expected_names):
+        return tuple(row[:len(expected_names)])
+
+    raise SchemaCompatibilityError(
+        "Database metadata response format is incompatible."
+    )
+
+
+def _missing_required_metadata(rows):
+    present = {table: set() for table in REQUIRED_SCHEMA}
+    for row in rows:
+        table_name, column_name = _row_values(
+            row,
+            ("table_name", "column_name"),
+        )
+        if table_name in present and column_name:
+            present[table_name].add(column_name)
+
+    return sorted(
+        f"{table}.{column}"
+        for table, columns in REQUIRED_SCHEMA.items()
+        for column in columns - present[table]
+    )
 
 
 def _reset_validation_cache_for_tests():
