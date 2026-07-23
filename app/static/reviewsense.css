@@ -1246,8 +1246,154 @@ td {
 }
 
 .rs-problem-solution-section {
+    scroll-margin-top: calc(var(--rs-topbar) + 1rem);
     background:
         linear-gradient(180deg, var(--rs-bg) 0%, var(--rs-surface-muted) 100%);
+}
+
+.rs-business-reality-section {
+    background: var(--rs-surface);
+}
+
+.rs-business-reality-intro {
+    max-width: 850px;
+    font-size: 1.05rem;
+    line-height: 1.75;
+}
+
+.rs-business-reality-visual {
+    overflow: hidden;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius);
+    background: var(--rs-surface-muted);
+    box-shadow: var(--rs-shadow);
+}
+
+.rs-business-reality-visual img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+}
+
+.rs-reality-card {
+    position: relative;
+    overflow: hidden;
+    padding: 1.4rem;
+}
+
+.rs-reality-card::after {
+    position: absolute;
+    top: -55px;
+    right: -55px;
+    width: 140px;
+    height: 140px;
+    border-radius: 999px;
+    content: "";
+    pointer-events: none;
+}
+
+.rs-reality-card-danger {
+    border-top: 4px solid #ef4444;
+}
+
+.rs-reality-card-danger::after {
+    background: rgba(239, 68, 68, .1);
+}
+
+.rs-reality-card-warning {
+    border-top: 4px solid #f59e0b;
+}
+
+.rs-reality-card-warning::after {
+    background: rgba(245, 158, 11, .12);
+}
+
+.rs-reality-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.rs-reality-card-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: .8rem;
+    min-height: 3.5rem;
+    margin-bottom: 1.2rem;
+}
+
+.rs-reality-card-icon {
+    display: inline-grid;
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 2.6rem;
+    place-items: center;
+    border-radius: .85rem;
+    font-size: 1.15rem;
+}
+
+.rs-reality-card-danger .rs-reality-card-icon {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.rs-reality-card-warning .rs-reality-card-icon {
+    background: #fff7ed;
+    color: #d97706;
+}
+
+.rs-reality-list {
+    display: grid;
+    gap: .8rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rs-reality-list li {
+    position: relative;
+    padding-left: 1.25rem;
+    color: var(--rs-muted);
+    font-size: .92rem;
+    line-height: 1.55;
+}
+
+.rs-reality-list li::before {
+    position: absolute;
+    top: .57em;
+    left: 0;
+    width: .42rem;
+    height: .42rem;
+    border-radius: 999px;
+    background: currentColor;
+    content: "";
+    opacity: .7;
+}
+
+.rs-business-reality-callout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1.4rem 1.5rem;
+    border: 1px solid rgba(37, 99, 235, .2);
+    border-radius: var(--rs-radius);
+    background: var(--rs-primary-soft);
+    box-shadow: var(--rs-shadow-sm);
+}
+
+.rs-business-reality-callout p {
+    max-width: 760px;
+    color: var(--rs-text);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.6;
+}
+
+.rs-business-reality-callout .btn-solid {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .rs-problem-card,
@@ -1530,6 +1676,11 @@ td {
     .rs-timeline-item:not(:last-child)::after {
         display: none;
     }
+
+    .rs-business-reality-callout {
+        align-items: flex-start;
+        flex-direction: column;
+    }
 }
 
 @media (max-width: 575.98px) {
@@ -1623,6 +1774,19 @@ td {
 
     .rs-benefit-card {
         align-items: flex-start;
+    }
+
+    .rs-business-reality-intro {
+        font-size: 1rem;
+    }
+
+    .rs-business-reality-callout {
+        padding: 1.1rem;
+    }
+
+    .rs-business-reality-callout .btn-solid {
+        width: 100%;
+        white-space: normal;
     }
 }
 
