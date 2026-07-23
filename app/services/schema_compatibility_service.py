@@ -41,6 +41,11 @@ REQUIRED_SCHEMA = {
         "worker_id",
         "lease_expires_at",
     },
+    "ai_usage_logs": {
+        "user_id",
+        "request_status",
+        "created_at",
+    },
     "google_review_sync_jobs": {
         "id",
         "user_id",

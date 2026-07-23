@@ -25,6 +25,7 @@ from app.services.login_limiter_service import validate_login_limiter_config
 from app.services.login_security_service import validate_login_dummy_hash
 from app.services.security_audit_service import validate_security_audit_config
 from app.services.schema_compatibility_service import validate_runtime_schema
+from app.services.sync_ai_security_service import validate_sync_ai_security_config
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -36,6 +37,7 @@ app.wsgi_app = TrustedProxyFix(app.wsgi_app, app.config["TRUSTED_PROXY_IPS"])
 validate_login_limiter_config(app)
 validate_login_dummy_hash(app)
 validate_security_audit_config(app)
+validate_sync_ai_security_config(app)
 init_session_security(app)
 init_csrf(app)
 validate_runtime_schema()

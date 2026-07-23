@@ -23,11 +23,14 @@
 <div class="row g-4">
     <div class="col-lg-7">
         <div class="rs-card rs-card-lg">
-            <form method="POST">
+            {% if error_message %}
+            <div class="alert alert-danger" role="alert">{{ error_message }}</div>
+            {% endif %}
+            <form method="POST" id="reviewAssistantForm">
                 {{ csrf_field() }}
                 <div class="field">
                     <label for="review_text">Customer review</label>
-                    <textarea id="review_text" name="review_text" class="form-control" rows="10" placeholder="Paste a customer review here..." required></textarea>
+                    <textarea id="review_text" name="review_text" class="form-control" rows="10" maxlength="5000" placeholder="Paste a customer review here..." required></textarea>
                     <div class="form-hint">Use real customer wording for the most useful sentiment and reply output.</div>
                 </div>
 
@@ -140,6 +143,12 @@
 
 {% block scripts %}
 <script>
+document.getElementById("reviewAssistantForm")?.addEventListener("submit", event => {
+    event.currentTarget.querySelectorAll('button[type="submit"]').forEach(button => {
+        button.disabled = true;
+    });
+});
+
 async function copyReply() {
     const replyText = document.getElementById("replyContent").innerText;
     const button = document.getElementById("copyBtn");

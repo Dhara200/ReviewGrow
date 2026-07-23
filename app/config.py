@@ -55,6 +55,14 @@ def _get_bounded_login_int(name, default, minimum, maximum):
     return value
 
 
+def _get_configured_int(name, default):
+    raw_value = os.getenv(name, str(default))
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(f"{name} must be an integer.") from error
+
+
 class Config:
     APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
@@ -180,7 +188,9 @@ class Config:
             1, GOOGLE_REVIEW_SYNC_LEASE_SECONDS // 4
         )
     MAX_REVIEWS_PER_MONTH = int(os.getenv("MAX_REVIEWS_PER_MONTH", 0))
-    MAX_AI_REQUESTS_PER_MONTH = int(os.getenv("MAX_AI_REQUESTS_PER_MONTH", 0))
+    MAX_AI_REQUESTS_PER_MONTH = _get_configured_int(
+        "MAX_AI_REQUESTS_PER_MONTH", 500
+    )
     MAX_TOKENS_PER_MONTH = int(os.getenv("MAX_TOKENS_PER_MONTH", 0))
     GEMINI_FLASH_INPUT_COST_PER_1M = float(os.getenv("GEMINI_FLASH_INPUT_COST_PER_1M", 0.30))
     GEMINI_FLASH_OUTPUT_COST_PER_1M = float(os.getenv("GEMINI_FLASH_OUTPUT_COST_PER_1M", 2.50))

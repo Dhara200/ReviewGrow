@@ -14,7 +14,9 @@ from typing import Protocol
 from app.services.database_service import get_connection
 
 
-SUPPORTED_SCOPES = frozenset({"ip", "account", "ip_account"})
+SUPPORTED_SCOPES = frozenset({
+    "ip", "account", "ip_account", "ai_ip", "ai_user",
+})
 
 
 @dataclass(frozen=True)
@@ -45,9 +47,9 @@ class LimiterBackend(Protocol):
 def normalize_key(scope: str, key) -> str:
     """Return a stable canonical key without retaining the caller's raw value."""
     _validate_scope(scope)
-    if scope == "ip":
+    if scope in {"ip", "ai_ip"}:
         return ipaddress.ip_address(_required_text(key)).compressed.lower()
-    if scope == "account":
+    if scope in {"account", "ai_user"}:
         return _required_text(key).casefold()
 
     if not isinstance(key, (tuple, list)) or len(key) != 2:
