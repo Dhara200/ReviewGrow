@@ -1255,6 +1255,12 @@ td {
     background: var(--rs-surface);
 }
 
+.rs-business-reality-container {
+    width: min(1560px, 100%);
+    margin-inline: auto;
+    padding-inline: clamp(2rem, 4vw, 4rem);
+}
+
 .rs-business-reality-intro {
     max-width: 850px;
     font-size: 1.05rem;
@@ -1262,6 +1268,7 @@ td {
 }
 
 .rs-business-reality-visual {
+    display: flex;
     overflow: hidden;
     border: 1px solid var(--rs-border);
     border-radius: var(--rs-radius);
@@ -1272,15 +1279,21 @@ td {
 .rs-business-reality-visual img {
     display: block;
     width: 100%;
-    height: auto;
-    aspect-ratio: 3 / 2;
-    object-fit: cover;
+    height: 100%;
+    min-height: 100%;
+    object-fit: contain;
+    object-position: center;
 }
 
 .rs-reality-card {
+    display: flex;
+    flex-direction: column;
     position: relative;
     overflow: hidden;
-    padding: 1.4rem;
+    min-height: 100%;
+    padding: clamp(1.3rem, 1.8vw, 1.75rem);
+    border-radius: var(--rs-radius);
+    box-shadow: var(--rs-shadow);
 }
 
 .rs-reality-card::after {
@@ -1319,8 +1332,8 @@ td {
     display: flex;
     align-items: flex-start;
     gap: .8rem;
-    min-height: 3.5rem;
-    margin-bottom: 1.2rem;
+    min-height: 4.5rem;
+    margin-bottom: 1.35rem;
 }
 
 .rs-reality-card-icon {
@@ -1345,55 +1358,140 @@ td {
 
 .rs-reality-list {
     display: grid;
-    gap: .8rem;
+    gap: .85rem;
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
 .rs-reality-list li {
-    position: relative;
-    padding-left: 1.25rem;
+    display: flex;
+    align-items: flex-start;
+    gap: .7rem;
     color: var(--rs-muted);
     font-size: .92rem;
     line-height: 1.55;
 }
 
-.rs-reality-list li::before {
-    position: absolute;
-    top: .57em;
-    left: 0;
-    width: .42rem;
-    height: .42rem;
-    border-radius: 999px;
-    background: currentColor;
-    content: "";
-    opacity: .7;
+.rs-reality-list li > i {
+    flex: 0 0 1rem;
+    width: 1rem;
+    margin-top: .22rem;
+    font-size: .82rem;
+    text-align: center;
+}
+
+.rs-reality-card-danger .rs-reality-list li > i {
+    color: #dc2626;
+}
+
+.rs-reality-card-warning .rs-reality-list li > i {
+    color: #d97706;
 }
 
 .rs-business-reality-callout {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1.5rem;
-    padding: 1.4rem 1.5rem;
+    gap: clamp(1.25rem, 2.5vw, 2.5rem);
+    overflow: hidden;
+    padding: clamp(1.75rem, 3vw, 2.75rem);
+    border: 1px solid rgba(37, 99, 235, .32);
+    border-radius: calc(var(--rs-radius) + .35rem);
+    background:
+        radial-gradient(circle at 0% 0%, rgba(96, 165, 250, .2), transparent 38%),
+        linear-gradient(120deg, rgba(239, 246, 255, .98), rgba(219, 234, 254, .86));
+    box-shadow: 0 22px 50px rgba(37, 99, 235, .14);
+}
+
+.rs-reality-quote-icon {
+    display: inline-grid;
+    flex: 0 0 auto;
+    width: clamp(3.5rem, 5vw, 4.75rem);
+    height: clamp(3.5rem, 5vw, 4.75rem);
+    place-items: center;
     border: 1px solid rgba(37, 99, 235, .2);
-    border-radius: var(--rs-radius);
-    background: var(--rs-primary-soft);
+    border-radius: 1.35rem;
+    background: rgba(255, 255, 255, .72);
+    color: var(--rs-primary);
+    font-size: clamp(2rem, 3vw, 3rem);
     box-shadow: var(--rs-shadow-sm);
 }
 
-.rs-business-reality-callout p {
-    max-width: 760px;
-    color: var(--rs-text);
-    font-size: 1.05rem;
-    font-weight: 700;
-    line-height: 1.6;
+.rs-reality-callout-content {
+    flex: 1 1 auto;
+    max-width: 900px;
 }
 
-.rs-business-reality-callout .btn-solid {
+.rs-reality-callout-label {
+    color: var(--rs-primary);
+    font-size: .76rem;
+    font-weight: 850;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+}
+
+.rs-reality-callout-statement {
+    color: #172554;
+    font-size: clamp(1.2rem, 1.55vw, 1.55rem);
+    font-weight: 700;
+    line-height: 1.55;
+}
+
+.rs-reality-callout-statement span {
+    color: var(--rs-primary);
+    font-weight: 850;
+    text-decoration: underline;
+    text-decoration-color: rgba(37, 99, 235, .28);
+    text-decoration-thickness: .2em;
+    text-underline-offset: .08em;
+}
+
+.rs-reality-callout-cta {
     flex: 0 0 auto;
+    min-height: 3.25rem;
+    padding-inline: 1.45rem;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    box-shadow: 0 12px 26px rgba(37, 99, 235, .24);
     white-space: nowrap;
+}
+
+.rs-reality-callout-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px rgba(37, 99, 235, .3);
+}
+
+.rs-reality-callout-cta:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .35);
+    outline-offset: 3px;
+}
+
+:root[data-theme="dark"] .rs-business-reality-callout {
+    border-color: rgba(96, 165, 250, .38);
+    background:
+        radial-gradient(circle at 0% 0%, rgba(37, 99, 235, .24), transparent 40%),
+        linear-gradient(120deg, rgba(30, 41, 59, .98), rgba(30, 58, 138, .5));
+    box-shadow: 0 24px 54px rgba(0, 0, 0, .28);
+}
+
+:root[data-theme="dark"] .rs-reality-quote-icon {
+    border-color: rgba(96, 165, 250, .3);
+    background: rgba(15, 23, 42, .62);
+}
+
+:root[data-theme="dark"] .rs-reality-callout-statement {
+    color: #eff6ff;
+}
+
+:root[data-theme="dark"] .rs-reality-card-danger .rs-reality-card-icon {
+    background: rgba(220, 38, 38, .16);
+    color: #fca5a5;
+}
+
+:root[data-theme="dark"] .rs-reality-card-warning .rs-reality-card-icon {
+    background: rgba(217, 119, 6, .16);
+    color: #fcd34d;
 }
 
 .rs-problem-card,
@@ -1681,6 +1779,11 @@ td {
         align-items: flex-start;
         flex-direction: column;
     }
+
+    .rs-business-reality-visual img {
+        height: auto;
+        aspect-ratio: 3 / 2;
+    }
 }
 
 @media (max-width: 575.98px) {
@@ -1778,6 +1881,14 @@ td {
 
     .rs-business-reality-intro {
         font-size: 1rem;
+    }
+
+    .rs-business-reality-container {
+        padding-inline: 1rem;
+    }
+
+    .rs-reality-card-heading {
+        min-height: 0;
     }
 
     .rs-business-reality-callout {
