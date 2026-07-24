@@ -51,3 +51,15 @@ def robots():
         "",
     ))
     return Response(content, content_type="text/plain; charset=utf-8")
+
+from flask import send_from_directory
+from pathlib import Path
+
+@app.route("/BingSiteAuth.xml")
+def bing_site_auth():
+    project_root = Path(__file__).resolve().parents[2]  # Adjust if your file is in a different location
+    return send_from_directory(
+        project_root,
+        "BingSiteAuth.xml",
+        mimetype="application/xml"
+    )
