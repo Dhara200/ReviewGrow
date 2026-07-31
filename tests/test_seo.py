@@ -21,8 +21,8 @@ class SeoRouteTests(unittest.TestCase):
             return render_template(
                 "index.html",
                 landing_hero_images=[],
-                subscription_price=1999,
-                original_subscription_price=2999,
+                subscription_price=1499,
+                original_subscription_price=1999,
             )
 
         self.client = self.app.test_client()

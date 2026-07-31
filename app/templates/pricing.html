@@ -84,8 +84,8 @@
                 <div class="rs-card rs-card-lg rs-pricing-card h-100">
                     <h2 class="h4 fw-bold mb-2">ReviewGrow Premium</h2>
                     <div class="pricing-price mb-4">
-                        <span class="pricing-original-price">₹{{ "%.0f"|format(original_subscription_price) }}</span>
-                        <span class="display-5 fw-bold text-primary">₹{{ "%.0f"|format(subscription_price) }}<span class="h6 text-muted">/month</span></span>
+                        <span class="pricing-original-price">₹{{ "{:,.0f}".format(original_subscription_price) }}</span>
+                        <span class="display-5 fw-bold text-primary">₹{{ "{:,.0f}".format(subscription_price) }}<span class="h6 text-muted">/month</span></span>
                     </div>
                     <div class="rs-pricing-list mb-4">
                         {% for item in [
@@ -122,7 +122,7 @@
                         </div>
                         <div class="d-flex justify-content-between gap-3">
                             <span class="text-muted">Amount</span>
-                            <strong>₹{{ "%.0f"|format(subscription_price) }}</strong>
+                            <strong>₹{{ "{:,.0f}".format(subscription_price) }}</strong>
                         </div>
                     </div>
 
@@ -140,7 +140,7 @@
                     </div>
                     {% else %}
                     <div>
-                        <button id="razorpay-button" type="button" class="btn-solid w-100">Pay ₹{{ "%.0f"|format(subscription_price) }} securely with Razorpay</button>
+                        <button id="razorpay-button" type="button" class="btn-solid w-100">Pay ₹{{ "{:,.0f}".format(subscription_price) }} securely with Razorpay</button>
                         <p class="small text-muted text-center mt-3 mb-0">
                             By submitting payment details, you acknowledge the
                             <a href="/terms-of-service">Terms of Service</a> and

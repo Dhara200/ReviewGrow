@@ -12,9 +12,15 @@ Set these deployment variables (placeholders only):
 RAZORPAY_KEY_ID=rzp_test_replace_me
 RAZORPAY_KEY_SECRET=replace_me
 RAZORPAY_WEBHOOK_SECRET=replace_with_random_webhook_secret
+SUBSCRIPTION_PRICE=1499
+ORIGINAL_SUBSCRIPTION_PRICE=1999
 ```
 
-The app can start without a webhook secret. `/webhooks/razorpay` fails closed with HTTP 503 until it is configured. Secrets are never sent to templates or JSON; only `RAZORPAY_KEY_ID` is public.
+The subscription price variables are INR rupees; the authoritative backend plan
+mapping converts `SUBSCRIPTION_PRICE=1499` to `149900` paise. The app can start
+without a webhook secret. `/webhooks/razorpay` fails closed with HTTP 503 until
+it is configured. Secrets are never sent to templates or JSON; only
+`RAZORPAY_KEY_ID` is public.
 
 ## Test Mode and local setup
 

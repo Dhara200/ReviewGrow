@@ -94,10 +94,18 @@ def _provider_is_paid(client, order_id, payment_id, amount_paise, currency):
         raise PaymentError("Payment does not match the order.")
     if int(payment.get("amount", -1)) != amount_paise or payment.get("currency") != currency:
         raise PaymentError("Payment amount or currency mismatch.")
+    order = client.order.fetch(order_id)
+    if (
+        int(order.get("amount", -1)) != amount_paise
+        or order.get("currency") != currency
+    ):
+        raise PaymentError("Order amount or currency mismatch.")
     if payment.get("status") == "captured":
         return True
-    order = client.order.fetch(order_id)
-    return order.get("status") == "paid" and int(order.get("amount_paid", 0)) >= amount_paise
+    return (
+        order.get("status") == "paid"
+        and int(order.get("amount_paid", -1)) == amount_paise
+    )
 
 
 def process_success(order_id, payment_id, user_id=None, signature=None, client=None):

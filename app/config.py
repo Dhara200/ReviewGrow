@@ -95,8 +95,8 @@ class Config:
         "openid email profile https://www.googleapis.com/auth/business.manage"
     )
 
-    SUBSCRIPTION_PRICE = float(os.getenv("SUBSCRIPTION_PRICE", 1999))
-    ORIGINAL_SUBSCRIPTION_PRICE = float(os.getenv("ORIGINAL_SUBSCRIPTION_PRICE", 2999))
+    SUBSCRIPTION_PRICE = float(os.getenv("SUBSCRIPTION_PRICE", 1499))
+    ORIGINAL_SUBSCRIPTION_PRICE = float(os.getenv("ORIGINAL_SUBSCRIPTION_PRICE", 1999))
     RAZORPAY_KEY_ID = (os.getenv("RAZORPAY_KEY_ID") or "").strip()
     RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
     RAZORPAY_WEBHOOK_SECRET = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()
