@@ -101,7 +101,7 @@ class Config:
     RAZORPAY_KEY_SECRET = (os.getenv("RAZORPAY_KEY_SECRET") or "").strip()
     RAZORPAY_WEBHOOK_SECRET = (os.getenv("RAZORPAY_WEBHOOK_SECRET") or "").strip()
     CONTACT_PHONE = (os.getenv("CONTACT_PHONE") or "8778358580").strip()
-    WHATSAPP_NUMBER = (os.getenv("WHATSAPP_NUMBER") or "8778358580").strip()
+    WHATSAPP_NUMBER = (os.getenv("WHATSAPP_NUMBER") or "918778358580").strip()
 
     MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", 5))
     LOGIN_LOCK_MINUTES = int(os.getenv("LOGIN_LOCK_MINUTES", 15))

@@ -48,12 +48,27 @@
                             </div>
                         </div>
 
-                        <div class="gbp-register-notice mb-3">
-                            <div class="gbp-register-notice-icon">
-                                <i class="bi bi-info-circle"></i>
-                            </div>
-                            <div>
-                                <h2 class="h6 fw-bold mb-2">Google Business Profile Notice</h2>
+                        <div class="gbp-register-notice mb-3" data-gbp-notice>
+                            <button
+                                class="gbp-register-notice-header"
+                                type="button"
+                                aria-expanded="false"
+                                aria-controls="gbp-register-notice-content"
+                                data-gbp-notice-toggle
+                            >
+                                <span class="gbp-register-notice-icon" aria-hidden="true">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                                <span class="h6 fw-bold mb-0">Google Business Profile Notice</span>
+                                <i class="bi bi-chevron-down gbp-register-notice-chevron" aria-hidden="true"></i>
+                            </button>
+                            <div
+                                class="gbp-register-notice-content"
+                                id="gbp-register-notice-content"
+                                aria-hidden="true"
+                                data-gbp-notice-content
+                            >
+                                <div class="gbp-register-notice-copy">
                                 <p class="mb-2">
                                     Please register using the same email address that is linked to your Google Business Profile (GBP).
                                 </p>
@@ -66,6 +81,7 @@
                                 <p class="small fw-semibold mb-0">
                                     Your Google account email must match your ReviewGrow account email when connecting Google Business Profile.
                                 </p>
+                                </div>
                             </div>
                         </div>
 
@@ -115,6 +131,30 @@
     const password = document.getElementById("password");
     const confirmPassword = document.getElementById("confirm_password");
     const hint = document.getElementById("passwordMatchHint");
+    const notice = document.querySelector("[data-gbp-notice]");
+    const noticeToggle = notice?.querySelector("[data-gbp-notice-toggle]");
+    const noticeContent = notice?.querySelector("[data-gbp-notice-content]");
+
+    function setNoticeExpanded(expanded) {
+        if (!notice || !noticeToggle || !noticeContent) {
+            return;
+        }
+
+        notice.classList.toggle("is-expanded", expanded);
+        noticeToggle.setAttribute("aria-expanded", String(expanded));
+        noticeContent.setAttribute("aria-hidden", String(!expanded));
+        noticeContent.style.maxHeight = expanded ? `${noticeContent.scrollHeight}px` : "0px";
+    }
+
+    noticeToggle?.addEventListener("click", () => {
+        setNoticeExpanded(noticeToggle.getAttribute("aria-expanded") !== "true");
+    });
+
+    window.addEventListener("resize", () => {
+        if (notice?.classList.contains("is-expanded") && noticeContent) {
+            noticeContent.style.maxHeight = `${noticeContent.scrollHeight}px`;
+        }
+    });
 
     function validatePasswordMatch() {
         if (!password || !confirmPassword) {

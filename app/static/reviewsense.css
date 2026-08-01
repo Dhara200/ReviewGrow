@@ -791,13 +791,38 @@ a {
 }
 
 .gbp-register-notice {
-    display: flex;
-    gap: .85rem;
-    padding: 1rem;
     border: 1px solid rgba(37, 99, 235, .18);
     border-radius: var(--rs-radius-sm);
     background: var(--rs-primary-soft);
     color: var(--rs-text);
+    overflow: hidden;
+}
+
+.gbp-register-notice-header {
+    display: grid;
+    width: 100%;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .85rem;
+    padding: 1rem;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+    transition: background-color .18s ease;
+}
+
+.gbp-register-notice-header:hover {
+    background: rgba(37, 99, 235, .06);
+}
+
+.gbp-register-notice-header:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .34);
+    outline-offset: -3px;
 }
 
 .gbp-register-notice-icon {
@@ -809,6 +834,30 @@ a {
     border-radius: 999px;
     background: rgba(37, 99, 235, .12);
     color: var(--rs-primary);
+}
+
+.gbp-register-notice-chevron {
+    color: var(--rs-primary);
+    transition: transform .24s ease;
+}
+
+.gbp-register-notice.is-expanded .gbp-register-notice-chevron {
+    transform: rotate(180deg);
+}
+
+.gbp-register-notice-content {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height .3s ease, opacity .2s ease;
+}
+
+.gbp-register-notice.is-expanded .gbp-register-notice-content {
+    opacity: 1;
+}
+
+.gbp-register-notice-copy {
+    padding: 0 1rem 1rem calc(3rem + .85rem);
 }
 
 .gbp-register-notice p {
@@ -2017,6 +2066,12 @@ td {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .gbp-register-notice-header,
+    .gbp-register-notice-chevron,
+    .gbp-register-notice-content {
+        transition: none;
+    }
+
     .login-page .auth-card,
     .login-card-error {
         animation: none;
