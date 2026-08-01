@@ -26,6 +26,7 @@ from app.services.login_security_service import validate_login_dummy_hash
 from app.services.security_audit_service import validate_security_audit_config
 from app.services.schema_compatibility_service import validate_runtime_schema
 from app.services.sync_ai_security_service import validate_sync_ai_security_config
+from app.utils.datetime_utils import register_datetime_filters
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -40,6 +41,7 @@ validate_security_audit_config(app)
 validate_sync_ai_security_config(app)
 init_session_security(app)
 init_csrf(app)
+register_datetime_filters(app)
 validate_runtime_schema()
 
 

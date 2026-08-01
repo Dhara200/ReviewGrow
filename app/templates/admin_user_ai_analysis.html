@@ -19,7 +19,7 @@
     <div>
         <p class="rs-eyebrow">User AI Analysis</p>
         <h1 class="rs-page-title">{{ user.name }}</h1>
-        <p class="rs-page-subtitle">{{ user.email }} - {{ user.role }} account created {{ user.created_at }}</p>
+        <p class="rs-page-subtitle">{{ user.email }} - {{ user.role }} account created {{ user.created_at | datetime_ist }}</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
         <a href="/admin/ai-analysis?month={{ filters.month }}" class="btn-ghost">
@@ -98,7 +98,7 @@
             </div>
             <div class="d-flex justify-content-between gap-3">
                 <span class="text-muted">Joined</span>
-                <span class="fw-semibold text-end">{{ user.created_at }}</span>
+                <span class="fw-semibold text-end">{{ user.created_at | datetime_ist }}</span>
             </div>
         </div>
     </div>
