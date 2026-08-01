@@ -1956,6 +1956,34 @@ td {
     text-transform: none;
 }
 
+.rg-checkout-plan-card .rg-feature-group h3,
+.rg-checkout-plan-card .rg-coming-next h3 {
+    margin: 0 0 .3rem;
+    color: var(--rs-primary);
+    font-size: .82rem;
+    font-weight: 800;
+}
+
+.rg-checkout-plan-card > h2 {
+    margin: 0 0 .5rem;
+    color: #0f2b5b;
+    font-family: "Space Grotesk", "Inter", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.rg-checkout-plan-card .rg-coming-next h3 {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    color: #6d28d9;
+    font-size: .78rem;
+}
+
+:root[data-theme="dark"] .rg-checkout-plan-card > h2 {
+    color: var(--rs-text);
+}
+
 .rg-feature-group ul {
     display: grid;
     gap: .35rem;

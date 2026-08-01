@@ -81,33 +81,69 @@
 
         <div class="row justify-content-center g-4">
             <div class="col-lg-6">
-                <div class="rs-card rs-card-lg rs-pricing-card h-100">
-                    <h2 class="h4 fw-bold mb-2">ReviewGrow Premium</h2>
-                    <div class="pricing-price mb-4">
-                        <span class="pricing-original-price">₹{{ "{:,.0f}".format(original_subscription_price) }}</span>
-                        <span class="display-5 fw-bold text-primary">₹{{ "{:,.0f}".format(subscription_price) }}<span class="h6 text-muted">/month</span></span>
+                <article class="rg-premium-card rg-checkout-plan-card h-100">
+                    <div class="rg-premium-card-topline">
+                        <span class="rg-fit-badge"><i class="bi bi-star-fill" aria-hidden="true"></i> Best for growing businesses</span>
                     </div>
-                    <div class="rs-pricing-list mb-4">
-                        {% for item in [
-                            "Connect Your Google Business Profile in few clicks",
-                            "Manage your Business locations centrally in our software",
-                            "Monitor Reviews in Real Time with UI rich live dashboard",
-                            "Analyse and Respond to your Reviews in Seconds",
-                            "Draft and send personalized and professional review responses",
-                            "Automate bulk Review Replies in single click",                            
-                            "Track your business Performance Insights",
-                            "Import Existing Reviews in Excel",
-                            "Download PDF health Reports",
-                            "Understand Customer Sentiments Instantly",
-                            "Negative review whatsapp alert to business owner - Coming soon",
-                            "Send review request to customer via whatsapp in a click - Coming soon",
-                        ] %}
-                        <div><i class="bi bi-check-circle-fill"></i><span>{{ item }}</span></div>
-                        {% endfor %}
+                    <h2>ReviewGrow Premium</h2>
+                    <div class="rg-offer-badge">Launch offer</div>
+                    <div class="rg-premium-price">
+                        <span class="rs-marketing-price-original">₹{{ "{:,.0f}".format(original_subscription_price) }}</span>
+                        <strong>₹{{ "{:,.0f}".format(subscription_price) }}</strong>
+                        <span>per month</span>
                     </div>
-                    <a href="#payment" class="btn-solid w-100">Subscribe Now</a>
-                    <p class="text-muted mt-4 mb-0">Secure one-time payment powered by Razorpay. Access is activated after server verification.</p>
-                </div>
+                    <p class="rg-price-note">One simple plan. No hidden charges.</p>
+
+                    <div class="rg-feature-groups">
+                        <section class="rg-feature-group" aria-labelledby="checkout-connect-title">
+                            <div class="rg-feature-heading">
+                                <span class="rg-feature-icon rg-feature-icon-blue"><i class="bi bi-link-45deg" aria-hidden="true"></i></span>
+                                <h3 id="checkout-connect-title">Connect and monitor</h3>
+                            </div>
+                            <ul>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Connect your Google Business Profile</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Manage business locations</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Monitor reviews in real time</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Import existing reviews from Excel</li>
+                            </ul>
+                        </section>
+                        <section class="rg-feature-group" aria-labelledby="checkout-analyse-title">
+                            <div class="rg-feature-heading">
+                                <span class="rg-feature-icon rg-feature-icon-purple"><i class="bi bi-stars" aria-hidden="true"></i></span>
+                                <h3 id="checkout-analyse-title">Analyse and respond</h3>
+                            </div>
+                            <ul>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Analyse customer sentiment</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Generate professional AI review responses</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Create bulk review replies</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Understand complaints and positive feedback</li>
+                            </ul>
+                        </section>
+                        <section class="rg-feature-group" aria-labelledby="checkout-reports-title">
+                            <div class="rg-feature-heading">
+                                <span class="rg-feature-icon rg-feature-icon-green"><i class="bi bi-bar-chart-line-fill" aria-hidden="true"></i></span>
+                                <h3 id="checkout-reports-title">Reports and insights</h3>
+                            </div>
+                            <ul>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Track business performance</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Download PDF health reports</li>
+                                <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>View reputation insights from one dashboard</li>
+                            </ul>
+                        </section>
+                    </div>
+
+                    <section class="rg-coming-next" aria-labelledby="checkout-coming-title">
+                        <h3 id="checkout-coming-title"><i class="bi bi-clock-history" aria-hidden="true"></i>Coming next</h3>
+                        <div><span><i class="bi bi-whatsapp" aria-hidden="true"></i>Negative-review WhatsApp alerts</span><span class="rg-coming-badge">Coming soon</span></div>
+                        <div><span><i class="bi bi-send" aria-hidden="true"></i>WhatsApp review-request messages</span><span class="rg-coming-badge">Coming soon</span></div>
+                    </section>
+
+                    <div class="rg-premium-actions">
+                        <a href="#payment" class="btn-solid rg-premium-primary">Start with ReviewGrow Premium <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+                        <a href="mailto:founder@reviewgrow.in" class="btn-ghost"><i class="bi bi-headset" aria-hidden="true"></i> Talk to Sales</a>
+                    </div>
+                    <p class="rg-secure-note"><i class="bi bi-shield-check" aria-hidden="true"></i>Secure payment powered by Razorpay.</p>
+                </article>
             </div>
 
             <div class="col-lg-6" id="payment">

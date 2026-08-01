@@ -281,8 +281,8 @@ class RazorpayRouteTests(unittest.TestCase):
         self.assertIn("Purchase ReviewGrow Premium", page)
         self.assertIn("<span class=\"text-muted\">Plan</span>", page)
         self.assertIn("<strong>ReviewGrow Premium</strong>", page)
-        self.assertIn('<span class="pricing-original-price">₹1,999</span>', page)
-        self.assertIn('₹1,499<span class="h6 text-muted">/month</span>', page)
+        self.assertIn('<span class="rs-marketing-price-original">₹1,999</span>', page)
+        self.assertIn('<strong>₹1,499</strong>', page)
         self.assertIn("Pay ₹1,499 securely with Razorpay", page)
         self.assertNotIn("ReviewGrow Starter", page)
 
