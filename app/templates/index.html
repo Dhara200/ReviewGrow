@@ -337,47 +337,158 @@
     </div>
 </section>
 
-<section class="py-5 bg-white border-top border-bottom">
+<section class="rg-premium-section" aria-labelledby="premium-heading">
     <div class="rs-public-container">
-        <div class="text-center mb-5">
-            <p class="rs-eyebrow">Subscription plan</p>
-            <h2 class="fw-bold">Simple Pricing</h2>
-            <p class="text-muted mb-0">One plan. Everything included.</p>
+        <div class="rg-premium-header text-center">
+            <p class="rs-eyebrow">ReviewGrow Premium</p>
+            <h2 class="rg-premium-heading" id="premium-heading">Everything you need to grow your online reputation</h2>
+            <p>Monitor reviews, understand customer sentiment and respond professionally from one simple dashboard.</p>
         </div>
-        <div class="row justify-content-center">
-            <div class="col-lg-6">
-                <div class="rs-card rs-card-lg rs-pricing-card">
-                    <h3 class="h4 fw-bold mb-2">ReviewGrow Premium</h3>
-                    <div class="rs-marketing-price mb-4">
-                        <span class="rs-marketing-price-original">₹{{ "{:,.0f}".format(original_subscription_price) }}</span>
-                        <span class="display-5 fw-bold text-primary">₹{{ "{:,.0f}".format(subscription_price) }}<span class="h6 text-muted">/month</span></span>
+
+        <div class="rg-premium-layout">
+            <article class="rg-premium-card">
+                <div class="rg-premium-card-topline">
+                    <span class="rg-fit-badge"><i class="bi bi-star-fill" aria-hidden="true"></i> Best for growing businesses</span>
+                </div>
+                <h3>ReviewGrow Premium</h3>
+                <div class="rg-offer-badge">Launch offer</div>
+                <div class="rg-premium-price">
+                    <span class="rs-marketing-price-original">₹{{ "{:,.0f}".format(original_subscription_price) }}</span>
+                    <strong>₹{{ "{:,.0f}".format(subscription_price) }}</strong>
+                    <span>per month</span>
+                </div>
+                <p class="rg-price-note">One simple plan. No hidden charges.</p>
+
+                <div class="rg-feature-groups">
+                    <section class="rg-feature-group" aria-labelledby="connect-monitor-title">
+                        <div class="rg-feature-heading">
+                            <span class="rg-feature-icon rg-feature-icon-blue"><i class="bi bi-link-45deg" aria-hidden="true"></i></span>
+                            <h4 id="connect-monitor-title">Connect and monitor</h4>
+                        </div>
+                        <ul>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Connect your Google Business Profile</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Manage business locations</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Monitor reviews in real time</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Import existing reviews from Excel</li>
+                        </ul>
+                    </section>
+                    <section class="rg-feature-group" aria-labelledby="analyse-respond-title">
+                        <div class="rg-feature-heading">
+                            <span class="rg-feature-icon rg-feature-icon-purple"><i class="bi bi-stars" aria-hidden="true"></i></span>
+                            <h4 id="analyse-respond-title">Analyse and respond</h4>
+                        </div>
+                        <ul>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Analyse customer sentiment</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Generate professional AI review responses</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Create bulk review replies</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Understand complaints and positive feedback</li>
+                        </ul>
+                    </section>
+                    <section class="rg-feature-group" aria-labelledby="reports-insights-title">
+                        <div class="rg-feature-heading">
+                            <span class="rg-feature-icon rg-feature-icon-green"><i class="bi bi-bar-chart-line-fill" aria-hidden="true"></i></span>
+                            <h4 id="reports-insights-title">Reports and insights</h4>
+                        </div>
+                        <ul>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Track business performance</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Download PDF health reports</li>
+                            <li><i class="bi bi-check-circle-fill" aria-hidden="true"></i>View reputation insights from one dashboard</li>
+                        </ul>
+                    </section>
+                </div>
+
+                <section class="rg-coming-next" aria-labelledby="coming-next-title">
+                    <h4 id="coming-next-title"><i class="bi bi-clock-history" aria-hidden="true"></i>Coming next</h4>
+                    <div><span><i class="bi bi-whatsapp" aria-hidden="true"></i>Negative-review WhatsApp alerts</span><span class="rg-coming-badge">Coming soon</span></div>
+                    <div><span><i class="bi bi-send" aria-hidden="true"></i>WhatsApp review-request messages</span><span class="rg-coming-badge">Coming soon</span></div>
+                </section>
+
+                <div class="rg-premium-actions">
+                    <a href="/pricing" class="btn-solid rg-premium-primary">Start with ReviewGrow Premium <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+                    <a href="mailto:founder@reviewgrow.in" class="btn-ghost"><i class="bi bi-headset" aria-hidden="true"></i> Talk to Sales</a>
+                </div>
+                <p class="rg-secure-note"><i class="bi bi-shield-check" aria-hidden="true"></i>Secure payment powered by Razorpay.</p>
+            </article>
+
+            <div class="rg-preview-wrap" aria-label="ReviewGrow dashboard product preview">
+                <span class="rg-preview-chip rg-preview-chip-sync"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Review synced</span>
+                <span class="rg-preview-chip rg-preview-chip-ai"><i class="bi bi-stars" aria-hidden="true"></i>AI response generated</span>
+                <span class="rg-preview-rating"><i class="bi bi-star-fill" aria-hidden="true"></i>4.8 average rating</span>
+
+                <div class="rg-dashboard-preview">
+                    <div class="rg-dashboard-topbar">
+                        <div class="rg-dashboard-brand"><span><i class="bi bi-bar-chart-fill" aria-hidden="true"></i></span>Review<span>Grow</span></div>
+                        <div class="rg-window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+                        <span class="rg-demo-pill">Demo preview</span>
                     </div>
-                    <div class="rs-pricing-list mb-4">
-                        {% for item in [
-                            "Connect Your Google Business Profile in few clicks",
-                            "Manage your Business locations centrally in our software",
-                            "Monitor Reviews in Real Time with UI rich live dashboard",
-                            "Analyse and Respond to your Reviews in Seconds",
-                            "Draft and send personalized and professional review responses",
-                            "Automate bulk Review Replies in single click",                            
-                            "Track your business Performance Insights",
-                            "Import Existing Reviews in Excel",
-                            "Download PDF health Reports",
-                            "Understand Customer Sentiments Instantly",
-                            "Negative review whatsapp alert to business owner - Coming soon",
-                            "Send review request to customer via whatsapp in a click - Coming soon",
-                            
-                        ] %}
-                        <div><i class="bi bi-check-circle-fill"></i><span>{{ item }}</span></div>
-                        {% endfor %}
-                    </div>
-                    <div class="d-flex flex-column flex-sm-row gap-3">
-                        <a href="/pricing" class="btn-solid flex-fill">Subscribe Now</a>
-                        <a href="mailto:founder@reviewgrow.in" class="btn-ghost flex-fill">Contact Sales</a>
+                    <div class="rg-dashboard-body">
+                        <aside class="rg-dashboard-nav" aria-hidden="true">
+                            <span class="active"><i class="bi bi-grid-fill"></i></span>
+                            <span><i class="bi bi-chat-square-text"></i></span>
+                            <span><i class="bi bi-stars"></i></span>
+                            <span><i class="bi bi-file-earmark-bar-graph"></i></span>
+                            <span><i class="bi bi-buildings"></i></span>
+                        </aside>
+                        <div class="rg-dashboard-main">
+                            <div class="rg-dashboard-title-row">
+                                <div><p>Dashboard</p><h3>Reputation Overview</h3></div>
+                                <span>Last 30 days <i class="bi bi-chevron-down" aria-hidden="true"></i></span>
+                            </div>
+                            <div class="rg-preview-metrics">
+                                <div><span>Reputation Score</span><strong>92<small>/100</small></strong><em><i class="bi bi-arrow-up" aria-hidden="true"></i>12% this month</em></div>
+                                <div><span>Positive Sentiment</span><strong>87%</strong><div class="rg-ring" aria-label="Positive sentiment 87 percent"></div></div>
+                                <div><span>Reviews Analysed</span><strong>248</strong><em><i class="bi bi-arrow-up" aria-hidden="true"></i>18% this month</em></div>
+                            </div>
+                            <div class="rg-preview-middle">
+                                <section class="rg-chart-card" aria-label="Sentiment trend chart">
+                                    <h4>Sentiment trend</h4>
+                                    <div class="rg-chart-grid" aria-hidden="true">
+                                        <svg viewBox="0 0 320 112" preserveAspectRatio="none">
+                                            <polyline points="0,80 35,61 70,67 105,47 140,55 175,35 210,50 245,25 280,43 320,31" fill="none" stroke="#10b981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <polyline points="0,90 35,94 70,86 105,92 140,84 175,91 210,82 245,88 280,80 320,85" fill="none" stroke="#f87171" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <div class="rg-chart-legend"><span><i class="positive"></i>Positive</span><span><i class="negative"></i>Negative</span></div>
+                                </section>
+                                <section class="rg-review-card">
+                                    <div class="rg-preview-card-title"><h4>Recent review</h4><span>5.0</span></div>
+                                    <div class="rg-review-person"><span aria-hidden="true">AS</span><div><strong>Arun Sharma</strong><small>2 hours ago</small></div></div>
+                                    <div class="rg-stars" aria-label="Five out of five stars">★★★★★</div>
+                                    <p>“Excellent service and a very friendly team.”</p>
+                                </section>
+                            </div>
+                            <div class="rg-preview-bottom">
+                                <section class="rg-alert-card">
+                                    <div><span class="rg-alert-icon"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i></span><strong>Negative-review alert</strong></div>
+                                    <p>One review needs your attention.</p>
+                                    <span>Needs attention</span>
+                                </section>
+                                <section class="rg-ai-card">
+                                    <div class="rg-preview-card-title"><h4><i class="bi bi-stars" aria-hidden="true"></i>AI Reply Ready</h4><span>Ready</span></div>
+                                    <p>“Thank you for your kind feedback. We are delighted that you enjoyed your experience.”</p>
+                                    <button type="button" disabled>Approve &amp; Send</button>
+                                </section>
+                                <section class="rg-report-card">
+                                    <i class="bi bi-file-earmark-pdf-fill" aria-hidden="true"></i>
+                                    <div><strong>PDF Report Generated</strong><span>Ready to download</span></div>
+                                    <span class="rg-report-status"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Complete</span>
+                                </section>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <p class="text-center text-muted mt-4 mb-0">No hidden fees. No complicated pricing. One subscription for everything.</p>
             </div>
+        </div>
+
+        <div class="rg-value-row" aria-label="ReviewGrow value highlights">
+            <div><span><i class="bi bi-clock-history" aria-hidden="true"></i></span><div><strong>Real-time review monitoring</strong><p>Never miss a new review from your Google Business Profile.</p></div></div>
+            <div><span><i class="bi bi-lightning-charge-fill" aria-hidden="true"></i></span><div><strong>AI replies in seconds</strong><p>Generate professional responses instantly with AI.</p></div></div>
+            <div><span><i class="bi bi-geo-alt-fill" aria-hidden="true"></i></span><div><strong>One dashboard for every location</strong><p>Manage all your business locations from a single place.</p></div></div>
+        </div>
+        <div class="rg-trust-row" aria-label="Platform capabilities">
+            <span><i class="bi bi-google" aria-hidden="true"></i>Google Business Profile connection</span>
+            <span><i class="bi bi-stars" aria-hidden="true"></i>AI-powered insights</span>
+            <span><i class="bi bi-shield-check" aria-hidden="true"></i>Secure Razorpay payments</span>
         </div>
     </div>
 </section>
