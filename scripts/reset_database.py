@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 
-ADMIN_EMAIL = "dharaprasath52@gmail.com"
+ADMIN_EMAIL = "dharaprasat52@gmail.com"
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]

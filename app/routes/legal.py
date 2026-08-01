@@ -7,7 +7,7 @@ LEGAL_DETAILS = {
     "brand_name": "ReviewGrow",
     "website": "https://reviewgrow.in",
     "owner_name": "Dhara Prasath",
-    "support_email": "dharaprasath52@gmail.com",
+    "support_email": "founder@reviewgrow.in",
     "business_address": "15/308, SAYAPATTARAI, AMARAVATHY RF, UDUMALPET TK, TIRUPPUR DIST, TAMIL NADU, 642102",
     "jurisdiction": "Coimbatore, Tamil Nadu, India",
     "refund_period": "On Subscription end date",

@@ -51,9 +51,9 @@ class LegalPageTests(unittest.TestCase):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(b"Dhara Prasath", response.data)
-                self.assertIn(b"dharaprasath52@gmail.com", response.data)
+                self.assertIn(b"founder@reviewgrow.in", response.data)
                 self.assertIn(
-                    b'href="mailto:dharaprasath52@gmail.com"',
+                    b'href="mailto:founder@reviewgrow.in"',
                     response.data,
                 )
                 self.assertIn(b"[BUSINESS ADDRESS]", response.data)
