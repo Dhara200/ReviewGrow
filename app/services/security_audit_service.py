@@ -25,6 +25,8 @@ EVENT_CATALOG = {
     "login_limiter_unavailable": ("error", "error"),
     "login_backend_unavailable": ("error", "error"),
     "login_internal_error": ("error", "error"),
+    "login_otp_challenge_created": ("info", "success"),
+    "login_otp_verified": ("info", "success"),
 }
 
 ALLOWED_EVENT_FIELDS = frozenset({

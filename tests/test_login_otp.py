@@ -2,10 +2,11 @@ import re
 import inspect
 import time
 import unittest
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from flask import Flask
+from flask import Flask, url_for
 from werkzeug.security import generate_password_hash
 
 from app.routes.auth import auth_bp
@@ -120,6 +121,106 @@ class LoginOtpTests(unittest.TestCase):
             self.assertEqual(7, active["pending_login_user_id"])
             self.assertEqual(91, active["pending_login_challenge_id"])
 
+    def test_registered_get_endpoint_is_resolvable(self):
+        with self.app.test_request_context():
+            self.assertEqual(
+                "/login/verify-otp", url_for("auth.login_verify_otp_page")
+            )
+        rules = [rule for rule in self.app.url_map.iter_rules()
+                 if rule.endpoint == "auth.login_verify_otp_page"]
+        self.assertEqual(1, len(rules))
+        self.assertIn("GET", rules[0].methods)
+
+    def test_pending_session_values_are_primitives_and_ids_are_coerced(self):
+        decimal_user = dict(self.user, id=Decimal("7"))
+        token = self.csrf()
+        with patch("app.routes.auth._get_login_limiter", return_value=self.limiter), \
+             patch("app.routes.auth.verify_recaptcha", return_value=SimpleNamespace(success=True)), \
+             patch("app.routes.auth._find_login_user", return_value=decimal_user), \
+             patch("app.routes.auth.create_login_otp_challenge",
+                   return_value=CreatedChallenge(Decimal("91"), "o***@example.com")):
+            response = self.client.post("/login-page", data={
+                "csrf_token": token, "recaptcha_token": "token",
+                "email": "owner@example.com", "password": "correct"})
+        self.assertEqual(302, response.status_code)
+        with self.client.session_transaction() as active:
+            expected_types = {
+                "pending_login_user_id": int,
+                "pending_login_challenge_id": int,
+                "pending_login_started_at": int,
+                "pending_login_masked_email": str,
+            }
+            for key, expected_type in expected_types.items():
+                self.assertIs(type(active[key]), expected_type)
+
+    def test_next_url_missing_safe_relative_and_external_handling(self):
+        for supplied, expected in (
+            (None, None), ("/my-businesses?tab=reviews", "/my-businesses?tab=reviews"),
+            ("https://evil.example/phish", None), ("//evil.example/phish", None),
+        ):
+            with self.subTest(next=supplied):
+                client = self.app.test_client()
+                path = "/login-page" + (f"?next={supplied}" if supplied else "")
+                page = client.get(path).get_data(as_text=True)
+                token = re.search(r'name="csrf_token" value="([^"]+)"', page).group(1)
+                with patch("app.routes.auth._get_login_limiter", return_value=self.limiter), \
+                     patch("app.routes.auth.verify_recaptcha", return_value=SimpleNamespace(success=True)), \
+                     patch("app.routes.auth._find_login_user", return_value=self.user), \
+                     patch("app.routes.auth.create_login_otp_challenge",
+                           return_value=CreatedChallenge(91, "o***@example.com")):
+                    response = client.post("/login-page", data={
+                        "csrf_token": token, "recaptcha_token": "token",
+                        "email": "owner@example.com", "password": "correct",
+                        "next": supplied or "",
+                    })
+                self.assertEqual(302, response.status_code)
+                with client.session_transaction() as active:
+                    self.assertEqual(expected, active.get("pending_login_next_url"))
+
+    def test_audit_catalog_no_longer_replaces_redirect(self):
+        self.app.config.update(
+            SECURITY_AUDIT_ENABLED=True,
+            SECURITY_AUDIT_HMAC_KEY="strong-audit-key-with-enough-entropy-12345",
+        )
+        with self.assertLogs(self.app.logger.name, level="INFO") as captured:
+            response, create = self.login()
+        self.assertEqual(302, response.status_code)
+        create.assert_called_once()
+        logs = " ".join(captured.output)
+        self.assertIn('"event_name":"login_otp_challenge_created"', logs)
+        self.assertNotIn('"event_name":"login_internal_error"', logs)
+
+    def test_unexpected_post_challenge_error_logs_safe_traceback_once(self):
+        class BrokenChallenge:
+            @property
+            def id(self):
+                raise TypeError(
+                    "otp=123456 password=secret hash=secret-hash template_data=secret"
+                )
+        self.app.config.update(
+            SECURITY_AUDIT_ENABLED=True,
+            SECURITY_AUDIT_HMAC_KEY="strong-audit-key-with-enough-entropy-12345",
+        )
+        token = self.csrf()
+        with patch("app.routes.auth._get_login_limiter", return_value=self.limiter), \
+             patch("app.routes.auth.verify_recaptcha", return_value=SimpleNamespace(success=True)), \
+             patch("app.routes.auth._find_login_user", return_value=self.user), \
+             patch("app.routes.auth.create_login_otp_challenge",
+                   return_value=BrokenChallenge()) as create, \
+             self.assertLogs(self.app.logger.name, level="ERROR") as captured:
+            response = self.client.post("/login-page", data={
+                "csrf_token": token, "recaptcha_token": "token",
+                "email": "owner@example.com", "password": "correct"})
+        self.assertEqual(500, response.status_code)
+        self.assertIn("We could not complete your login right now", response.get_data(as_text=True))
+        create.assert_called_once()
+        logs = " ".join(captured.output)
+        self.assertIn("Unexpected error during password login OTP setup", logs)
+        self.assertIn("TypeError", logs)
+        self.assertIn('"event_name":"login_internal_error"', logs)
+        for secret in ("123456", "password=secret", "secret-hash", "template_data=secret"):
+            self.assertNotIn(secret, logs)
+
     def test_incorrect_password_never_creates_challenge(self):
         response, create = self.login(password="incorrect")
         self.assertEqual(401, response.status_code)
@@ -170,6 +271,19 @@ class LoginOtpTests(unittest.TestCase):
         with self.client.session_transaction() as active:
             self.assertEqual(7, active["user_id"])
             self.assertNotIn("pending_login_user_id", active)
+
+    def test_safe_next_is_used_after_successful_otp(self):
+        self.set_pending()
+        with self.client.session_transaction() as active:
+            active["pending_login_next_url"] = "/my-businesses?tab=reviews"
+        token = self.csrf("/login/verify-otp")
+        verified = {k: self.user[k] for k in ("id", "name", "email", "role")}
+        with patch("app.routes.auth.verify_login_otp", return_value=verified), \
+             patch("app.routes.auth.has_active_subscription", return_value=True), \
+             patch("app.routes.auth._find_user_business", return_value={"id": 3}):
+            response = self.client.post("/login/verify-otp", data={
+                "csrf_token": token, "otp_code": "012345"})
+        self.assertTrue(response.location.endswith("/my-businesses?tab=reviews"))
 
     def test_invalid_expired_and_locked_outcomes_are_safe(self):
         for error, expected_status in ((OtpInvalidError(), 400), (OtpExpiredError(), 400),

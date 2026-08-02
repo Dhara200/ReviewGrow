@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 import ipaddress
 import re
+import sys
 import time
 import unicodedata
+from urllib.parse import urlsplit
 
 import mysql.connector
 from flask import (
@@ -12,7 +14,8 @@ from flask import (
     request,
     render_template,
     redirect,
-    session
+    session,
+    url_for,
 )
 from werkzeug.security import (
     generate_password_hash,
@@ -63,6 +66,50 @@ PENDING_LOGIN_KEYS = (
 def _clear_pending_login():
     for key in PENDING_LOGIN_KEYS:
         session.pop(key, None)
+
+
+def _safe_login_next_url(value):
+    if (
+        not value
+        or not isinstance(value, str)
+        or "\\" in value
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        return None
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return None
+    if parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
+        return None
+    if parsed.path.startswith("//"):
+        return None
+    return value
+
+
+def _safe_audit_emit(audit, event_name, **fields):
+    try:
+        return audit.emit(event_name, **fields)
+    except Exception as error:
+        safe_error = RuntimeError(
+            f"Security audit emission failed ({type(error).__name__})."
+        )
+        current_app.logger.error(
+            "Security audit emission failed: event_name=%s",
+            event_name,
+            exc_info=(type(safe_error), safe_error, error.__traceback__),
+        )
+        return None
+
+
+def _log_unexpected_login_exception(error):
+    safe_error = RuntimeError(
+        f"Unexpected password login failure ({type(error).__name__})."
+    )
+    current_app.logger.error(
+        "Unexpected error during password login OTP setup",
+        exc_info=(type(safe_error), safe_error, sys.exc_info()[2]),
+    )
 
 
 def _pending_login_valid():
@@ -274,7 +321,8 @@ def _login_application_error_response(
     audit, email, ip_address, *, account_valid, unavailable=False,
     failure_category="unexpected_failure",
 ):
-    audit.emit(
+    _safe_audit_emit(
+        audit,
         "login_backend_unavailable" if unavailable else "login_internal_error",
         email=email,
         account_valid=account_valid,
@@ -376,7 +424,7 @@ def _find_login_user_by_id(user_id):
         connection.close()
 
 
-def _complete_authenticated_login(user, audit, email, ip_address):
+def _complete_authenticated_login(user, audit, email, ip_address, next_url=None):
     # Clearing rotates all signed cookie session state before final authentication.
     session.clear()
     session.permanent = True
@@ -399,7 +447,8 @@ def _complete_authenticated_login(user, audit, email, ip_address):
             unavailable=True, failure_category="post_auth_lookup",
         )
     audit.emit("login_success", email=email, client_ip=ip_address, http_status=302)
-    return redirect("/my-businesses" if business else "/create-business")
+    safe_next = _safe_login_next_url(next_url)
+    return redirect(safe_next or ("/my-businesses" if business else "/create-business"))
 
 
 def is_login_locked(email, ip_address):
@@ -616,7 +665,8 @@ def register_form():
 def login_page():
 
     return render_template(
-        "login.html"
+        "login.html",
+        next_url=_safe_login_next_url(request.args.get("next")),
     )
     
 @auth_bp.route("/login-page", methods=["POST"])
@@ -626,6 +676,7 @@ def login_form():
 
         email = normalize_login_email(request.form.get("email"))
         password = request.form.get("password")
+        next_url = _safe_login_next_url(request.form.get("next"))
         ip_address = get_client_ip()
         audit = _get_security_audit()
         email_identity_valid = bool(
@@ -793,7 +844,9 @@ def login_form():
             )
 
         if not current_app.config.get("LOGIN_OTP_ENABLED", False):
-            return _complete_authenticated_login(user, audit, email, ip_address)
+            return _complete_authenticated_login(
+                user, audit, email, ip_address, next_url=next_url
+            )
 
         # Rotate away all password-form state. Only signed, short-lived pending
         # identifiers are retained; the OTP itself never enters the session.
@@ -812,17 +865,20 @@ def login_form():
                 email=email, status_code=503,
             )
         session.permanent = True
-        session["pending_login_user_id"] = user["id"]
-        session["pending_login_challenge_id"] = challenge.id
+        session["pending_login_user_id"] = int(user["id"])
+        session["pending_login_challenge_id"] = int(challenge.id)
         session["pending_login_started_at"] = int(time.time())
-        session["pending_login_masked_email"] = challenge.masked_email
-        audit.emit(
+        session["pending_login_masked_email"] = str(challenge.masked_email)
+        session["pending_login_next_url"] = next_url
+        _safe_audit_emit(
+            audit,
             "login_otp_challenge_created", email=email, client_ip=ip_address,
             http_status=302,
         )
-        return redirect("/login/verify-otp")
+        return redirect(url_for("auth.login_verify_otp_page"))
 
-    except Exception:
+    except Exception as error:
+        _log_unexpected_login_exception(error)
         if "user_id" in session:
             session.clear()
         audit = locals().get("audit") or _get_security_audit()
@@ -864,6 +920,7 @@ def login_verify_otp_form():
         )
     user_id = session["pending_login_user_id"]
     challenge_id = session["pending_login_challenge_id"]
+    next_url = _safe_login_next_url(session.get("pending_login_next_url"))
     ip_address = get_client_ip()
     audit = _get_security_audit()
     try:
@@ -890,11 +947,14 @@ def login_verify_otp_form():
             status=503,
             otp_error="Verification is temporarily unavailable. Please try again.",
         )
-    audit.emit(
+    _safe_audit_emit(
+        audit,
         "login_otp_verified", email=user["email"], client_ip=ip_address,
         http_status=302,
     )
-    return _complete_authenticated_login(user, audit, user["email"], ip_address)
+    return _complete_authenticated_login(
+        user, audit, user["email"], ip_address, next_url=next_url
+    )
 
 
 @auth_bp.route("/login/resend-otp", methods=["POST"])

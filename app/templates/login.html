@@ -54,6 +54,7 @@
 
                     <form id="loginForm" method="POST" action="/login-page" data-lock-seconds="{{ login_lock_seconds or '' }}" data-recaptcha-form data-recaptcha-action="login" data-recaptcha-site-key="{{ recaptcha_site_key }}">
                         {{ login_csrf_field() }}
+                        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
                         <input type="hidden" name="recaptcha_token" data-recaptcha-token>
                         <div class="alert alert-danger d-none" role="alert" data-recaptcha-error>
                             Security verification failed. Please try again.
