@@ -5,6 +5,7 @@ import math
 from datetime import datetime, timedelta
 
 from app.services.database_service import get_connection
+from app.utils.plan_display_utils import display_plan_name
 
 
 EMAIL_TYPES = ("welcome", "login_otp", "subscription_confirmation", "renewal_reminder")
@@ -155,13 +156,13 @@ class EmailAnalyticsService:
           ORDER BY {SORTS[f['sort']]} LIMIT %s OFFSET %s""", tuple(params+[limit,offset]))
         rows=c.fetchall()
         for row in rows:
-            data=_json_data(row.pop("template_data", None)); row["safe_template_variables"]={k:data[k] for k in SAFE_TEMPLATE_KEYS if k in data}; row["payment_id"]=data.get("razorpay_payment_id") if row["email_type"]=="subscription_confirmation" else None; row["last_error"]=_safe_error(row.get("last_error")); row["retry_count"]=max(int(row.get("attempt_count") or 0)-1,0)
+            data=_json_data(row.pop("template_data", None)); row["safe_template_variables"]={k:(display_plan_name(data[k]) if k=="plan_name" else data[k]) for k in SAFE_TEMPLATE_KEYS if k in data}; row["payment_id"]=data.get("razorpay_payment_id") if row["email_type"]=="subscription_confirmation" else None; row["last_error"]=_safe_error(row.get("last_error")); row["retry_count"]=max(int(row.get("attempt_count") or 0)-1,0); row["subscription_plan"]=display_plan_name(row.get("subscription_plan"))
         return rows,total
 
     def _options(self,c):
         c.execute("SELECT id,name,email FROM users ORDER BY name LIMIT 500"); users=c.fetchall()
         c.execute("SELECT id,business_name FROM businesses ORDER BY business_name LIMIT 500"); businesses=c.fetchall()
-        c.execute("SELECT DISTINCT plan_name FROM subscriptions ORDER BY plan_name"); plans=[r["plan_name"] for r in c.fetchall()]
+        c.execute("SELECT DISTINCT plan_name FROM subscriptions ORDER BY plan_name"); plans=[{"value":r["plan_name"],"label":display_plan_name(r["plan_name"])} for r in c.fetchall()]
         return {"users":users,"businesses":businesses,"plans":plans}
 
 

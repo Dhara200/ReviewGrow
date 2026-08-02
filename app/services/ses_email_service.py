@@ -9,6 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from app.config import Config
+from app.utils.plan_display_utils import display_plan_name
 
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ _template_environment = Environment(
     autoescape=select_autoescape(("html", "xml")),
     undefined=StrictUndefined,
 )
+_template_environment.filters["display_plan_name"] = display_plan_name
 
 
 def _create_ses_client():

@@ -11,6 +11,7 @@ from app.services.razorpay_service import (
     resolve_plan,
 )
 from app.services.subscription_service import activate_or_extend_subscription
+from app.utils.plan_display_utils import register_plan_display_filter
 
 
 class FakeSubscriptionCursor:
@@ -126,6 +127,7 @@ class RazorpayRouteTests(unittest.TestCase):
             ORIGINAL_SUBSCRIPTION_PRICE=1999,
         )
         init_csrf(self.app)
+        register_plan_display_filter(self.app)
         self.app.register_blueprint(subscription_bp)
 
         @self.app.get("/test-token")

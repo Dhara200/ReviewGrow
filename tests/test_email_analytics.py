@@ -57,6 +57,8 @@ class EmailAnalyticsServiceTests(unittest.TestCase):
         self.assertEqual(1,total); self.assertNotIn("template_data",rows[0])
         self.assertNotIn("otp_code",rows[0]["safe_template_variables"])
         self.assertNotIn("secret",rows[0]["safe_template_variables"])
+        self.assertEqual("Premium", rows[0]["subscription_plan"])
+        self.assertEqual("Premium", rows[0]["safe_template_variables"]["plan_name"])
         self.assertIn("LIKE %s",cursor.executions[0][0]); self.assertIn("LIMIT %s OFFSET %s",cursor.executions[1][0])
 
     def test_chart_queries_return_serializable_series(self):
@@ -68,6 +70,11 @@ class EmailAnalyticsServiceTests(unittest.TestCase):
         charts=EmailAnalyticsService()._charts(ChartCursor())
         self.assertEqual("2026-08-02",charts["daily"][0]["label"])
         self.assertEqual(2,charts["statuses"][0]["value"])
+
+    def test_plan_filter_keeps_internal_value_and_uses_display_label(self):
+        cursor=Cursor(all_rows=[{"plan_name":"starter"}])
+        options=EmailAnalyticsService()._options(cursor)
+        self.assertEqual({"value":"starter","label":"Premium"},options["plans"][0])
 
 
 class EmailAnalyticsRouteTests(unittest.TestCase):

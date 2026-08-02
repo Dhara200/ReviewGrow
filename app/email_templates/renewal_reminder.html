@@ -2,7 +2,7 @@
 {% block content %}
 <h1 style="margin:0 0 16px;color:#0f172a;font-size:25px;line-height:1.3">Your subscription expires in {{ days_remaining }} days</h1>
 <p style="margin:0 0 16px;color:#334155;line-height:1.7">Hello{% if customer_name %} {{ customer_name }}{% endif %},</p>
-<p style="margin:0 0 16px;color:#334155;line-height:1.7">Your {{ plan_name }} subscription will expire on <strong>{{ subscription_end_date }}</strong>.</p>
+<p style="margin:0 0 16px;color:#334155;line-height:1.7">Your {{ plan_name | display_plan_name }} subscription will expire on <strong>{{ subscription_end_date }}</strong>.</p>
 <p style="margin:0 0 24px;color:#334155;line-height:1.7">Renew before the expiry date to continue accessing review insights, AI-assisted responses, reports and Google Business Profile features without interruption.</p>
 <p style="margin:0 0 24px"><a href="{{ renewal_url }}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:9px">Renew ReviewGrow Premium</a></p>
 <p style="margin:0 0 12px;color:#475569">If you have already renewed, you can ignore this email.</p>

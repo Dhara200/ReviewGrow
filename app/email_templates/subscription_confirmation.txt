@@ -4,7 +4,7 @@ Payment confirmed — your ReviewGrow Premium plan is active
 
 Your payment was confirmed and your subscription is now active.
 
-Plan: {{ plan_name }}
+Plan: {{ plan_name | display_plan_name }}
 Amount paid: {{ amount_display }} {{ currency }}
 Payment ID: {{ razorpay_payment_id }}
 Subscription starts: {{ subscription_start_date }}

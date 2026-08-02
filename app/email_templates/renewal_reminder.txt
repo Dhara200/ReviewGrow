@@ -2,7 +2,7 @@ Your ReviewGrow subscription expires in {{ days_remaining }} days
 
 Hello{% if customer_name %} {{ customer_name }}{% endif %},
 
-Your {{ plan_name }} subscription will expire on {{ subscription_end_date }}.
+Your {{ plan_name | display_plan_name }} subscription will expire on {{ subscription_end_date }}.
 
 Renew before the expiry date to continue accessing review insights, AI-assisted responses, reports and Google Business Profile features without interruption.
 
