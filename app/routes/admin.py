@@ -1,3 +1,5 @@
+import csv
+import io
 from datetime import datetime
 
 from flask import (
@@ -6,7 +8,8 @@ from flask import (
     render_template,
     request,
     session,
-    redirect
+    redirect,
+    Response,
 )
 
 from app.services.database_service import get_connection
@@ -17,9 +20,39 @@ from app.services.admin_sync_queue_service import (
     normalize_sync_queue_filters,
 )
 from app.services.subscription_service import approve_payment, reject_payment
+from app.services.email_analytics_service import EmailAnalyticsService, normalize_filters
 
 admin_bp = Blueprint("admin", __name__)
 sync_queue_monitor = AdminSyncQueueService()
+email_analytics = EmailAnalyticsService()
+
+
+@admin_bp.route("/admin/email-analytics")
+def admin_email_analytics():
+    guard = _admin_required()
+    if guard:
+        return guard
+    filters = normalize_filters(request.args)
+    data = email_analytics.dashboard(filters)
+    return render_template("admin_email_analytics.html", filters=filters, **data)
+
+
+@admin_bp.route("/admin/email-analytics/export.csv")
+def admin_email_analytics_export():
+    guard = _admin_required()
+    if guard:
+        return guard
+    filters = normalize_filters(request.args)
+    rows = email_analytics.export_rows(filters)
+    output = io.StringIO(newline="")
+    fields = ["customer_name","recipient_email","business_name","email_type","priority",
+              "status","sent_at","created_at","processing_seconds","retry_count",
+              "ses_message_id","last_error","deduplication_key","subscription_plan","payment_id"]
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader(); writer.writerows(rows)
+    return Response(output.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=reviewgrow-email-analytics.csv",
+                             "Cache-Control": "no-store"})
 
 
 def _money(value):
