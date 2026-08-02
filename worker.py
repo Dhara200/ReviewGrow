@@ -120,6 +120,14 @@ def _process_email_job(job):
                 if not mark_email_cancelled(job["id"], "Login challenge is no longer active"):
                     raise WorkerInfrastructureError("Email cancellation state could not be persisted.")
                 return True
+        if job.get("email_type") == "renewal_reminder":
+            from app.services.subscription_reminder_service import validate_renewal_reminder_job
+            eligible, reason, customer_name = validate_renewal_reminder_job(job)
+            if not eligible:
+                if not mark_email_cancelled(job["id"], reason):
+                    raise WorkerInfrastructureError("Email cancellation state could not be persisted.")
+                return True
+            job.setdefault("template_data", {})["customer_name"] = customer_name
         message_id = send_queued_email(job)
         if not mark_email_sent(job["id"], message_id):
             raise WorkerInfrastructureError("Email sent state could not be persisted.")

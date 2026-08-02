@@ -15,11 +15,23 @@ RETRY_DELAYS_SECONDS = (60, 300, 900, 3600, 21600)
 SUBSCRIPTION_CONFIRMATION_SUBJECT = (
     "Payment confirmed — your ReviewGrow Premium plan is active"
 )
+RENEWAL_REMINDER_SUBJECT = "Your ReviewGrow subscription expires in 5 days"
 
 
 def enqueue_email(recipient_email, email_type, template_name, template_data,
                   *, user_id=None, priority=100, max_attempts=6,
                   deduplication_key=None):
+    job_id, _created = _enqueue_email_with_result(
+        recipient_email, email_type, template_name, template_data,
+        user_id=user_id, priority=priority, max_attempts=max_attempts,
+        deduplication_key=deduplication_key,
+    )
+    return job_id
+
+
+def _enqueue_email_with_result(recipient_email, email_type, template_name,
+                               template_data, *, user_id=None, priority=100,
+                               max_attempts=6, deduplication_key=None):
     connection = get_connection()
     cursor = connection.cursor()
     try:
@@ -38,7 +50,7 @@ def enqueue_email(recipient_email, email_type, template_name, template_data,
         )
         job_id = cursor.lastrowid
         connection.commit()
-        return job_id
+        return job_id, True
     except mysql.connector.IntegrityError as error:
         connection.rollback()
         if error.errno != 1062 or not deduplication_key:
@@ -48,7 +60,7 @@ def enqueue_email(recipient_email, email_type, template_name, template_data,
             (deduplication_key,),
         )
         row = cursor.fetchone()
-        return row[0] if row else None
+        return (row[0] if row else None), False
     finally:
         cursor.close()
         connection.close()
@@ -96,6 +108,28 @@ def enqueue_subscription_confirmation_email(details):
         },
         user_id=int(details["user_id"]), priority=20,
         deduplication_key=f"subscription_confirmation:{payment_id}",
+    )
+
+
+def enqueue_renewal_reminder_email(details):
+    """Queue one reminder for a subscription period; return (job_id, created)."""
+    user_id = int(details["user_id"])
+    end_date = details["subscription_end_date"]
+    end_date_key = str(details["subscription_end_date_ist"])
+    return _enqueue_email_with_result(
+        details["email"], "renewal_reminder", "renewal_reminder",
+        {
+            "subject": RENEWAL_REMINDER_SUBJECT,
+            "plan_name": details.get("plan_name") or "ReviewGrow Premium",
+            "subscription_end_date": details["subscription_end_date_display"],
+            "days_remaining": int(details["days_remaining"]),
+            "renewal_url": f"{Config.APP_BASE_URL}/pricing",
+            "support_email": Config.SES_REPLY_TO_EMAIL or "founder@reviewgrow.in",
+            "expected_subscription_end": end_date.isoformat(),
+            "expected_subscription_end_ist": end_date_key,
+        },
+        user_id=user_id, priority=100,
+        deduplication_key=f"renewal_5_day:{user_id}:{end_date_key}",
     )
 
 

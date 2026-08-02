@@ -64,6 +64,23 @@ class EmailQueueServiceTests(unittest.TestCase):
             queue.claim_pending_email_jobs()
         self.assertIn("ORDER BY priority ASC, created_at ASC", cursor.executions[0][0])
 
+    def test_renewal_reminder_uses_period_deduplication_and_low_urgency(self):
+        cursor = FakeCursor()
+        with patch.object(queue, "get_connection", return_value=FakeConnection(cursor)):
+            job_id, created = queue.enqueue_renewal_reminder_email({
+                "user_id": 7, "email": "owner@example.com",
+                "plan_name": "ReviewGrow Premium",
+                "subscription_end_date": datetime(2026, 8, 7, 10, 0),
+                "subscription_end_date_ist": "2026-08-07",
+                "subscription_end_date_display": "07 Aug 2026, 03:30 PM IST",
+                "days_remaining": 5,
+            })
+        self.assertEqual((31, True), (job_id, created))
+        params = cursor.executions[0][1]
+        self.assertEqual("renewal_reminder", params[2])
+        self.assertEqual(100, params[5])
+        self.assertEqual("renewal_5_day:7:2026-08-07", params[7])
+
     def test_temporary_failure_schedules_retry(self):
         cursor = FakeCursor()
         with patch.object(queue, "get_connection", return_value=FakeConnection(cursor)):

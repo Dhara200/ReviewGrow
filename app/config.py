@@ -40,6 +40,14 @@ def _get_positive_int(name, default, minimum=1):
     return value if value >= minimum else int(default)
 
 
+def _get_bounded_int_or_default(name, default, minimum, maximum):
+    try:
+        value = int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+    return value if minimum <= value <= maximum else int(default)
+
+
 def _get_bounded_login_int(name, default, minimum, maximum):
     raw_value = os.getenv(name)
     if raw_value is None:
@@ -75,6 +83,12 @@ class Config:
     SES_ENABLED = _get_strict_bool("SES_ENABLED", True)
     SUBSCRIPTION_CONFIRMATION_EMAIL_ENABLED = _get_strict_bool(
         "SUBSCRIPTION_CONFIRMATION_EMAIL_ENABLED", True
+    )
+    SUBSCRIPTION_RENEWAL_REMINDER_ENABLED = _get_bool(
+        "SUBSCRIPTION_RENEWAL_REMINDER_ENABLED", True
+    )
+    SUBSCRIPTION_RENEWAL_REMINDER_DAYS = _get_bounded_int_or_default(
+        "SUBSCRIPTION_RENEWAL_REMINDER_DAYS", 5, 1, 30
     )
     LOGIN_OTP_ENABLED = _get_strict_bool("LOGIN_OTP_ENABLED", True)
     LOGIN_OTP_EXPIRY_MINUTES = _get_positive_int("LOGIN_OTP_EXPIRY_MINUTES", 5)

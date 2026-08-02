@@ -24,6 +24,17 @@ class EmailWorkerTests(unittest.TestCase):
         worker.run_worker_iteration()
         send.assert_called_once_with(job)
 
+    @patch("worker.mark_email_cancelled", return_value=True)
+    @patch("app.services.subscription_reminder_service.validate_renewal_reminder_job",
+           return_value=(False, "subscription_renewed", ""))
+    @patch("worker.send_queued_email")
+    def test_stale_renewal_reminder_is_cancelled_not_sent(self, send, _validate, cancel):
+        job = {"id": 9, "user_id": 7, "email_type": "renewal_reminder",
+               "recipient_email": "owner@example.com", "template_data": {}}
+        self.assertTrue(worker._process_email_job(job))
+        send.assert_not_called()
+        cancel.assert_called_once_with(9, "subscription_renewed")
+
 
 if __name__ == "__main__":
     unittest.main()

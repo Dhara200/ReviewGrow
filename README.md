@@ -416,3 +416,37 @@ Built as an end-to-end SaaS project combining software development, artificial i
 ---
 
 **ReviewGrow — Turn customer feedback into actionable business growth.**
+# Phase 4 subscription renewal reminders
+
+The idempotent command `python -m app.jobs.generate_subscription_renewal_reminders`
+queues (but never directly sends) one `renewal_reminder` email five IST calendar
+days before the latest active paid subscription expires. Use `--dry-run` to inspect
+safe summary counts without database writes. The worker revalidates the current
+subscription end date immediately before delivery and cancels stale reminders.
+
+Configuration:
+
+```env
+SUBSCRIPTION_RENEWAL_REMINDER_ENABLED=true
+SUBSCRIPTION_RENEWAL_REMINDER_DAYS=5
+```
+
+The day count safely falls back to 5 when invalid or outside 1–30. Lower queue
+priority numbers are more urgent: login OTP 10, subscription confirmation 20,
+welcome 50, renewal reminder 100. Reminder deduplication keys are
+`renewal_5_day:<user_id>:<expiry-date-in-IST>`.
+
+For Docker Compose on EC2, validate first with
+`sudo docker exec reputation_app python -m app.jobs.generate_subscription_renewal_reminders --dry-run`.
+After validation, run daily at 03:00 UTC (08:30 IST). The configured app
+container name makes this independent of the secret EC2 deployment path:
+
+```cron
+0 3 * * * sudo docker exec reputation_app python -m app.jobs.generate_subscription_renewal_reminders >> /var/log/reviewgrow-renewal-reminders.log 2>&1
+```
+
+The same module command can later be used as an EventBridge-scheduled
+ECS/Fargate task override.
+Set `SUBSCRIPTION_RENEWAL_REMINDER_ENABLED=false` and restart app and worker for
+emergency rollback; generation stops and the worker cancels already queued
+renewal reminders while preserving email history and all payment behavior.
