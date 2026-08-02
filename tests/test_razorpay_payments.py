@@ -278,6 +278,9 @@ class RazorpayRouteTests(unittest.TestCase):
         self.assertEqual("ReviewGrow Premium", body["description"])
         self.assertNotIn("ReviewGrow Starter", response.get_data(as_text=True))
         self.assertNotIn("key_secret", body)
+        self.assertNotIn("contact", body)
+        self.assertNotIn("phone", body)
+        self.assertNotIn("mobile", body)
 
     @patch("app.routes.subscription.get_connection", return_value=FakeUserConnection())
     @patch("app.routes.subscription.has_active_subscription", return_value=False)
@@ -295,6 +298,29 @@ class RazorpayRouteTests(unittest.TestCase):
         self.assertIn('<strong>₹1,499</strong>', page)
         self.assertIn("Pay ₹1,499 securely with Razorpay", page)
         self.assertNotIn("ReviewGrow Starter", page)
+        self.assertIn("const checkoutPrefill = {email:", page)
+        self.assertIn('"owner@example.com"', page)
+        self.assertIn("if (checkoutCustomerName) checkoutPrefill.name", page)
+        checkout_script = page[page.index("const checkoutPrefill"):page.index("const checkout = new Razorpay") + 300]
+        self.assertNotIn("contact", checkout_script.lower())
+        self.assertNotIn("phone", checkout_script.lower())
+        self.assertNotIn("8778358580", checkout_script)
+        self.assertNotIn("918778358580", checkout_script)
+
+    @patch("app.routes.subscription.get_connection")
+    @patch("app.routes.subscription.has_active_subscription", return_value=False)
+    @patch("app.routes.subscription.latest_subscription", return_value=None)
+    def test_checkout_omits_name_when_customer_name_is_unavailable(self, latest, active, connection):
+        class EmailOnlyCursor(FakeUserCursor):
+            def fetchone(self): return {"name": "", "email": "owner@example.com"}
+        class EmailOnlyConnection(FakeUserConnection):
+            def cursor(self, dictionary=False): return EmailOnlyCursor()
+        connection.return_value = EmailOnlyConnection()
+        self.login()
+        page = self.client.get("/pricing").get_data(as_text=True)
+        self.assertIn('const checkoutCustomerName = "".trim()', page)
+        self.assertIn("if (checkoutCustomerName) checkoutPrefill.name", page)
+        self.assertNotIn("prefill: {name:", page)
 
     @patch("app.routes.subscription.verify_checkout", return_value=(True, False))
     def test_verified_checkout_returns_success(self, mocked):

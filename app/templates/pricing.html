@@ -199,6 +199,9 @@
     const button = document.getElementById("razorpay-button");
     const message = document.getElementById("payment-message");
     const csrfToken = {{ csrf_token()|tojson }};
+    const checkoutPrefill = {email: {{ customer.get('email', '')|tojson }}};
+    const checkoutCustomerName = {{ customer.get('name', '')|tojson }}.trim();
+    if (checkoutCustomerName) checkoutPrefill.name = checkoutCustomerName;
     const setMessage = (text, kind = "info") => {
         message.className = `alert alert-${kind} mb-4`;
         message.textContent = text;
@@ -217,7 +220,7 @@
             const checkout = new Razorpay({
                 key: order.key_id, order_id: order.order_id, amount: order.amount,
                 currency: order.currency, name: order.name, description: order.description,
-                prefill: {name: {{ customer.get('name', '')|tojson }}, email: {{ customer.get('email', '')|tojson }}},
+                prefill: checkoutPrefill,
                 handler: async (result) => {
                     setMessage("Verifying your payment…");
                     try {
