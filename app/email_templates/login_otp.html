@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 18px;font-size:26px;line-height:1.25;color:#0f172a">Verify your ReviewGrow login</h1>
+<p style="margin:0 0 18px">{% if customer_name %}Hello {{ customer_name }},{% else %}Hello,{% endif %}</p>
+<p style="margin:0 0 22px">Use this six-digit verification code to finish signing in:</p>
+<div style="margin:0 0 22px;padding:18px;text-align:center;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;color:#0f3f8f;font-size:34px;font-weight:700;letter-spacing:8px">{{ otp_code }}</div>
+<p style="margin:0 0 12px">This code expires in {{ expiry_minutes }} minutes. Do not share it with anyone.</p>
+<p style="margin:0 0 18px;color:#475569">If you did not attempt to log in, you can safely ignore this email.</p>
+<p style="margin:0;color:#475569">Need help? Contact <a href="mailto:{{ support_email }}" style="color:#2563eb">{{ support_email }}</a>.</p>
+{% endblock %}

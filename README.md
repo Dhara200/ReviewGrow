@@ -384,6 +384,16 @@ Razorpay Standard Checkout setup, environment placeholders, migration steps, web
 ## Amazon SES transactional email
 
 Transactional email is stored in the `email_jobs` queue and delivered by the existing background worker through Amazon SES v2. Apply `database/migrations/20260802_001_create_email_jobs.sql` before deploying the app and worker, configure the documented `SES_*`, `AWS_REGION`, and `APP_BASE_URL` variables, and attach an EC2 IAM role with `ses:SendEmail`. Boto3 uses its normal credential provider chain; do not configure static AWS keys in the application. Set `SES_ENABLED=false` for local queue testing without AWS calls.
+
+### Password-login email verification
+
+Phase 2 makes a six-digit email OTP mandatory after a correct password. The application stores only a challenge-specific HMAC, queues the short-lived plaintext solely for worker rendering, and creates the authenticated session only after the challenge is atomically marked used. Codes expire after five minutes, allow five attempts, have a 60-second resend cooldown, and are limited to five requests per user or source IP per 15 minutes by default. Successful or permanently failed OTP email jobs redact their template payload.
+
+Apply `database/migrations/20260802_002_create_login_otp_challenges.sql` after the Phase 1 migration and configure `LOGIN_OTP_ENABLED`, `LOGIN_OTP_EXPIRY_MINUTES`, `LOGIN_OTP_MAX_ATTEMPTS`, `LOGIN_OTP_RESEND_COOLDOWN_SECONDS`, `LOGIN_OTP_MAX_REQUESTS_PER_15_MINUTES`, and `LOGIN_OTP_PENDING_SESSION_MINUTES`. Test locally with `SES_ENABLED=false`; automated tests mock the queue and never contact AWS.
+
+For production, back up MySQL, apply the migration, update the environment, rebuild and restart both containers, then verify challenge hashing, queued delivery, expiry, attempts, resend limits, and post-OTP session creation. Monitor failed `login_otp` email jobs, challenge request rates, SES delivery errors, and stale processing jobs without logging message payloads. ReviewGrow has no Google identity login: its Google OAuth flow connects an already-authenticated Google Business Profile and is unchanged.
+
+Emergency rollback requires setting `LOGIN_OTP_ENABLED=false` and restarting the app containers because configuration is read at process startup. Direct password login then follows the previous path; existing challenges and email jobs may remain for audit history and the migration does not need to be removed.
 * Expanded observability and monitoring
 * Infrastructure scaling as customer usage grows
 

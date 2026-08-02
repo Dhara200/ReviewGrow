@@ -73,6 +73,18 @@ class Config:
     SES_REPLY_TO_EMAIL = (os.getenv("SES_REPLY_TO_EMAIL") or "founder@reviewgrow.in").strip()
     SES_CONFIGURATION_SET = (os.getenv("SES_CONFIGURATION_SET") or "").strip()
     SES_ENABLED = _get_strict_bool("SES_ENABLED", True)
+    LOGIN_OTP_ENABLED = _get_strict_bool("LOGIN_OTP_ENABLED", True)
+    LOGIN_OTP_EXPIRY_MINUTES = _get_positive_int("LOGIN_OTP_EXPIRY_MINUTES", 5)
+    LOGIN_OTP_MAX_ATTEMPTS = _get_positive_int("LOGIN_OTP_MAX_ATTEMPTS", 5)
+    LOGIN_OTP_RESEND_COOLDOWN_SECONDS = _get_positive_int(
+        "LOGIN_OTP_RESEND_COOLDOWN_SECONDS", 60
+    )
+    LOGIN_OTP_MAX_REQUESTS_PER_15_MINUTES = _get_positive_int(
+        "LOGIN_OTP_MAX_REQUESTS_PER_15_MINUTES", 5
+    )
+    LOGIN_OTP_PENDING_SESSION_MINUTES = _get_positive_int(
+        "LOGIN_OTP_PENDING_SESSION_MINUTES", 10
+    )
     DEBUG = _get_bool("APP_DEBUG", False)
     TESTING = False
     # Allow bounded multipart framing around the separately enforced 10 MiB file.

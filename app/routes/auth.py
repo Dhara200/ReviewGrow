@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import ipaddress
 import re
+import time
 import unicodedata
 
 import mysql.connector
@@ -20,6 +21,11 @@ from werkzeug.security import (
 from app.config import Config
 from app.services.database_service import get_connection
 from app.services.email_queue_service import enqueue_welcome_email
+from app.services.login_otp_service import (
+    LoginOtpError, OtpCooldownError, OtpExpiredError, OtpInvalidError,
+    OtpLockedError, OtpRateLimitError, create_login_otp_challenge,
+    verify_login_otp,
+)
 from app.services.subscription_service import create_expired_subscription, has_active_subscription
 from app.services.recaptcha_service import verify_recaptcha
 from app.services.login_limiter_service import (
@@ -47,6 +53,42 @@ INVALID_LOGIN_MESSAGE = "Invalid email or password."
 LOCKED_LOGIN_MESSAGE = "Too many failed login attempts. Please try again after 15 minutes."
 RECAPTCHA_ERROR_MESSAGE = "Security verification failed. Please try again."
 EMAIL_LOCAL_PATTERN = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$")
+PENDING_LOGIN_KEYS = (
+    "pending_login_user_id", "pending_login_challenge_id",
+    "pending_login_started_at", "pending_login_masked_email",
+    "pending_login_next_url",
+)
+
+
+def _clear_pending_login():
+    for key in PENDING_LOGIN_KEYS:
+        session.pop(key, None)
+
+
+def _pending_login_valid():
+    try:
+        age = int(time.time()) - int(session["pending_login_started_at"])
+        return (
+            session.get("pending_login_user_id") is not None
+            and session.get("pending_login_challenge_id") is not None
+            and 0 <= age <= current_app.config["LOGIN_OTP_PENDING_SESSION_MINUTES"] * 60
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _otp_response(template="login_verify_otp.html", status=200, **context):
+    response = current_app.make_response((render_template(
+        template,
+        masked_email=session.get("pending_login_masked_email", "***"),
+        expiry_minutes=current_app.config["LOGIN_OTP_EXPIRY_MINUTES"],
+        cooldown_seconds=current_app.config["LOGIN_OTP_RESEND_COOLDOWN_SECONDS"],
+        **context,
+    ), status))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 def _registration_validation_error(name, email, password, confirm_password):
@@ -292,8 +334,6 @@ def _find_login_user(email):
                 connection.close()
             except Exception:
                 pass
-
-
 def _find_user_business(user_id):
     connection = None
     cursor = None
@@ -323,6 +363,43 @@ def _find_user_business(user_id):
                 connection.close()
             except Exception:
                 pass
+
+
+def _find_login_user_by_id(user_id):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id,name,email,role FROM users WHERE id=%s", (user_id,))
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        connection.close()
+
+
+def _complete_authenticated_login(user, audit, email, ip_address):
+    # Clearing rotates all signed cookie session state before final authentication.
+    session.clear()
+    session.permanent = True
+    session["user_id"] = user["id"]
+    session["user_name"] = user["name"]
+    session["role"] = user.get("role") or "owner"
+
+    if session["role"] == "admin":
+        audit.emit("login_success", email=email, client_ip=ip_address, http_status=302)
+        return redirect("/admin/dashboard")
+    try:
+        if not has_active_subscription(session["user_id"]):
+            audit.emit("login_success", email=email, client_ip=ip_address, http_status=302)
+            return redirect("/pricing")
+        business = _find_user_business(session["user_id"])
+    except Exception:
+        session.clear()
+        return _login_application_error_response(
+            audit, email, ip_address, account_valid=True,
+            unavailable=True, failure_category="post_auth_lookup",
+        )
+    audit.emit("login_success", email=email, client_ip=ip_address, http_status=302)
+    return redirect("/my-businesses" if business else "/create-business")
 
 
 def is_login_locked(email, ip_address):
@@ -715,46 +792,35 @@ def login_form():
                 failure_category="success_reset",
             )
 
-        # Discard all pre-authentication state before creating a fresh session.
+        if not current_app.config.get("LOGIN_OTP_ENABLED", False):
+            return _complete_authenticated_login(user, audit, email, ip_address)
+
+        # Rotate away all password-form state. Only signed, short-lived pending
+        # identifiers are retained; the OTP itself never enters the session.
         session.clear()
-        session.permanent = True
-        session["user_id"] = user["id"]
-        session["user_name"] = user["name"]
-        session["role"] = user.get("role") or "owner"
-
-        # Admin users go directly to Admin Dashboard
-        if session["role"] == "admin":
-            audit.emit(
-                "login_success", email=email, client_ip=ip_address, http_status=302
-            )
-            return redirect("/admin/dashboard")
-
         try:
-            if not has_active_subscription(session["user_id"]):
-                audit.emit(
-                    "login_success", email=email, client_ip=ip_address, http_status=302
-                )
-                return redirect("/pricing")
-
-            # Normal owners continue existing flow.
-            business = _find_user_business(session["user_id"])
-        except Exception:
-            session.clear()
-            return _login_application_error_response(
-                audit, email, ip_address, account_valid=True,
-                unavailable=True, failure_category="post_auth_lookup",
+            challenge = create_login_otp_challenge(
+                user, ip_address, request.headers.get("User-Agent", "")
             )
-
-        if business:
-            audit.emit(
-                "login_success", email=email, client_ip=ip_address, http_status=302
+        except Exception as error:
+            current_app.logger.error(
+                "Login OTP creation failed: user_id=%s error_type=%s",
+                user["id"], type(error).__name__,
             )
-            return redirect("/my-businesses")
-
+            return _login_error_response(
+                "We could not send your verification code. Please try again.",
+                email=email, status_code=503,
+            )
+        session.permanent = True
+        session["pending_login_user_id"] = user["id"]
+        session["pending_login_challenge_id"] = challenge.id
+        session["pending_login_started_at"] = int(time.time())
+        session["pending_login_masked_email"] = challenge.masked_email
         audit.emit(
-            "login_success", email=email, client_ip=ip_address, http_status=302
+            "login_otp_challenge_created", email=email, client_ip=ip_address,
+            http_status=302,
         )
-        return redirect("/create-business")
+        return redirect("/login/verify-otp")
 
     except Exception:
         if "user_id" in session:
@@ -768,7 +834,112 @@ def login_form():
             failure_category="unexpected_failure",
         )
 
-    
+
+@auth_bp.route("/login/verify-otp", methods=["GET"])
+def login_verify_otp_page():
+    if not current_app.config.get("LOGIN_OTP_ENABLED", False):
+        _clear_pending_login()
+        return redirect("/login-page")
+    if not _pending_login_valid():
+        _clear_pending_login()
+        return redirect("/login-page")
+    return _otp_response()
+
+
+@auth_bp.route("/login/verify-otp", methods=["POST"])
+def login_verify_otp_form():
+    if not current_app.config.get("LOGIN_OTP_ENABLED", False):
+        _clear_pending_login()
+        return redirect("/login-page")
+    if not _pending_login_valid():
+        _clear_pending_login()
+        return redirect("/login-page")
+    if not validate_login_csrf():
+        return _otp_response(status=403, otp_error=LOGIN_CSRF_ERROR_MESSAGE)
+    otp = request.form.get("otp_code") or ""
+    if not re.fullmatch(r"[0-9]{6}", otp):
+        return _otp_response(
+            status=400,
+            otp_error="The verification code is incorrect. Please try again.",
+        )
+    user_id = session["pending_login_user_id"]
+    challenge_id = session["pending_login_challenge_id"]
+    ip_address = get_client_ip()
+    audit = _get_security_audit()
+    try:
+        user = verify_login_otp(user_id, challenge_id, otp)
+    except OtpExpiredError:
+        return _otp_response(
+            status=400,
+            otp_error="This verification code has expired. Request a new code.",
+        )
+    except OtpLockedError:
+        _clear_pending_login()
+        return redirect("/login-page")
+    except OtpInvalidError:
+        return _otp_response(
+            status=400,
+            otp_error="The verification code is incorrect. Please try again.",
+        )
+    except Exception as error:
+        current_app.logger.error(
+            "Login OTP verification failed: challenge_id=%s error_type=%s",
+            challenge_id, type(error).__name__,
+        )
+        return _otp_response(
+            status=503,
+            otp_error="Verification is temporarily unavailable. Please try again.",
+        )
+    audit.emit(
+        "login_otp_verified", email=user["email"], client_ip=ip_address,
+        http_status=302,
+    )
+    return _complete_authenticated_login(user, audit, user["email"], ip_address)
+
+
+@auth_bp.route("/login/resend-otp", methods=["POST"])
+def login_resend_otp():
+    if not current_app.config.get("LOGIN_OTP_ENABLED", False):
+        _clear_pending_login()
+        return redirect("/login-page")
+    if not _pending_login_valid():
+        _clear_pending_login()
+        return redirect("/login-page")
+    if not validate_login_csrf():
+        return _otp_response(status=403, otp_error=LOGIN_CSRF_ERROR_MESSAGE)
+    user_id = session["pending_login_user_id"]
+    try:
+        user = _find_login_user_by_id(user_id)
+        if not user:
+            _clear_pending_login()
+            return redirect("/login-page")
+        challenge = create_login_otp_challenge(
+            user, get_client_ip(), request.headers.get("User-Agent", ""), resend=True
+        )
+    except OtpCooldownError:
+        return _otp_response(
+            status=429, otp_error="Please wait before requesting another code."
+        )
+    except OtpRateLimitError:
+        return _otp_response(
+            status=429,
+            otp_error="Too many verification-code requests. Please sign in again later.",
+        )
+    except Exception as error:
+        current_app.logger.error(
+            "Login OTP resend failed: user_id=%s error_type=%s",
+            user_id, type(error).__name__,
+        )
+        return _otp_response(
+            status=503,
+            otp_error="We could not send your verification code. Please try again.",
+        )
+    session["pending_login_challenge_id"] = challenge.id
+    session["pending_login_started_at"] = int(time.time())
+    session["pending_login_masked_email"] = challenge.masked_email
+    return _otp_response(otp_message="A new verification code has been sent.")
+
+
 #LOGOUT ROUTE AUTHENTICATION
 
 @auth_bp.route("/account/delete", methods=["DELETE"])

@@ -23,6 +23,7 @@ from app.services.business_analytics_service import refresh_business_review_anal
 from app.services.database_service import get_connection
 from app.services.email_queue_service import (
     claim_pending_email_jobs,
+    mark_email_cancelled,
     mark_email_failed,
     mark_email_sent,
     recover_stale_email_jobs,
@@ -32,6 +33,7 @@ from app.services.ses_email_service import (
     mask_email,
     send_queued_email,
 )
+from app.services.login_otp_service import is_login_otp_challenge_active
 from app.services.schema_compatibility_service import validate_runtime_schema
 from app.services.google_review_sync_execution_service import run_google_review_sync
 from app.services.google_review_post_sync_service import perform_google_review_post_sync
@@ -112,6 +114,12 @@ def run_worker_iteration():
 
 def _process_email_job(job):
     try:
+        if job.get("email_type") == "login_otp":
+            challenge_id = (job.get("template_data") or {}).get("challenge_id")
+            if not challenge_id or not is_login_otp_challenge_active(challenge_id):
+                if not mark_email_cancelled(job["id"], "Login challenge is no longer active"):
+                    raise WorkerInfrastructureError("Email cancellation state could not be persisted.")
+                return True
         message_id = send_queued_email(job)
         if not mark_email_sent(job["id"], message_id):
             raise WorkerInfrastructureError("Email sent state could not be persisted.")

@@ -14,7 +14,7 @@ RETRY_DELAYS_SECONDS = (60, 300, 900, 3600, 21600)
 
 
 def enqueue_email(recipient_email, email_type, template_name, template_data,
-                  *, user_id=None, priority=0, max_attempts=6,
+                  *, user_id=None, priority=100, max_attempts=6,
                   deduplication_key=None):
     connection = get_connection()
     cursor = connection.cursor()
@@ -75,7 +75,7 @@ def claim_pending_email_jobs(limit=1):
             """
             SELECT * FROM email_jobs
             WHERE status='pending' AND next_attempt_at<=UTC_TIMESTAMP(6)
-            ORDER BY priority DESC, created_at ASC
+            ORDER BY priority ASC, created_at ASC
             LIMIT %s FOR UPDATE SKIP LOCKED
             """, (max(1, int(limit)),),
         )
@@ -108,6 +108,9 @@ def mark_email_sent(job_id, message_id):
     return _terminal_update(
         """UPDATE email_jobs SET status='sent',ses_message_id=%s,
            sent_at=UTC_TIMESTAMP(6),processing_started_at=NULL,last_error=NULL,
+           template_data=IF(email_type='login_otp',
+             JSON_OBJECT('redacted',TRUE,'challenge_id',JSON_EXTRACT(template_data,'$.challenge_id')),
+             template_data),
            updated_at=UTC_TIMESTAMP(6) WHERE id=%s AND status='processing'""",
         (message_id, job_id),
     )
@@ -130,9 +133,22 @@ def mark_email_failed(job, error_message, *, retryable):
         )
     return _terminal_update(
         """UPDATE email_jobs SET status='failed',last_error=%s,
+           template_data=IF(email_type='login_otp',
+             JSON_OBJECT('redacted',TRUE,'challenge_id',JSON_EXTRACT(template_data,'$.challenge_id')),
+             template_data),
            processing_started_at=NULL,updated_at=UTC_TIMESTAMP(6)
            WHERE id=%s AND status='processing'""",
         (safe_error, job["id"]),
+    )
+
+
+def mark_email_cancelled(job_id, reason="Email job cancelled"):
+    return _terminal_update(
+        """UPDATE email_jobs SET status='cancelled',last_error=%s,
+           template_data=IF(email_type='login_otp',JSON_OBJECT('redacted',TRUE),template_data),
+           processing_started_at=NULL,updated_at=UTC_TIMESTAMP(6)
+           WHERE id=%s AND status='processing'""",
+        (" ".join(str(reason).split())[:500], job_id),
     )
 
 

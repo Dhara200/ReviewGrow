@@ -37,6 +37,15 @@ class SesEmailServiceTests(unittest.TestCase):
         self.assertIn("Asha", html)
         self.assertIn("Log in: https://reviewgrow.in/login-page", text)
 
+    def test_login_otp_template_has_subject_content_without_secret_url(self):
+        html, text = render_email("login_otp", {
+            "customer_name": "Asha", "otp_code": "012345", "expiry_minutes": 5,
+            "support_email": "founder@reviewgrow.in",
+        })
+        self.assertIn("012345", html)
+        self.assertIn("expires in 5 minutes", text)
+        self.assertNotIn("?otp", html.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

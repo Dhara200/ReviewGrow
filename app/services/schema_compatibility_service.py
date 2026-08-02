@@ -78,6 +78,12 @@ REQUIRED_SCHEMA = {
         "processing_started_at",
         "sent_at",
     },
+    "login_otp_challenges": {
+        "id", "user_id", "otp_hash", "expires_at", "attempt_count",
+        "max_attempts", "used_at", "invalidated_at", "requested_ip",
+        "user_agent_hash", "resend_count", "last_sent_at", "created_at",
+        "updated_at",
+    },
 }
 
 _validation_lock = threading.Lock()

@@ -55,7 +55,14 @@ class EmailQueueServiceTests(unittest.TestCase):
             self.assertTrue(queue.mark_email_sent(7, "ses-message"))
         sql, params = cursor.executions[0]
         self.assertIn("sent_at=UTC_TIMESTAMP(6)", sql)
+        self.assertIn("JSON_OBJECT('redacted',TRUE", sql)
         self.assertEqual(("ses-message", 7), params)
+
+    def test_claim_orders_lower_priority_first(self):
+        cursor = FakeCursor(rows=[])
+        with patch.object(queue, "get_connection", return_value=FakeConnection(cursor)):
+            queue.claim_pending_email_jobs()
+        self.assertIn("ORDER BY priority ASC, created_at ASC", cursor.executions[0][0])
 
     def test_temporary_failure_schedules_retry(self):
         cursor = FakeCursor()

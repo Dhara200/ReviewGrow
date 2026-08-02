@@ -1,0 +1,13 @@
+Verify your ReviewGrow login
+
+{% if customer_name %}Hello {{ customer_name }},{% else %}Hello,{% endif %}
+
+Use this six-digit verification code to finish signing in:
+
+{{ otp_code }}
+
+This code expires in {{ expiry_minutes }} minutes. Do not share it with anyone.
+
+If you did not attempt to log in, you can safely ignore this email.
+
+Need help? Contact {{ support_email }}.
