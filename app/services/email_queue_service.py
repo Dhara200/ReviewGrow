@@ -7,10 +7,14 @@ import mysql.connector
 
 from app.config import Config
 from app.services.database_service import get_connection
+from app.utils.datetime_utils import format_datetime_ist
 
 
 WELCOME_SUBJECT = "Welcome to ReviewGrow — your account is ready"
 RETRY_DELAYS_SECONDS = (60, 300, 900, 3600, 21600)
+SUBSCRIPTION_CONFIRMATION_SUBJECT = (
+    "Payment confirmed — your ReviewGrow Premium plan is active"
+)
 
 
 def enqueue_email(recipient_email, email_type, template_name, template_data,
@@ -63,6 +67,35 @@ def enqueue_welcome_email(user):
             "support_email": Config.SES_REPLY_TO_EMAIL or "founder@reviewgrow.in",
         },
         user_id=user_id, priority=50, deduplication_key=f"welcome:{user_id}",
+    )
+
+
+def enqueue_subscription_confirmation_email(details):
+    payment_id = str(details["razorpay_payment_id"])
+    amount_paise = int(details["amount_paise"])
+    currency = str(details["currency"])
+    symbol = "₹" if currency == "INR" else f"{currency} "
+    return enqueue_email(
+        details["email"], "subscription_confirmation", "subscription_confirmation",
+        {
+            "subject": SUBSCRIPTION_CONFIRMATION_SUBJECT,
+            "customer_name": details.get("name") or "",
+            "plan_name": details["plan_name"],
+            "amount_display": f"{symbol}{amount_paise / 100:,.2f}",
+            "currency": currency,
+            "razorpay_payment_id": payment_id,
+            "razorpay_order_id": str(details["razorpay_order_id"]),
+            "subscription_start_date": format_datetime_ist(
+                details.get("subscription_start_date")
+            ),
+            "subscription_end_date": format_datetime_ist(
+                details.get("subscription_end_date")
+            ),
+            "dashboard_url": f"{Config.APP_BASE_URL}/my-businesses",
+            "support_email": Config.SES_REPLY_TO_EMAIL or "founder@reviewgrow.in",
+        },
+        user_id=int(details["user_id"]), priority=20,
+        deduplication_key=f"subscription_confirmation:{payment_id}",
     )
 
 

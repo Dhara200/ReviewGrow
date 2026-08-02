@@ -6,6 +6,7 @@ import razorpay
 
 from app.config import Config
 from app.services.database_service import get_connection
+from app.services.email_queue_service import enqueue_subscription_confirmation_email
 from app.services.subscription_service import activate_or_extend_subscription
 
 
@@ -119,9 +120,6 @@ def process_success(order_id, payment_id, user_id=None, signature=None, client=N
             raise PaymentError("Unknown payment order.", 404)
         if user_id is not None and payment["user_id"] != user_id:
             raise PaymentError("This payment order belongs to another account.", 403)
-        if payment.get("processed_at") is not None:
-            conn.commit()
-            return True, True
         plan = resolve_plan(payment.get("plan_code"))
         if payment.get("amount_paise") != plan.amount_paise or payment.get("currency") != plan.currency:
             raise PaymentError("Stored payment amount or currency mismatch.")
@@ -136,27 +134,94 @@ def process_success(order_id, payment_id, user_id=None, signature=None, client=N
                 raise PaymentError("Payment signature verification failed.", 400) from exc
         if not _provider_is_paid(provider, order_id, payment_id, plan.amount_paise, plan.currency):
             raise PaymentError("Payment has not been captured.", 409)
-        subscription_id, _ = activate_or_extend_subscription(
-            cursor, payment["user_id"], "starter", plan.duration_days
-        )
-        cursor.execute(
-            """
-            UPDATE payments SET razorpay_payment_id=%s, transaction_id=%s,
-                payment_status='paid', paid_at=NOW(), processed_at=NOW(),
-                subscription_id=%s, failure_code=NULL, failure_reason=NULL
-            WHERE id=%s AND processed_at IS NULL
-            """,
-            (payment_id, payment_id, subscription_id, payment["id"])
-        )
+        duplicate = payment.get("processed_at") is not None
+        if duplicate:
+            if payment.get("razorpay_payment_id") != payment_id:
+                raise PaymentError("Payment does not match the processed order.")
+        else:
+            subscription_id, _ = activate_or_extend_subscription(
+                cursor, payment["user_id"], "starter", plan.duration_days
+            )
+            cursor.execute(
+                """
+                UPDATE payments SET razorpay_payment_id=%s, transaction_id=%s,
+                    payment_status='paid', paid_at=UTC_TIMESTAMP(6),
+                    processed_at=UTC_TIMESTAMP(6), subscription_id=%s,
+                    failure_code=NULL, failure_reason=NULL
+                WHERE id=%s AND processed_at IS NULL
+                """,
+                (payment_id, payment_id, subscription_id, payment["id"])
+            )
+            if cursor.rowcount != 1:
+                raise PaymentError("Payment was processed concurrently.", 409)
         conn.commit()
-        logger.info("razorpay_payment_processed local_payment_id=%s order_id=%s payment_id=%s duplicate=false", payment["id"], order_id, payment_id)
-        return True, False
+        logger.info(
+            "razorpay_payment_processed local_payment_id=%s order_id=%s "
+            "payment_id=%s duplicate=%s",
+            payment["id"], order_id, payment_id, str(duplicate).lower(),
+        )
     except Exception:
         conn.rollback()
         raise
     finally:
         cursor.close()
         conn.close()
+    _queue_confirmation_after_commit(payment_id)
+    return True, duplicate
+
+
+def ensure_subscription_confirmation_email(payment_id):
+    """Queue a missing confirmation for an already-processed payment only."""
+    if not Config.SUBSCRIPTION_CONFIRMATION_EMAIL_ENABLED:
+        return None
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """SELECT p.user_id,p.amount_paise,p.currency,p.plan_code,
+                      p.razorpay_payment_id,p.razorpay_order_id,
+                      u.name,u.email,s.subscription_start_date,
+                      s.subscription_end_date
+               FROM payments p
+               JOIN users u ON u.id=p.user_id
+               JOIN subscriptions s ON s.id=p.subscription_id
+               WHERE p.razorpay_payment_id=%s
+                 AND p.payment_gateway='razorpay'
+                 AND p.payment_status='paid'
+                 AND p.processed_at IS NOT NULL
+               LIMIT 1""",
+            (payment_id,),
+        )
+        details = cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+    if not details:
+        return None
+    plan = resolve_plan(details.get("plan_code"))
+    if (
+        int(details.get("amount_paise") or -1) != plan.amount_paise
+        or details.get("currency") != plan.currency
+    ):
+        raise PaymentError("Processed payment amount or currency mismatch.")
+    details["plan_name"] = plan.name
+    return enqueue_subscription_confirmation_email(details)
+
+
+def _queue_confirmation_after_commit(payment_id):
+    try:
+        job_id = ensure_subscription_confirmation_email(payment_id)
+        if job_id is not None:
+            logger.info(
+                "subscription_confirmation_queued payment_id=%s email_job_id=%s "
+                "email_type=subscription_confirmation",
+                payment_id, job_id,
+            )
+    except Exception as error:
+        logger.error(
+            "subscription_confirmation_queue_failed payment_id=%s error_type=%s",
+            payment_id, type(error).__name__,
+        )
 
 
 def verify_checkout(user_id, payload, client=None):

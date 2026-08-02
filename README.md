@@ -394,6 +394,14 @@ Apply `database/migrations/20260802_002_create_login_otp_challenges.sql` after t
 For production, back up MySQL, apply the migration, update the environment, rebuild and restart both containers, then verify challenge hashing, queued delivery, expiry, attempts, resend limits, and post-OTP session creation. Monitor failed `login_otp` email jobs, challenge request rates, SES delivery errors, and stale processing jobs without logging message payloads. ReviewGrow has no Google identity login: its Google OAuth flow connects an already-authenticated Google Business Profile and is unchanged.
 
 Emergency rollback requires setting `LOGIN_OTP_ENABLED=false` and restarting the app containers because configuration is read at process startup. Direct password login then follows the previous path; existing challenges and email jobs may remain for audit history and the migration does not need to be removed.
+
+### Subscription confirmation email
+
+Phase 3 queues a `subscription_confirmation` email only after Razorpay authenticity, server-side amount/currency and paid-state checks succeed and the payment/subscription transaction commits. Both the browser callback and signed webhook use the shared `process_success` flow. The deterministic key `subscription_confirmation:<razorpay_payment_id>` prevents duplicate email jobs while the payment row's existing `processed_at` guard prevents duplicate 30-day extensions.
+
+If the payment was already processed, the same flow verifies it again and calls `ensure_subscription_confirmation_email` without changing the subscription. This repairs a missing job after an earlier post-commit queue outage. Queue failures never reverse payment or subscription access and are logged using payment ID and exception type only. Priority order remains OTP `10`, subscription confirmation `20`, welcome `50`, and default/reminder `100`; workers select `priority ASC, created_at ASC`.
+
+Set `SUBSCRIPTION_CONFIRMATION_EMAIL_ENABLED=false` and restart app processes for an email-only emergency rollback. Payments and subscription activation continue normally, existing jobs remain available for audit, and no schema rollback is needed. Local tests mock Razorpay and SES; production validation should use one controlled low-risk payment and verify a single payment update, subscription extension, deduplicated email job, SES MessageId, and received message before replaying the signed webhook.
 * Expanded observability and monitoring
 * Infrastructure scaling as customer usage grows
 

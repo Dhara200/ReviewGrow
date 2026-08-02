@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 18px;font-size:26px;line-height:1.25;color:#0f172a">Your ReviewGrow Premium plan is active</h1>
+<p style="margin:0 0 18px">{% if customer_name %}Hello {{ customer_name }},{% else %}Hello,{% endif %}</p>
+<p style="margin:0 0 22px">Your payment was confirmed and your subscription is now active.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 24px;border-collapse:collapse;border:1px solid #dbeafe;border-radius:10px">
+  <tr><td style="padding:10px 14px;color:#64748b">Plan</td><td style="padding:10px 14px;text-align:right;font-weight:700">{{ plan_name }}</td></tr>
+  <tr style="background:#f8fafc"><td style="padding:10px 14px;color:#64748b">Amount paid</td><td style="padding:10px 14px;text-align:right;font-weight:700">{{ amount_display }} {{ currency }}</td></tr>
+  <tr><td style="padding:10px 14px;color:#64748b">Payment ID</td><td style="padding:10px 14px;text-align:right;font-family:monospace">{{ razorpay_payment_id }}</td></tr>
+  <tr style="background:#f8fafc"><td style="padding:10px 14px;color:#64748b">Subscription starts</td><td style="padding:10px 14px;text-align:right">{{ subscription_start_date }}</td></tr>
+  <tr><td style="padding:10px 14px;color:#64748b">Subscription ends</td><td style="padding:10px 14px;text-align:right">{{ subscription_end_date }}</td></tr>
+</table>
+<p style="margin:0 0 24px"><a href="{{ dashboard_url }}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:9px">Open ReviewGrow dashboard</a></p>
+<p style="margin:0 0 12px;color:#475569">Keep your payment ID for future reference.</p>
+<p style="margin:0;color:#475569">Need help? Contact <a href="mailto:{{ support_email }}" style="color:#2563eb">{{ support_email }}</a>.</p>
+{% endblock %}

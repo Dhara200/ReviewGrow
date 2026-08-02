@@ -207,24 +207,32 @@ class RazorpayRouteTests(unittest.TestCase):
         self.assertTrue(payment_connection.rolled_back)
 
     @patch("app.services.razorpay_service.activate_or_extend_subscription")
+    @patch("app.services.razorpay_service._queue_confirmation_after_commit")
     @patch("app.services.razorpay_service.get_connection")
     def test_duplicate_callback_does_not_extend_subscription(
-        self, connection, activate
+        self, connection, queue_confirmation, activate
     ):
         payment_connection = FakePaymentConnection({
             "id": 11, "user_id": 7, "payment_gateway": "razorpay",
             "razorpay_order_id": "order_test", "processed_at": object(),
+            "razorpay_payment_id": "pay_test",
             "plan_code": "starter_monthly", "amount_paise": 149900,
             "currency": "INR",
         })
         connection.return_value = payment_connection
         success, duplicate = process_success(
             "order_test", "pay_test", user_id=7,
-            client=FakeProvider({}, {}),
+            client=FakeProvider(
+                {"id": "pay_test", "order_id": "order_test", "amount": 149900,
+                 "currency": "INR", "status": "captured"},
+                {"id": "order_test", "amount": 149900, "amount_paid": 149900,
+                 "currency": "INR", "status": "paid"},
+            ),
         )
         self.assertTrue(success)
         self.assertTrue(duplicate)
         activate.assert_not_called()
+        queue_confirmation.assert_called_once_with("pay_test")
 
     @patch("app.services.razorpay_service.Config.RAZORPAY_WEBHOOK_SECRET", "test-secret")
     @patch(

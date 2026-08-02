@@ -73,6 +73,9 @@ class Config:
     SES_REPLY_TO_EMAIL = (os.getenv("SES_REPLY_TO_EMAIL") or "founder@reviewgrow.in").strip()
     SES_CONFIGURATION_SET = (os.getenv("SES_CONFIGURATION_SET") or "").strip()
     SES_ENABLED = _get_strict_bool("SES_ENABLED", True)
+    SUBSCRIPTION_CONFIRMATION_EMAIL_ENABLED = _get_strict_bool(
+        "SUBSCRIPTION_CONFIRMATION_EMAIL_ENABLED", True
+    )
     LOGIN_OTP_ENABLED = _get_strict_bool("LOGIN_OTP_ENABLED", True)
     LOGIN_OTP_EXPIRY_MINUTES = _get_positive_int("LOGIN_OTP_EXPIRY_MINUTES", 5)
     LOGIN_OTP_MAX_ATTEMPTS = _get_positive_int("LOGIN_OTP_MAX_ATTEMPTS", 5)
