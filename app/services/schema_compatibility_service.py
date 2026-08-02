@@ -61,6 +61,23 @@ REQUIRED_SCHEMA = {
         "access_token",
         "refresh_token",
     },
+    "email_jobs": {
+        "id",
+        "user_id",
+        "recipient_email",
+        "email_type",
+        "template_name",
+        "template_data",
+        "priority",
+        "status",
+        "attempt_count",
+        "max_attempts",
+        "next_attempt_at",
+        "deduplication_key",
+        "ses_message_id",
+        "processing_started_at",
+        "sent_at",
+    },
 }
 
 _validation_lock = threading.Lock()

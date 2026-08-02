@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin:0 0 18px;font-size:26px;line-height:1.25;color:#0f172a">Welcome to ReviewGrow{% if display_name %}, {{ display_name }}{% endif %}!</h1>
+<p style="margin:0 0 16px">Your ReviewGrow account is ready.</p>
+<p style="margin:0 0 24px">You can now add a business, connect your Google Business Profile, analyse customer reviews, and prepare professional AI-assisted responses from one simple dashboard.</p>
+<p style="margin:0 0 26px"><a href="{{ login_url }}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:9px">Log in to ReviewGrow</a></p>
+<p style="margin:0;color:#475569">Questions? Reply to this email or contact <a href="mailto:{{ support_email }}" style="color:#2563eb">{{ support_email }}</a>.</p>
+{% endblock %}

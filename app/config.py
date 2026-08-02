@@ -66,6 +66,13 @@ def _get_configured_int(name, default):
 class Config:
     APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://reviewgrow.in").rstrip("/")
+    APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://reviewgrow.in").rstrip("/")
+    AWS_REGION = (os.getenv("AWS_REGION") or "ap-south-1").strip()
+    SES_FROM_EMAIL = (os.getenv("SES_FROM_EMAIL") or "notifications@reviewgrow.in").strip()
+    SES_FROM_NAME = (os.getenv("SES_FROM_NAME") or "ReviewGrow").strip()
+    SES_REPLY_TO_EMAIL = (os.getenv("SES_REPLY_TO_EMAIL") or "founder@reviewgrow.in").strip()
+    SES_CONFIGURATION_SET = (os.getenv("SES_CONFIGURATION_SET") or "").strip()
+    SES_ENABLED = _get_strict_bool("SES_ENABLED", True)
     DEBUG = _get_bool("APP_DEBUG", False)
     TESTING = False
     # Allow bounded multipart framing around the separately enforced 10 MiB file.

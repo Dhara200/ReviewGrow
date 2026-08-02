@@ -19,6 +19,7 @@ from werkzeug.security import (
 )
 from app.config import Config
 from app.services.database_service import get_connection
+from app.services.email_queue_service import enqueue_welcome_email
 from app.services.subscription_service import create_expired_subscription, has_active_subscription
 from app.services.recaptcha_service import verify_recaptcha
 from app.services.login_limiter_service import (
@@ -483,6 +484,15 @@ def register_form():
 
     password_hash = generate_password_hash(password)
     user_id = _create_registered_user(name, email, password_hash)
+    # User and initial subscription are committed before this independent queue write.
+    # Email infrastructure must never turn a successful registration into an error.
+    try:
+        enqueue_welcome_email({"id": user_id, "name": name, "email": email})
+    except Exception as error:
+        current_app.logger.error(
+            "Welcome email enqueue failed: user_id=%s error_type=%s",
+            user_id, type(error).__name__,
+        )
     session.clear()
     session.permanent = True
     session["user_id"] = user_id

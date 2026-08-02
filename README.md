@@ -380,6 +380,10 @@ Planned improvements include:
 ## Razorpay payments
 
 Razorpay Standard Checkout setup, environment placeholders, migration steps, webhook configuration, go-live checks, troubleshooting, and rollback guidance are documented in [docs/razorpay-integration.md](docs/razorpay-integration.md). This integration provides one-time subscription purchases; automatic recurring Razorpay Subscriptions are not included.
+
+## Amazon SES transactional email
+
+Transactional email is stored in the `email_jobs` queue and delivered by the existing background worker through Amazon SES v2. Apply `database/migrations/20260802_001_create_email_jobs.sql` before deploying the app and worker, configure the documented `SES_*`, `AWS_REGION`, and `APP_BASE_URL` variables, and attach an EC2 IAM role with `ses:SendEmail`. Boto3 uses its normal credential provider chain; do not configure static AWS keys in the application. Set `SES_ENABLED=false` for local queue testing without AWS calls.
 * Expanded observability and monitoring
 * Infrastructure scaling as customer usage grows
 

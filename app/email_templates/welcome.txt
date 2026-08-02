@@ -1,0 +1,11 @@
+Welcome to ReviewGrow{% if display_name %}, {{ display_name }}{% endif %}!
+
+Your ReviewGrow account is ready.
+
+You can now add a business, connect your Google Business Profile, analyse customer reviews, and prepare professional AI-assisted responses from one simple dashboard.
+
+Log in: {{ login_url }}
+
+Questions? Contact {{ support_email }}.
+
+ReviewGrow — reviewgrow.in

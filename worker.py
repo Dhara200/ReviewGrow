@@ -21,6 +21,17 @@ from app.services.analysis_job_service import (
 from app.services.ai_consultant_service import generate_consultant_report
 from app.services.business_analytics_service import refresh_business_review_analytics
 from app.services.database_service import get_connection
+from app.services.email_queue_service import (
+    claim_pending_email_jobs,
+    mark_email_failed,
+    mark_email_sent,
+    recover_stale_email_jobs,
+)
+from app.services.ses_email_service import (
+    EmailDeliveryError,
+    mask_email,
+    send_queued_email,
+)
 from app.services.schema_compatibility_service import validate_runtime_schema
 from app.services.google_review_sync_execution_service import run_google_review_sync
 from app.services.google_review_post_sync_service import perform_google_review_post_sync
@@ -39,6 +50,7 @@ shutdown_event = threading.Event()
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex}"[:255]
 AI_LEASE_SECONDS = 120
 AI_HEARTBEAT_SECONDS = 30
+EMAIL_STALE_TIMEOUT_MINUTES = 15
 
 
 class WorkerInfrastructureError(Exception):
@@ -46,7 +58,7 @@ class WorkerInfrastructureError(Exception):
 
 
 def run_worker_iteration():
-    """Process at most one job from each queue so neither queue is starved."""
+    """Process at most one job from each queue so no queue is starved."""
     processed_job = False
     if shutdown_requested:
         return False
@@ -83,7 +95,52 @@ def run_worker_iteration():
                 )
             processed_job = True
 
+    if not shutdown_requested:
+        try:
+            email_jobs = claim_pending_email_jobs(limit=1)
+            if email_jobs:
+                _process_email_job(email_jobs[0])
+                processed_job = True
+        except Exception as error:
+            # Email delivery is isolated from existing review and AI queues.
+            _log_sanitized_exception(
+                "Email queue iteration failed: component=email_queue", error
+            )
+
     return processed_job
+
+
+def _process_email_job(job):
+    try:
+        message_id = send_queued_email(job)
+        if not mark_email_sent(job["id"], message_id):
+            raise WorkerInfrastructureError("Email sent state could not be persisted.")
+        logger.info(
+            "Email job sent: job_id=%s email_type=%s recipient=%s ses_message_id=%s",
+            job.get("id"), job.get("email_type"),
+            mask_email(job.get("recipient_email")), message_id,
+        )
+        return True
+    except EmailDeliveryError as error:
+        if not mark_email_failed(job, str(error), retryable=error.retryable):
+            raise WorkerInfrastructureError("Email failure state could not be persisted.")
+        logger.warning(
+            "Email job delivery failed: job_id=%s email_type=%s recipient=%s "
+            "retryable=%s error_type=%s",
+            job.get("id"), job.get("email_type"),
+            mask_email(job.get("recipient_email")), error.retryable,
+            type(error).__name__,
+        )
+        return True
+    except WorkerInfrastructureError:
+        raise
+    except Exception as error:
+        # Unknown transport failures are retried; no content or template data is logged.
+        if not mark_email_failed(
+            job, f"Unexpected email failure ({type(error).__name__}).", retryable=True
+        ):
+            raise WorkerInfrastructureError("Email failure state could not be persisted.")
+        return True
 
 
 class _AIHeartbeatService:
@@ -157,6 +214,14 @@ def run_worker_forever():
     if not _recover_stale_google_jobs():
         logger.info("Worker shutdown during Google stale-job recovery.")
         return
+
+    try:
+        recovered_email_count = recover_stale_email_jobs(EMAIL_STALE_TIMEOUT_MINUTES)
+        logger.info("Recovered stale email jobs: count=%s", recovered_email_count)
+    except Exception as error:
+        _log_sanitized_exception(
+            "Email stale-job recovery failed: component=startup_recovery", error
+        )
 
     while not shutdown_requested:
         try:
