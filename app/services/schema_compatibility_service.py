@@ -39,7 +39,7 @@ REQUIRED_SCHEMA = {
         "status",
         "job_type",
         "worker_id",
-        "lease_expires_at",
+        "lease_expires_at", "refresh_window_key", "result_json",
     },
     "ai_usage_logs": {
         "user_id",
@@ -60,6 +60,16 @@ REQUIRED_SCHEMA = {
         "business_id",
         "access_token",
         "refresh_token",
+        "google_place_id", "latitude", "longitude", "primary_category",
+    },
+    "business_competitors": {
+        "id", "business_id", "google_place_id", "competitor_name",
+        "rating", "user_rating_count", "last_refreshed_at", "is_active",
+    },
+    "business_reputation_snapshots": {
+        "id", "business_id", "subject_type", "subject_key", "competitor_id",
+        "google_place_id", "rating", "user_rating_count", "captured_at",
+        "capture_date", "refresh_job_id",
     },
     "email_jobs": {
         "id",

@@ -1,130 +1,17 @@
 {% extends "base_app.html" %}
 
-{% block title %}AI Business Consultant - ReviewGrow{% endblock %}
+{% block title %}AI Reputation Consultant - ReviewGrow{% endblock %}
 {% block nav_consultant %}active{% endblock %}
 
 {% block breadcrumb %}
 <span class="text-muted small fw-semibold">
-    Workspace / {{ business.business_name if business else "Business" }} / AI Business Consultant
+    Workspace / {{ business.business_name if business else "Business" }} / AI Reputation Consultant
 </span>
 {% endblock %}
 
 
 {% block head %}
-<style>
-.rs-content {
-    width: 100%;
-    max-width: none;
-}
-
-.consultant-score {
-    font-size: clamp(2.4rem, 5vw, 4rem);
-    line-height: 1;
-}
-
-.consultant-list {
-    display: grid;
-    gap: .85rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.consultant-list li {
-    display: flex;
-    gap: .65rem;
-    align-items: flex-start;
-    color: var(--rs-muted);
-}
-
-.consultant-list i {
-    margin-top: .15rem;
-    flex: 0 0 auto;
-}
-
-.consultant-metric {
-    padding: 1rem;
-    border: 1px solid var(--rs-border);
-    border-radius: .5rem;
-    background: var(--rs-surface);
-}
-
-.command-grid {
-    display: grid;
-    grid-template-columns: minmax(320px, .8fr) minmax(0, 1.6fr);
-    gap: 1.5rem;
-}
-
-.command-score {
-    font-size: clamp(3rem, 7vw, 5rem);
-    line-height: .95;
-}
-
-.command-section {
-    margin-bottom: 1.5rem;
-}
-
-.command-list {
-    display: grid;
-    gap: .85rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.command-list li,
-.command-action,
-.command-alert,
-.topic-row,
-.attention-review {
-    border: 1px solid var(--rs-border);
-    border-radius: .5rem;
-    background: var(--rs-surface);
-    padding: 1rem;
-}
-
-.command-action,
-.attention-review {
-    display: grid;
-    gap: .5rem;
-}
-
-.topic-row {
-    display: grid;
-    grid-template-columns: minmax(110px, 1fr) auto auto;
-    gap: .75rem;
-    align-items: center;
-}
-
-.emotion-bar {
-    height: .55rem;
-    border-radius: 999px;
-    background: var(--rs-border);
-    overflow: hidden;
-}
-
-.emotion-bar span {
-    display: block;
-    height: 100%;
-    background: var(--rs-primary);
-}
-
-.growth-chart-wrap {
-    position: relative;
-    min-height: 320px;
-}
-
-.growth-chart-wrap canvas {
-    width: 100% !important;
-    height: 320px !important;
-}
-
-@media (max-width: 991.98px) {
-    .command-grid {
-        grid-template-columns: 1fr;
-    }
-}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai_consultant.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
 
@@ -166,14 +53,15 @@
 {% set executive_summary = (report.executive_summary if report else command_center.executive_summary) %}
 
 {% if consultant_job and consultant_job.status in ['pending', 'processing', 'completed', 'failed'] %}
-<div class="alert {% if consultant_job.status == 'failed' %}alert-danger{% elif consultant_job.status == 'completed' %}alert-success{% else %}alert-info{% endif %}"
+<div class="consultant-job-state alert {% if consultant_job.status == 'failed' %}alert-danger{% elif consultant_job.status == 'completed' %}alert-success{% else %}alert-info{% endif %}"
      role="status" data-consultant-job data-job-id="{{ consultant_job.id }}">
+    {% if consultant_job.status in ['pending', 'processing'] %}<span class="consultant-loader" aria-hidden="true"></span>{% endif %}
     <strong data-consultant-job-label>
         {% if consultant_job.status == 'pending' %}Queued{% elif consultant_job.status == 'processing' %}Processing{% elif consultant_job.status == 'completed' %}Completed{% else %}Failed{% endif %}
     </strong>
     {% if consultant_job.status == 'failed' %}
     <span>{{ consultant_job.error_message or 'Consultant generation could not be completed.' }}</span>
-    <form method="post" action="{{ url_for('ai_consultant.generate', business_id=business.id) }}" class="d-inline ms-2">
+    <form method="post" action="{{ url_for('ai_consultant.generate_ai_consultant_report', business_id=business.id) }}" class="d-inline ms-2">
         {{ csrf_field() }}
         <button class="btn btn-sm btn-outline-danger" type="submit">Retry</button>
     </form>
@@ -183,14 +71,21 @@
     <span>Your AI Business Consultant report is being generated. You can safely leave this page.</span>
     {% endif %}
 </div>
+{% if consultant_job.status in ['pending', 'processing'] %}
+<div class="consultant-loading-card" aria-hidden="true">
+    <div class="consultant-skeleton consultant-skeleton-title"></div>
+    <div class="consultant-skeleton"></div>
+    <div class="consultant-skeleton consultant-skeleton-short"></div>
+</div>
+{% endif %}
 {% endif %}
 
-<div class="rs-page-header">
+<div class="rs-page-header consultant-page-header">
     <div>
         <p class="rs-eyebrow">{{ business.business_type if business else "Business" }}</p>
-        <h1 class="rs-page-title">AI Business Command Center</h1>
+        <h1 class="rs-page-title">AI Reputation Consultant</h1>
         <p class="rs-page-subtitle">
-            Live improvement priorities for {{ business.business_name if business else "this business" }} from Google Business Profile reviews.
+            Understand what customers are saying, what is changing, and what to improve next.
         </p>
         <div class="d-flex flex-wrap gap-2 mt-3">
             <span class="badge-soft-primary">
@@ -200,16 +95,34 @@
             <span class="badge-soft-success">
                 Google reviews analyzed: {{ metrics.total_reviews or 0 }}
             </span>
+            <span class="badge-soft-primary"><i class="bi bi-calendar3"></i> {{ consultant_data.period.label }}</span>
+            {% if google_connection and google_connection.last_sync_at %}
+            <span class="badge-soft-primary"><i class="bi bi-arrow-repeat"></i> GBP synced {{ google_connection.last_sync_at }}</span>
+            {% endif %}
+            {% if report and report.generated_at %}
+            <span class="badge-soft-primary"><i class="bi bi-stars"></i> AI analysed {{ report.generated_at }}</span>
+            {% endif %}
         </div>
     </div>
     <form method="POST" action="/business/{{ business_id }}/ai-consultant/generate">
         {{ csrf_field() }}
+        <input type="hidden" name="period" value="{{ selected_period }}">
         <button type="submit" class="btn-solid" {% if not can_generate %}disabled{% endif %}>
             <i class="bi bi-stars"></i>
-            Generate AI Business Consultant Report
+            Refresh analysis
         </button>
     </form>
 </div>
+
+<form class="consultant-period-bar command-section" method="get" aria-label="Analysis period">
+    <label class="form-label mb-0" for="consultantPeriod">Analysis period</label>
+    <select class="form-select" id="consultantPeriod" name="period" data-period-select>
+        {% for option in consultant_data.period.allowed %}
+        <option value="{{ option.days }}" {% if option.days == selected_period %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+    </select>
+    <span class="text-muted small">Compared with the immediately preceding {{ selected_period }} days.</span>
+</form>
 
 {% if not can_generate %}
 <div class="alert alert-warning" role="alert">
@@ -231,23 +144,26 @@
 </div>
 {% endif %}
 
-<div class="command-grid command-section">
-    <div class="rs-card rs-card-lg h-100">
+<section class="command-grid command-section consultant-hero" aria-labelledby="reputation-health-title">
+    <div class="rs-card rs-card-lg h-100 consultant-health-card">
         <div class="d-flex justify-content-between gap-3 align-items-start mb-4">
             <div>
-                <p class="rs-eyebrow">Business Health Score</p>
+                <p class="rs-eyebrow">Reputation health</p>
+                <h2 id="reputation-health-title" class="visually-hidden">Current reputation health</h2>
                 {% if health.score is none %}
                 <p class="h2 fw-bold mb-1">Pending</p>
                 <p class="text-muted mb-0">Need at least 5 live Google reviews</p>
                 {% else %}
-                <p class="command-score fw-bold mb-1">{{ "%.1f"|format(health.score) }}</p>
-                <p class="text-muted mb-0">out of 10</p>
+                <div class="consultant-score-ring" style="--score: {{ health.score }}" role="img" aria-label="Reputation health score {{ '%.0f'|format(health.score) }} out of 100">
+                    <span class="command-score fw-bold">{{ "%.0f"|format(health.score) }}</span>
+                    <small>out of 100</small>
+                </div>
                 {% endif %}
             </div>
             {% if health.status == "Excellent" %}
             <span class="badge-soft-success">Excellent</span>
-            {% elif health.status == "Good" %}
-            <span class="badge-soft-primary">Good</span>
+            {% elif health.status == "Strong" %}
+            <span class="badge-soft-primary">Strong</span>
             {% elif health.status == "Needs Attention" %}
             <span class="badge-soft-warning">Needs Attention</span>
             {% elif health.status == "Critical" %}
@@ -256,22 +172,17 @@
             <span class="badge-soft-warning">Pending</span>
             {% endif %}
         </div>
-        {% if health.score is not none %}
-        <div class="progress mb-3">
-            <div class="progress-bar" style="width: {{ health.score * 10 }}%;"></div>
-        </div>
-        {% endif %}
         <ul class="consultant-list">
             {% for driver in health.drivers %}
             <li><i class="bi bi-check2-circle text-primary"></i><span>{{ driver }}</span></li>
             {% endfor %}
         </ul>
     </div>
-    <div class="rs-card rs-card-lg h-100">
+    <div class="rs-card rs-card-lg h-100 consultant-brief-card">
         <div class="d-flex justify-content-between gap-3 align-items-start mb-3">
             <div>
-                <p class="rs-eyebrow">AI Daily Briefing</p>
-                <h2 class="h5 fw-bold mb-0">Today’s reputation brief</h2>
+                <p class="rs-eyebrow">Executive briefing</p>
+                <h2 class="h5 fw-bold mb-0">What your reviews are telling you</h2>
             </div>
             {% if status.state == "up_to_date" %}
             <span class="badge-soft-success">Up to date</span>
@@ -292,21 +203,29 @@
                 <p class="rs-kpi-label">Average rating</p>
             </div>
             <div class="consultant-metric">
-                <p class="rs-kpi-value">{{ metrics.recent_review_count }}</p>
-                <p class="rs-kpi-label">Last 30 days</p>
+                <p class="rs-kpi-value">{{ consultant_data.kpis.new_reviews.current }}</p>
+                <p class="rs-kpi-label">New in period</p>
             </div>
             <div class="consultant-metric">
                 <p class="rs-kpi-value">{{ metrics.response_rate }}%</p>
                 <p class="rs-kpi-label">Response rate</p>
             </div>
+            <div class="consultant-metric">
+                <p class="rs-kpi-value">{{ consultant_data.kpis.unanswered_reviews.current }}</p>
+                <p class="rs-kpi-label">Unanswered</p>
+            </div>
+            <div class="consultant-metric">
+                <p class="rs-kpi-value">{% if consultant_data.kpis.average_response_minutes.current is not none %}{{ consultant_data.kpis.average_response_minutes.current|int }}m{% else %}—{% endif %}</p>
+                <p class="rs-kpi-label">Avg. response time</p>
+            </div>
         </div>
     </div>
-</div>
+</section>
 
 <div class="rs-card rs-card-lg command-section">
     <div class="d-flex align-items-center gap-2 mb-3">
         <span class="badge-soft-primary"><i class="bi bi-kanban"></i></span>
-        <h2 class="h5 fw-bold mb-0">AI Action Center</h2>
+        <div><p class="rs-eyebrow mb-1">Progress</p><h2 class="h5 fw-bold mb-0">Action progress</h2></div>
     </div>
     <div class="rs-kpi-grid">
         <div class="consultant-metric">
@@ -337,8 +256,23 @@
 </div>
 
 <div class="rs-card rs-card-lg command-section">
-    <p class="rs-eyebrow">AI Executive Summary</p>
-    <p class="text-muted fs-6 lh-lg mb-0">{{ executive_summary }}</p>
+    <div class="consultant-section-heading">
+        <span class="consultant-section-icon"><i class="bi bi-stars" aria-hidden="true"></i></span>
+        <div><p class="rs-eyebrow mb-1">AI executive briefing</p><h2 class="h5 fw-bold mb-0">The decision-ready view</h2></div>
+    </div>
+    {% if metrics.total_reviews %}
+    <p class="consultant-briefing-copy">{{ consultant_data.executive_briefing.overall_assessment }}</p>
+    <div class="consultant-briefing-grid">
+        <div><strong>What improved</strong><p>{{ consultant_data.executive_briefing.what_improved }}</p></div>
+        <div><strong>What declined</strong><p>{{ consultant_data.executive_briefing.what_declined }}</p></div>
+        <div><strong>Strongest praise</strong><p>{{ consultant_data.executive_briefing.strongest_praise }}</p></div>
+        <div><strong>Most frequent complaint</strong><p>{{ consultant_data.executive_briefing.most_frequent_complaint }}</p></div>
+        <div><strong>Emerging issue</strong><p>{{ consultant_data.executive_briefing.emerging_issue }}</p></div>
+        <div><strong>Recommended focus</strong><p>{{ consultant_data.executive_briefing.recommended_focus }}</p></div>
+    </div>
+    {% else %}
+    <div class="consultant-empty-state"><i class="bi bi-chat-square-dots" aria-hidden="true"></i><h3>More review data is needed</h3><p>Sync Google reviews to produce a reliable executive briefing grounded in customer feedback.</p></div>
+    {% endif %}
 </div>
 
 <div class="rs-card rs-card-lg command-section">
@@ -546,14 +480,14 @@
                 <h2 class="h5 fw-bold mb-0">Topic Analytics</h2>
             </div>
             <div class="d-grid gap-2">
-                {% for topic in command_center.topic_analytics %}
+                {% for topic in consultant_data.topics %}
                 <div class="topic-row">
                     <div>
                         <p class="fw-bold mb-0">{{ topic.topic|title }}</p>
-                        <p class="text-muted small mb-0">{{ topic.sentiment|title }}</p>
+                        <p class="text-muted small mb-0">{{ topic.status }} · {{ topic.confidence }} confidence</p>
                     </div>
-                    <span class="badge-soft-primary">{{ topic.count }}</span>
-                    <span class="text-muted small">{{ topic.percentage }}%</span>
+                    <span class="badge-soft-primary">{{ topic.mention_count }}</span>
+                    <span class="text-muted small">{{ topic.positive_percentage }}% positive · {{ topic.negative_percentage }}% negative</span>
                 </div>
                 {% else %}
                 <p class="text-muted mb-0">Topic analytics will appear after reviews are synced or imported.</p>
@@ -692,131 +626,164 @@
         <div>
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge-soft-primary"><i class="bi bi-graph-up-arrow"></i></span>
-                <h2 class="h5 fw-bold mb-0">Google Review Growth Trend</h2>
+                <h2 class="h5 fw-bold mb-0">Reputation trend</h2>
             </div>
-            <p class="text-muted mb-0">From Google Business Profile connection date to today</p>
-            <p class="text-muted small mb-0">Only live Google reviews are included. Excel uploaded reviews are excluded.</p>
+            <p class="text-muted mb-0">Real Google review activity during {{ consultant_data.period.label|lower }}.</p>
+            <p class="text-muted small mb-0">Unavailable values are left empty rather than estimated.</p>
         </div>
-        {% if google_review_trend_data.start_date %}
-        <span class="badge-soft-primary align-self-start">Since {{ google_review_trend_data.start_date }}</span>
-        {% endif %}
+        <div class="consultant-chart-switch" role="group" aria-label="Trend series">
+            <button type="button" class="btn-ghost active" data-chart-series="review_count">Volume</button>
+            <button type="button" class="btn-ghost" data-chart-series="rating">Rating</button>
+            <button type="button" class="btn-ghost" data-chart-series="positive_percentage">Sentiment</button>
+            <button type="button" class="btn-ghost" data-chart-series="response_rate">Responses</button>
+        </div>
     </div>
 
-    {% set growth_points = google_review_trend_data["data"] if google_review_trend_data else [] %}
-    {% if not growth_points or metrics.total_reviews == 0 %}
+    {% if not consultant_data.data_quality.historical_chart_available %}
     <div class="consultant-metric">
         <p class="text-muted mb-0">No live Google reviews available yet. Connect Google Business Profile and sync reviews to view trends.</p>
     </div>
-    {% elif growth_points|length < 2 %}
-    <div class="consultant-metric">
-        <p class="fw-bold mb-1">{{ google_review_trend_data.insight }}</p>
-        <p class="text-muted mb-0">More review history is needed to show a meaningful trend.</p>
-    </div>
     {% else %}
-    <div class="consultant-metric mb-3">
-        <p class="fw-bold mb-0">{{ google_review_trend_data.insight }}</p>
-    </div>
     <div class="growth-chart-wrap">
-        <canvas id="googleReviewGrowthChart" aria-label="Google review growth trend chart" role="img"></canvas>
+        <canvas id="googleReviewGrowthChart" aria-label="ReviewGrow reputation trend chart" role="img"></canvas>
     </div>
     <script type="application/json" id="googleReviewGrowthData">
-        {{ google_review_trend_data|tojson }}
+        {{ consultant_data.trend|tojson }}
     </script>
     {% endif %}
 </div>
 
-{% if google_review_trend_data and google_review_trend_data["data"] and google_review_trend_data["data"]|length >= 2 and metrics.total_reviews > 0 %}
-<script>
-(() => {
-    const dataNode = document.getElementById("googleReviewGrowthData");
-    const canvas = document.getElementById("googleReviewGrowthChart");
-    if (!dataNode || !canvas || !window.Chart) {
-        return;
-    }
+<div class="consultant-future-grid command-section">
+    <section id="competitors" class="rs-card rs-card-lg consultant-competitor-panel" aria-labelledby="competitor-title">
+        <div class="consultant-section-heading">
+            <span class="consultant-empty-icon"><i class="bi bi-buildings" aria-hidden="true"></i></span>
+            <div><p class="rs-eyebrow mb-1">Competitive position</p><h2 id="competitor-title" class="h5 fw-bold mb-0">Tracked competitors</h2></div>
+        </div>
+        {% if competitor_job and competitor_job.status in ['pending', 'processing'] %}
+        <div class="alert alert-info d-flex align-items-center gap-2" role="status"
+             data-competitor-job data-job-id="{{ competitor_job.id }}">
+            <span class="consultant-loader" aria-hidden="true"></span>
+            <span data-competitor-job-label>{{ 'Refresh queued' if competitor_job.status == 'pending' else 'Refresh in progress' }}</span>
+        </div>
+        {% elif competitor_job and competitor_job.status == 'failed' %}
+        <div class="alert alert-danger" role="status">Competitor refresh failed. Please try again later.</div>
+        {% elif competitor_job and competitor_job.status == 'completed' and request.args.get('competitor_job') %}
+        {% set refresh_outcome = (competitor_job.result or {}).get('outcome', 'completed') %}
+        <div class="alert {{ 'alert-warning' if refresh_outcome in ['partially_completed','failed'] else 'alert-success' }}" role="status">
+            {% if refresh_outcome == 'partially_completed' %}Competitors were partially refreshed. Successful updates were saved.
+            {% elif refresh_outcome == 'failed' %}Competitor refresh could not update any targets.
+            {% else %}Customer and competitor details were refreshed successfully.{% endif %}
+        </div>
+        {% endif %}
+        {% if competitors %}
+        <div class="competitor-history-toolbar">
+            <div><p class="rs-eyebrow mb-1">Competitive momentum</p><h3 class="h6 fw-bold mb-0">Historical intelligence</h3></div>
+            <form method="get" class="d-flex align-items-center gap-2">
+                <input type="hidden" name="period" value="{{ selected_period }}">
+                <label class="visually-hidden" for="competitorHistoryWindow">Competitor history window</label>
+                <select class="form-select form-select-sm" id="competitorHistoryWindow" name="history_window" data-history-window-select>
+                    {% for option in competitor_history.windows %}<option value="{{ option.value }}" {% if option.value == competitor_history.selected_window %}selected{% endif %} {% if not option.enabled %}disabled{% endif %}>{{ option.label }}</option>{% endfor %}
+                </select>
+            </form>
+        </div>
+        <div class="history-progress-card" aria-label="Competitor history collection progress">
+            <div class="history-progress-heading"><span class="consultant-empty-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span><div>
+                {% if competitor_history.readiness.stage == 0 %}<h3>Historical tracking has not started yet.</h3><p>The first successful refresh will create the first public snapshot.</p>
+                {% elif competitor_history.readiness.stage == 1 %}<h3>Historical data collection has started.</h3><p>One daily snapshot is available. Trend claims remain locked until enough time-separated evidence exists.</p>
+                {% elif competitor_history.readiness.stage == 2 %}<h3>Basic change tracking is now available.</h3><p>{{ competitor_history.readiness.valid_snapshot_dates }} daily snapshots collected. Weekly insights need approximately {{ competitor_history.readiness.weekly_remaining }} more successful refreshes.</p>
+                {% elif competitor_history.readiness.stage == 3 %}<h3>Weekly competitor trends are available.</h3><p>{{ competitor_history.readiness.valid_snapshot_dates }} daily snapshots collected. Monthly intelligence needs approximately {{ competitor_history.readiness.monthly_remaining }} more successful refreshes.</p>
+                {% else %}<h3>Monthly competitor intelligence is available.</h3><p>{{ competitor_history.readiness.valid_snapshot_dates }} valid daily snapshots support deeper historical comparison.</p>{% endif %}
+            </div></div>
+            <div class="history-progress-stats">
+                <span><strong>{{ competitor_history.readiness.valid_snapshot_dates }}</strong> snapshots</span>
+                <span><strong>{{ competitor_history.readiness.history_days }}</strong> history days</span>
+                <span><strong>{{ competitor_history.period.coverage_percentage }}%</strong> data coverage</span>
+            </div>
+            {% if competitor_history.readiness.first_snapshot_date %}<p class="small text-muted mb-0">{{ competitor_history.readiness.first_snapshot_date }} to {{ competitor_history.readiness.latest_snapshot_date }} · next refresh expected after the configured cadence; successful collection is not guaranteed.</p>{% endif %}
+        </div>
 
-    const trend = JSON.parse(dataNode.textContent || "{}");
-    const points = trend.data || [];
-    const labels = points.map((point) => point.period_label);
-    const newReviews = points.map((point) => point.review_count || 0);
-    const cumulativeReviews = points.map((point) => point.cumulative_review_count || 0);
+        {% if competitor_history.readiness.stage >= 2 %}
+        <div class="history-summary-grid" aria-label="Current versus past competitor summary">
+            <article><span>Rating movement</span><strong>{% if competitor_history.summary.rating_change is not none %}{{ '%+.1f'|format(competitor_history.summary.rating_change) }}{% else %}Unavailable{% endif %}</strong><small>{{ competitor_history.summary.rating_status }}</small></article>
+            <article><span>Reviews added</span><strong>{{ '%+d'|format(competitor_history.summary.review_growth) if competitor_history.summary.review_growth is not none else 'Unavailable' }}</strong><small>Actual public count change</small></article>
+            <article><span>Selected rank</span><strong>{{ competitor_history.summary.current_rank if competitor_history.summary.current_rank else 'Unavailable' }}</strong><small>{% if competitor_history.summary.rank_movement is not none %}{{ '%+d'|format(competitor_history.summary.rank_movement) }} position movement{% else %}Rank among selected competitors{% endif %}</small></article>
+            <article><span>Rating gap</span><strong>{{ '%+.2f'|format(competitor_history.summary.current_rating_gap) if competitor_history.summary.current_rating_gap is not none else 'Unavailable' }}</strong><small>{{ competitor_history.summary.rating_gap_interpretation }}</small></article>
+            <article><span>Review-count gap</span><strong>{{ '%+.0f'|format(competitor_history.summary.current_review_gap) if competitor_history.summary.current_review_gap is not none else 'Unavailable' }}</strong><small>{% if competitor_history.summary.review_gap_change is not none %}Gap movement {{ '%+.0f'|format(competitor_history.summary.review_gap_change) }}{% else %}Compared with selected average{% endif %}</small></article>
+        </div>
+        {% endif %}
 
-    new Chart(canvas, {
-        type: "line",
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: "New reviews per period",
-                    data: newReviews,
-                    borderColor: "#2563eb",
-                    backgroundColor: "rgba(37, 99, 235, .12)",
-                    tension: .32,
-                    fill: true,
-                    pointRadius: 3
-                },
-                {
-                    label: "Cumulative Google reviews",
-                    data: cumulativeReviews,
-                    borderColor: "#16a34a",
-                    backgroundColor: "rgba(22, 163, 74, .08)",
-                    tension: .32,
-                    fill: false,
-                    pointRadius: 3
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: "index",
-                intersect: false
-            },
-            plugins: {
-                legend: {
-                    position: "bottom"
-                },
-                tooltip: {
-                    callbacks: {
-                        afterBody(items) {
-                            const point = points[items[0].dataIndex] || {};
-                            const rating = point.average_rating_for_period;
-                            return [
-                                `Period: ${point.period_label}`,
-                                `New reviews: ${point.review_count || 0}`,
-                                `Total reviews: ${point.cumulative_review_count || 0}`,
-                                `Average rating: ${rating === null || rating === undefined ? "No rating" : rating}`
-                            ];
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        precision: 0
-                    }
-                }
-            }
-        }
-    });
-})();
-</script>
+        {% if competitor_history.chart_config.available %}
+        <div class="competitor-history-chart-card">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3"><div><h3 class="h6 fw-bold mb-1">Historical comparison</h3><p class="small text-muted mb-0">Real UTC daily snapshots · {{ competitor_history.period.span_days }}-day actual span · {{ competitor_history.period.missing_days }} missing dates. Missing values remain gaps.</p></div>
+            <div class="consultant-chart-tabs" role="tablist" aria-label="Competitor history chart metric"><button class="active" type="button" role="tab" aria-selected="true" data-competitor-chart-mode="rating">Rating</button><button type="button" role="tab" aria-selected="false" data-competitor-chart-mode="review_count">Review count</button><button type="button" role="tab" aria-selected="false" data-competitor-chart-mode="rank">Rank</button></div></div>
+            <div class="competitor-chart-wrap"><canvas id="competitorHistoryChart" role="img" aria-label="Historical rating comparison for your business and currently selected competitors"></canvas></div>
+            <p class="visually-hidden" id="competitorHistorySummary">History spans {{ competitor_history.period.span_days }} days with {{ competitor_history.period.coverage_percentage }} percent comparison-date coverage. Rank is recalculated against the current watchlist.</p>
+            <script type="application/json" id="competitorHistoryChartData">{{ competitor_history|tojson }}</script>
+        </div>
+        {% endif %}
+
+        {% if competitor_history.insights %}<div class="competitor-insights"><h3 class="h6 fw-bold">Evidence-based strategic insights</h3>{% for insight in competitor_history.insights %}<article class="competitor-insight competitor-insight-{{ insight.type }}"><span>{{ insight.type|title }}</span><div><strong>{{ insight.title }}</strong><p>{{ insight.explanation }}</p><small>{{ insight.confidence }} confidence · {{ insight.span_days }}-day available span</small></div></article>{% endfor %}</div>{% endif %}
+
+        {% if competitor_history.readiness.stage >= 4 %}<div class="competitor-leaders" aria-label="Leaders among selected competitors">
+            {% if competitor_history.leaders.rating_leader %}<article><span>Rating leader</span><strong>{{ competitor_history.leaders.rating_leader.name }}</strong><small>{{ competitor_history.leaders.rating_leader.current_rating }} stars</small></article>{% endif %}
+            {% if competitor_history.leaders.review_volume_leader %}<article><span>Review-volume leader</span><strong>{{ competitor_history.leaders.review_volume_leader.name }}</strong><small>{{ competitor_history.leaders.review_volume_leader.current_review_count }} public reviews</small></article>{% endif %}
+            {% if competitor_history.leaders.fastest_review_growth %}<article><span>Fastest-growing selected competitor</span><strong>{{ competitor_history.leaders.fastest_review_growth.name }}</strong><small>{{ '%+d'|format(competitor_history.leaders.fastest_review_growth.review_growth) }} reviews in the selected window</small></article>{% endif %}
+            {% if competitor_history.leaders.closest_rating %}<article><span>Closest rating competitor</span><strong>{{ competitor_history.leaders.closest_rating.name }}</strong><small>{{ competitor_history.leaders.closest_rating.current_rating }} stars</small></article>{% endif %}
+        </div>{% endif %}
+
+        <div class="competitor-summary">
+            {% if competitor_summary.average_rating is not none %}<p>Your rating is <strong>{{ competitor_summary.rating_gap|abs }} points {{ 'above' if competitor_summary.rating_gap >= 0 else 'below' }}</strong> the selected competitor average of {{ competitor_summary.average_rating }}.</p>{% endif %}
+            {% if competitor_summary.rank %}<span class="badge-soft-primary">Rank {{ competitor_summary.rank }} of {{ competitor_summary.rank_total }} among selected competitors</span>{% endif %}
+        </div>
+        <div class="competitor-watchlist">
+            <article class="competitor-card competitor-card-own"><span class="badge-soft-primary">Your business</span><h3>{{ business.business_name }}</h3><p>{{ customer_competitor_metrics.rating if customer_competitor_metrics.rating is not none else '—' }} stars · {{ customer_competitor_metrics.review_count if customer_competitor_metrics.review_count is not none else '—' }} public reviews</p>{% if competitor_history.readiness.stage >= 2 %}<p class="competitor-history-values"><span>Rating {{ '%+.1f'|format(competitor_history.summary.rating_change) if competitor_history.summary.rating_change is not none else 'unavailable' }}</span><span>Reviews {{ '%+d'|format(competitor_history.summary.review_growth) if competitor_history.summary.review_growth is not none else 'unavailable' }}</span><span>Selected rank {{ competitor_history.summary.current_rank or 'unavailable' }}</span></p>{% else %}<span class="badge-soft-primary">Collecting history</span>{% endif %}</article>
+            {% for competitor in competitors %}
+            <article class="competitor-card">
+                <div class="d-flex justify-content-between gap-2"><span class="badge-soft-primary">{{ competitor.primary_type|replace('_',' ')|title if competitor.primary_type else 'Business' }}</span><span class="text-muted small">{{ competitor.distance_meters }} m</span></div>
+                <h3>{{ competitor.competitor_name }}</h3>
+                <p><strong>{{ competitor.rating if competitor.rating is not none else '—' }}</strong> stars · {{ competitor.user_rating_count or 0 }} reviews</p>
+                <p class="small text-muted">{{ competitor.formatted_address or 'Address unavailable' }}</p>
+                <p class="small text-muted">Refreshed {{ competitor.last_refreshed_at|datetime_ist if competitor.last_refreshed_at else 'not yet' }}</p>
+                {% if competitor.history and competitor.history.rating_change is not none %}<p class="competitor-history-values"><span>Rating {{ '%+.1f'|format(competitor.history.rating_change) }}</span><span>Reviews {{ '%+d'|format(competitor.history.review_growth) if competitor.history.review_growth is not none else 'unavailable' }}</span><span>Rank {{ competitor.history.current_rank or 'unavailable' }}</span><span>{{ competitor.history.rating_status }}</span></p>{% else %}<span class="badge-soft-primary">Collecting history</span>{% endif %}
+                <div class="d-flex flex-wrap gap-2">
+                    {% if competitor.google_maps_url %}<a class="btn-ghost" href="{{ competitor.google_maps_url }}" target="_blank" rel="noopener noreferrer">View Maps</a>{% endif %}
+                    <form method="post" action="{{ url_for('ai_consultant.refresh_tracked_competitor', business_id=business_id, competitor_id=competitor.id) }}">{{ csrf_field() }}<input type="hidden" name="period" value="{{ selected_period }}"><button class="btn-ghost" type="submit">Refresh</button></form>
+                    <form method="post" action="{{ url_for('ai_consultant.remove_tracked_competitor', business_id=business_id, competitor_id=competitor.id) }}" onsubmit="return confirm('Remove this competitor from your watchlist?')">{{ csrf_field() }}<input type="hidden" name="period" value="{{ selected_period }}"><button class="btn-ghost text-danger" type="submit">Remove</button></form>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-3"><button class="btn-solid" type="button" data-bs-toggle="modal" data-bs-target="#competitorDiscoveryModal">Manage Competitors</button><form method="post" action="{{ url_for('ai_consultant.refresh_all_competitors', business_id=business_id) }}">{{ csrf_field() }}<input type="hidden" name="period" value="{{ selected_period }}"><button class="btn-ghost" type="submit" {% if competitor_job and competitor_job.status in ['pending','processing'] %}disabled{% endif %}>Refresh all</button></form></div>
+        {% else %}
+        <div class="consultant-empty-state p-0">
+            <h3>No competitors are currently being tracked.</h3>
+            {% if not competitor_config.api_configured %}<p>Competitor discovery is not configured yet.</p>
+            {% elif not competitor_config.source_ready %}<p>Competitor discovery is unavailable because this business does not yet have verified location coordinates and a Google Place ID. Re-select the connected GBP location to save this metadata.</p>
+            {% else %}<p>Search nearby relevant businesses and explicitly choose up to {{ competitor_config.max_tracked }} competitors.</p><button class="btn-solid" type="button" data-bs-toggle="modal" data-bs-target="#competitorDiscoveryModal">Add Competitors</button>{% endif %}
+        </div>
+        {% endif %}
+    </section>
+    <section class="rs-card rs-card-lg consultant-empty-state" aria-labelledby="forecast-title">
+        <span class="consultant-empty-icon"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i></span>
+        <p class="rs-eyebrow">Reputation forecast</p>
+        <h2 id="forecast-title" class="h5 fw-bold">More review history is required</h2>
+        <p>A directional estimate will be shown only when enough real review history exists. ReviewGrow will not display a fabricated future rating.</p>
+        <span class="badge-soft-primary">Historical comparison unavailable</span>
+    </section>
+</div>
+
+{% if competitor_config.api_configured and competitor_config.source_ready %}
+<div class="modal fade" id="competitorDiscoveryModal" tabindex="-1" aria-labelledby="competitorDiscoveryTitle" aria-hidden="true" data-competitor-search-url="{{ url_for('ai_consultant.search_competitors', business_id=business_id) }}" data-competitor-max="{{ competitor_config.max_tracked }}">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><p class="rs-eyebrow mb-1">Manual selection</p><h2 class="modal-title h5" id="competitorDiscoveryTitle">{{ 'Manage competitors' if competitors else 'Add competitors' }}</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+  <form method="post" action="{{ url_for('ai_consultant.add_competitors', business_id=business_id) }}" data-competitor-form>{{ csrf_field() }}<input type="hidden" name="period" value="{{ selected_period }}">
+  <div class="modal-body"><div class="competitor-search-controls"><div><label class="form-label" for="competitorQuery">Business name or category</label><input class="form-control" id="competitorQuery" value="{{ google_connection.primary_category or business.business_type }}"></div><div><label class="form-label" for="competitorRadius">Radius</label><select class="form-select" id="competitorRadius"><option value="1000">1 km</option><option value="5000" selected>5 km</option><option value="10000">10 km</option><option value="20000">20 km</option></select></div><button class="btn-solid align-self-end" type="button" data-competitor-search>Search nearby</button></div>
+  <p class="small text-muted mt-3"><span data-selected-count>0</span> selected · maximum {{ competitor_config.max_tracked }}</p><div class="competitor-search-state" data-competitor-results><div class="consultant-empty-state"><p>Search results will appear here. Nothing is added automatically.</p></div></div></div>
+  <div class="modal-footer"><button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn-solid" disabled data-competitor-confirm>Confirm selection</button></div></form></div></div>
+</div>
 {% endif %}
-<script>
-const consultantJob = document.querySelector("[data-consultant-job]");
-if (consultantJob && consultantJob.dataset.jobId) {
-    const pollConsultantJob = async () => {
-        const response = await fetch(`/analysis-jobs/${consultantJob.dataset.jobId}/status`);
-        if (!response.ok) return;
-        const job = await response.json();
-        const label = consultantJob.querySelector("[data-consultant-job-label]");
-        if (label) label.textContent = job.status === "pending" ? "Queued" : job.status[0].toUpperCase() + job.status.slice(1);
-        if (job.status === "completed") window.location.reload();
-        if (job.status === "pending" || job.status === "processing") setTimeout(pollConsultantJob, 3000);
-    };
-    setTimeout(pollConsultantJob, 1500);
-}
-</script>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/ai_consultant.js') }}" defer></script>
 {% endblock %}

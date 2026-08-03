@@ -43,6 +43,14 @@ from app.services.google_business_service import (
     GoogleQuotaError,
     GoogleTransientError,
 )
+from app.services.competitor_refresh_service import (
+    JOB_TYPE as COMPETITOR_REFRESH_JOB_TYPE,
+    complete_competitor_refresh_job,
+    enqueue_due_competitor_refresh_jobs,
+    execute_competitor_refresh_job,
+    is_retryable_refresh_error,
+    retry_delay_seconds as competitor_retry_delay_seconds,
+)
 
 
 google_review_sync_jobs = GoogleReviewSyncJobService()
@@ -53,6 +61,8 @@ WORKER_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex}"[:255]
 AI_LEASE_SECONDS = 120
 AI_HEARTBEAT_SECONDS = 30
 EMAIL_STALE_TIMEOUT_MINUTES = 15
+COMPETITOR_SCHEDULER_INTERVAL_SECONDS = 300
+_next_competitor_schedule_check = 0.0
 
 
 class WorkerInfrastructureError(Exception):
@@ -172,6 +182,8 @@ def _process_ai_job(job):
     )
     heartbeat.start()
     try:
+        if job.get("job_type") == COMPETITOR_REFRESH_JOB_TYPE:
+            return _process_competitor_refresh_job(job, heartbeat)
         if job.get("job_type", "review_analysis") == "ai_consultant":
             return _process_consultant_job(job, heartbeat)
         return process_analysis_job(
@@ -179,6 +191,26 @@ def _process_ai_job(job):
         )
     finally:
         heartbeat.stop()
+
+
+def _process_competitor_refresh_job(job, heartbeat):
+    try:
+        result = execute_competitor_refresh_job(
+            job,
+            ownership_check=lambda: (
+                not heartbeat.ownership_lost
+                and confirm_job_ownership(job["id"], WORKER_ID)
+            ),
+        )
+        if heartbeat.ownership_lost:
+            return True
+        return complete_competitor_refresh_job(job["id"], WORKER_ID, result)
+    except Exception as error:
+        retryable = is_retryable_refresh_error(error)
+        return fail_or_retry_owned_job(
+            job, WORKER_ID, _safe_error_message(error), retryable,
+            competitor_retry_delay_seconds(job.get("attempt_count", 1)),
+        )
 
 
 def _process_consultant_job(job, heartbeat):
@@ -241,6 +273,7 @@ def run_worker_forever():
 
     while not shutdown_requested:
         try:
+            _run_competitor_scheduler_if_due()
             reset_stale_processing_jobs()
             if not run_worker_iteration():
                 _wait_for_shutdown(Config.AI_WORKER_POLL_SECONDS)
@@ -259,6 +292,28 @@ def run_worker_forever():
             )
 
     logger.info("Background worker stopped cleanly.")
+
+
+def _run_competitor_scheduler_if_due(now=None):
+    global _next_competitor_schedule_check
+    current = time.monotonic() if now is None else float(now)
+    if current < _next_competitor_schedule_check:
+        return None
+    try:
+        summary = enqueue_due_competitor_refresh_jobs()
+        if summary.get("created"):
+            logger.info(
+                "Competitor refresh scheduler: eligible=%s created=%s reused=%s",
+                summary["eligible"], summary["created"], summary["reused"],
+            )
+        return summary
+    except Exception as error:
+        _log_sanitized_exception(
+            "Competitor refresh scheduler failed: component=competitor_scheduler", error
+        )
+        return None
+    finally:
+        _next_competitor_schedule_check = current + COMPETITOR_SCHEDULER_INTERVAL_SECONDS
 
 
 def _process_google_review_sync_job(job, worker_id=WORKER_ID):

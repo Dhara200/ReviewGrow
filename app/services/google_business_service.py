@@ -426,7 +426,7 @@ def list_locations(access_token, account_name):
 
     while True:
         params = {
-            "readMask": "name,title,metadata,storefrontAddress"
+            "readMask": "name,title,metadata,storefrontAddress,latlng,categories"
         }
 
         if page_token:

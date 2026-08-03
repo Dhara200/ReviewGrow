@@ -130,6 +130,19 @@ class Config:
         "GOOGLE_SCOPES",
         "openid email profile https://www.googleapis.com/auth/business.manage"
     )
+    GOOGLE_PLACES_API_KEY = (os.getenv("GOOGLE_PLACES_API_KEY") or "").strip()
+    COMPETITOR_SEARCH_RADIUS_METERS = _get_bounded_int_or_default(
+        "COMPETITOR_SEARCH_RADIUS_METERS", 5000, 500, 20000
+    )
+    COMPETITOR_MAX_TRACKED = _get_bounded_int_or_default(
+        "COMPETITOR_MAX_TRACKED", 5, 1, 10
+    )
+    COMPETITOR_REFRESH_HOURS = _get_bounded_int_or_default(
+        "COMPETITOR_REFRESH_HOURS", 24, 1, 168
+    )
+    COMPETITOR_MIN_REVIEW_COUNT = _get_bounded_int_or_default(
+        "COMPETITOR_MIN_REVIEW_COUNT", 10, 0, 1000000
+    )
 
     SUBSCRIPTION_PRICE = float(os.getenv("SUBSCRIPTION_PRICE", 1499))
     ORIGINAL_SUBSCRIPTION_PRICE = float(os.getenv("ORIGINAL_SUBSCRIPTION_PRICE", 1999))

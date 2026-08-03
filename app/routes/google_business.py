@@ -299,6 +299,11 @@ def _save_connected_location(business_id, location):
             google_account_id=%s,
             google_location_id=%s,
             google_location_name=%s,
+            google_place_id=%s,
+            latitude=%s,
+            longitude=%s,
+            primary_category=%s,
+            formatted_address=%s,
             connection_status='connected',
             is_connected=TRUE
         WHERE business_id=%s
@@ -308,6 +313,12 @@ def _save_connected_location(business_id, location):
             location["account_id"],
             location["location_id"],
             location["location_name"],
+            (location.get("raw") or {}).get("metadata", {}).get("placeId"),
+            (location.get("raw") or {}).get("latlng", {}).get("latitude"),
+            (location.get("raw") or {}).get("latlng", {}).get("longitude"),
+            ((location.get("raw") or {}).get("categories", {}).get("primaryCategory", {}).get("displayName")
+             or (location.get("raw") or {}).get("categories", {}).get("primaryCategory", {}).get("name")),
+            _format_google_address((location.get("raw") or {}).get("storefrontAddress")),
             business_id,
             session["user_id"]
         )
@@ -316,6 +327,14 @@ def _save_connected_location(business_id, location):
     conn.commit()
     cursor.close()
     conn.close()
+
+
+def _format_google_address(address):
+    if not isinstance(address, dict):
+        return None
+    parts = [*(address.get("addressLines") or []), address.get("locality"),
+             address.get("administrativeArea"), address.get("postalCode"), address.get("regionCode")]
+    return ", ".join(str(part).strip() for part in parts if part and str(part).strip()) or None
 
 
 def _location_cache_key(business_id):

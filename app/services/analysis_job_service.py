@@ -166,6 +166,12 @@ def get_job_status_for_user(job_id, user_id, is_admin=False):
         if not job:
             return None
 
+        result = job.get("result_json")
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except (TypeError, ValueError):
+                result = None
         return {
             "job_id": job["id"],
             "business_id": job["business_id"],
@@ -178,6 +184,7 @@ def get_job_status_for_user(job_id, user_id, is_admin=False):
             "consultant_report_id": job.get("result_consultant_report_id") if job["status"] == "completed" else None,
             "job_type": job.get("job_type", "review_analysis"),
             "attempt_count": job.get("attempt_count", 0),
+            "result": result if isinstance(result, dict) else None,
         }
     finally:
         cursor.close()
