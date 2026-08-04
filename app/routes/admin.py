@@ -10,6 +10,8 @@ from flask import (
     session,
     redirect,
     Response,
+    jsonify,
+    make_response,
 )
 
 from app.services.database_service import get_connection
@@ -21,6 +23,7 @@ from app.services.admin_sync_queue_service import (
 )
 from app.services.subscription_service import approve_payment, reject_payment
 from app.services.email_analytics_service import EmailAnalyticsService, normalize_filters
+from app.services.infrastructure_monitoring_service import get_infrastructure_status
 
 admin_bp = Blueprint("admin", __name__)
 sync_queue_monitor = AdminSyncQueueService()
@@ -90,6 +93,36 @@ def _admin_required():
         return "Access Denied", 403
 
     return None
+
+
+def _no_cache(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+@admin_bp.route("/admin/infra")
+def admin_infrastructure():
+    guard = _admin_required()
+    if guard:
+        return guard
+    return _no_cache(make_response(render_template("admin_infrastructure.html")))
+
+
+@admin_bp.route("/admin/api/infra/status")
+def admin_infrastructure_status():
+    guard = _admin_required()
+    if guard:
+        return guard
+    try:
+        payload = get_infrastructure_status()
+        response = jsonify(payload)
+    except Exception:
+        # A provider-level failure is deliberately opaque to the browser.
+        response = jsonify({"overall_status": "unavailable", "error": "Infrastructure metrics are temporarily unavailable."})
+        response.status_code = 503
+    return _no_cache(response)
 
 
 @admin_bp.route("/admin/sync-queue")

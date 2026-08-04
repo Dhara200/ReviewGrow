@@ -1,0 +1,26 @@
+{% extends "base_app.html" %}
+{% block title %}Infrastructure | ReviewGrow{% endblock %}
+{% block nav_admin_infra %}active{% endblock %}
+{% block breadcrumb %}<span class="text-muted small fw-semibold">Admin / Infrastructure</span>{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_infrastructure.css') }}">{% endblock %}
+{% block content %}
+<div class="infra-shell" data-infra-root data-status-url="/admin/api/infra/status">
+  <header class="infra-hero">
+    <div><p class="rs-eyebrow">Operations</p><h1>Infrastructure</h1><p>Read-only runtime health across the application, workers, queues, database, and host.</p></div>
+    <div class="infra-actions"><label class="infra-toggle"><input type="checkbox" checked data-auto-refresh> Auto-refresh</label><button class="btn-solid" type="button" data-refresh><i class="bi bi-arrow-clockwise"></i> Refresh</button></div>
+  </header>
+  <div class="infra-error" role="status" hidden data-error></div>
+  <section class="infra-overall infra-panel"><div><span class="infra-label">Overall health</span><strong class="infra-big">Loading…</strong></div><span class="infra-badge unavailable" data-overall>Loading</span><small>Last refreshed <span data-refreshed>—</span></small></section>
+  <div class="infra-grid">
+    <section class="infra-panel"><h2><i class="bi bi-window"></i> Application</h2><div data-application></div></section>
+    <section class="infra-panel"><h2><i class="bi bi-diagram-3"></i> Gunicorn</h2><div data-gunicorn></div></section>
+    <section class="infra-panel"><h2><i class="bi bi-cpu"></i> Background workers</h2><div data-workers></div></section>
+    <section class="infra-panel infra-wide"><h2><i class="bi bi-speedometer"></i> Server resources</h2><div class="resource-grid" data-host></div></section>
+    <section class="infra-panel infra-wide"><h2><i class="bi bi-boxes"></i> Docker containers</h2><div class="container-grid" data-docker></div></section>
+    <section class="infra-panel"><h2><i class="bi bi-database"></i> Database</h2><div data-database></div></section>
+    <section class="infra-panel"><h2><i class="bi bi-list-task"></i> Job queue</h2><div data-jobs></div></section>
+    <section class="infra-panel infra-wide"><h2><i class="bi bi-exclamation-triangle"></i> Alerts</h2><div data-alerts></div></section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/admin_infrastructure.js') }}"></script>{% endblock %}
