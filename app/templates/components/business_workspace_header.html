@@ -1,0 +1,80 @@
+{% macro render_business_workspace_header(business, business_id, active_section, connection=None, location_label=None, last_sync_at=None, sync_label="Last sync", admin_override_active=False) %}
+{% set business_name = business.business_name if business and business.business_name else "Business workspace" %}
+{% set connected_email = (connection.google_email or connection.google_account_email) if connection else none %}
+{% set resolved_location = location_label or (connection.google_location_name if connection else none) %}
+<section class="business-workspace" aria-labelledby="business-workspace-title">
+    <div class="business-workspace__main">
+        <div class="business-workspace__identity">
+            <span class="business-workspace__mark" aria-hidden="true">
+                <i class="bi bi-buildings"></i>
+            </span>
+            <div class="business-workspace__copy">
+                <div class="business-workspace__title-row">
+                    <h1 id="business-workspace-title">{{ business_name }}</h1>
+                    {% if connection %}
+                    <span class="business-workspace__status business-workspace__status--connected">
+                        <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                        Google connected
+                    </span>
+                    {% else %}
+                    <span class="business-workspace__status business-workspace__status--disconnected">
+                        <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                        Google not connected
+                    </span>
+                    {% endif %}
+                    {% if admin_override_active %}
+                    <span class="business-workspace__status business-workspace__status--admin">
+                        <i class="bi bi-shield-check" aria-hidden="true"></i>
+                        Admin override active
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="business-workspace__meta">
+                    <span>
+                        <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                        {{ resolved_location or "Location not selected" }}
+                    </span>
+                    {% if connected_email %}
+                    <span title="{{ connected_email }}">
+                        <i class="bi bi-google" aria-hidden="true"></i>
+                        <span class="business-workspace__email">{{ connected_email }}</span>
+                    </span>
+                    {% endif %}
+                    {% if connection %}
+                    <span>
+                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                        {{ sync_label }}: {{ last_sync_at or "Not synced yet" }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% if caller %}
+        <div class="business-workspace__action">
+            {{ caller() }}
+        </div>
+        {% endif %}
+    </div>
+
+    <nav class="business-workspace__tabs" aria-label="Business workspace sections">
+        <a href="{{ url_for('google_business.live_dashboard', business_id=business_id, tab='reviews') }}"
+           class="business-workspace__tab{% if active_section == 'reviews' %} is-active{% endif %}"
+           {% if active_section == 'reviews' %}aria-current="page"{% endif %}>
+            <i class="bi bi-chat-square-text" aria-hidden="true"></i>
+            Live Reviews
+        </a>
+        <a href="{{ url_for('google_business.live_dashboard', business_id=business_id, tab='performance') }}"
+           class="business-workspace__tab{% if active_section == 'performance' %} is-active{% endif %}"
+           {% if active_section == 'performance' %}aria-current="page"{% endif %}>
+            <i class="bi bi-activity" aria-hidden="true"></i>
+            Performance Analysis
+        </a>
+        <a href="{{ url_for('ai_consultant.ai_consultant_page', business_id=business_id) }}"
+           class="business-workspace__tab{% if active_section == 'consultant' %} is-active{% endif %}"
+           {% if active_section == 'consultant' %}aria-current="page"{% endif %}>
+            <i class="bi bi-stars" aria-hidden="true"></i>
+            AI Business Consultant
+        </a>
+    </nav>
+</section>
+{% endmacro %}

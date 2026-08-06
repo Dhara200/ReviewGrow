@@ -12,7 +12,7 @@ class GoogleReviewSyncUiTests(unittest.TestCase):
 
     def test_sync_controls_use_enqueue_endpoint_not_synchronous_route(self):
         self.assertIn("data-google-review-sync-button", self.template)
-        self.assertEqual(3, self.template.count("data-google-review-sync-button>"))
+        self.assertEqual(2, self.template.count("data-google-review-sync-button>"))
         self.assertIn("enqueue_google_review_sync_job", self.template)
         self.assertNotIn('action="/businesses/{{ business_id }}/google/sync-reviews"', self.template)
 

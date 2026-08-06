@@ -11,6 +11,7 @@
 
 
 {% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/business_workspace.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ai_consultant.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
@@ -52,6 +53,38 @@
 {% set daily_briefing = (report.daily_briefing if report and report.daily_briefing else command_center.daily_briefing) %}
 {% set executive_summary = (report.executive_summary if report else command_center.executive_summary) %}
 
+{% from "components/business_workspace_header.html" import render_business_workspace_header %}
+{% call render_business_workspace_header(
+    business,
+    business_id,
+    "consultant",
+    connection=google_connection,
+    location_label=(google_connection.google_location_name if google_connection else none),
+    last_sync_at=(google_connection.last_sync_at if google_connection else none),
+    sync_label="Last review sync"
+) %}
+<form method="POST" action="/business/{{ business_id }}/ai-consultant/generate">
+    {{ csrf_field() }}
+    <input type="hidden" name="period" value="{{ selected_period }}">
+    <button type="submit" class="btn-solid" {% if not can_generate %}disabled{% endif %}>
+        <i class="bi bi-stars" aria-hidden="true"></i>
+        Refresh analysis
+    </button>
+</form>
+{% endcall %}
+
+<div class="d-flex flex-wrap gap-2 mb-4" aria-label="Consultant data context">
+    <span class="badge-soft-primary">
+        <i class="bi bi-google" aria-hidden="true"></i>
+        Data Source: Live Google Reviews Only
+    </span>
+    <span class="badge-soft-success">Google reviews analyzed: {{ metrics.total_reviews or 0 }}</span>
+    <span class="badge-soft-primary"><i class="bi bi-calendar3" aria-hidden="true"></i> {{ consultant_data.period.label }}</span>
+    {% if report and report.generated_at %}
+    <span class="badge-soft-primary"><i class="bi bi-stars" aria-hidden="true"></i> AI analysed {{ report.generated_at }}</span>
+    {% endif %}
+</div>
+
 {% if consultant_job and consultant_job.status in ['pending', 'processing', 'completed', 'failed'] %}
 <div class="consultant-job-state alert {% if consultant_job.status == 'failed' %}alert-danger{% elif consultant_job.status == 'completed' %}alert-success{% else %}alert-info{% endif %}"
      role="status" data-consultant-job data-job-id="{{ consultant_job.id }}">
@@ -79,40 +112,6 @@
 </div>
 {% endif %}
 {% endif %}
-
-<div class="rs-page-header consultant-page-header">
-    <div>
-        <p class="rs-eyebrow">{{ business.business_type if business else "Business" }}</p>
-        <h1 class="rs-page-title">AI Reputation Consultant</h1>
-        <p class="rs-page-subtitle">
-            Understand what customers are saying, what is changing, and what to improve next.
-        </p>
-        <div class="d-flex flex-wrap gap-2 mt-3">
-            <span class="badge-soft-primary">
-                <i class="bi bi-google"></i>
-                Data Source: Live Google Reviews Only
-            </span>
-            <span class="badge-soft-success">
-                Google reviews analyzed: {{ metrics.total_reviews or 0 }}
-            </span>
-            <span class="badge-soft-primary"><i class="bi bi-calendar3"></i> {{ consultant_data.period.label }}</span>
-            {% if google_connection and google_connection.last_sync_at %}
-            <span class="badge-soft-primary"><i class="bi bi-arrow-repeat"></i> GBP synced {{ google_connection.last_sync_at }}</span>
-            {% endif %}
-            {% if report and report.generated_at %}
-            <span class="badge-soft-primary"><i class="bi bi-stars"></i> AI analysed {{ report.generated_at }}</span>
-            {% endif %}
-        </div>
-    </div>
-    <form method="POST" action="/business/{{ business_id }}/ai-consultant/generate">
-        {{ csrf_field() }}
-        <input type="hidden" name="period" value="{{ selected_period }}">
-        <button type="submit" class="btn-solid" {% if not can_generate %}disabled{% endif %}>
-            <i class="bi bi-stars"></i>
-            Refresh analysis
-        </button>
-    </form>
-</div>
 
 <form class="consultant-period-bar command-section" method="get" aria-label="Analysis period">
     <label class="form-label mb-0" for="consultantPeriod">Analysis period</label>
