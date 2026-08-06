@@ -1,0 +1,24 @@
+<div class="modal fade business-delete-modal" id="deleteBusinessModal" tabindex="-1" aria-labelledby="deleteBusinessModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="business-delete-heading">
+                    <span class="business-delete-icon" aria-hidden="true"><i class="bi bi-trash3"></i></span>
+                    <div><p class="rs-eyebrow">Confirm deletion</p><h2 class="modal-title" id="deleteBusinessModalLabel">Delete business?</h2></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteBusinessName"></strong>?</p>
+                <div class="business-delete-warning"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>This permanently removes the business and its associated reviews and reports. This action cannot be undone.</span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-ghost" data-bs-dismiss="modal" data-loading="false">Cancel</button>
+                <form id="deleteBusinessForm" method="POST" action="" data-delete-url-template="{{ url_for('businesses.delete_business', business_id=0) }}">
+                    {{ csrf_field() }}
+                    <button type="submit" class="btn-danger"><i class="bi bi-trash3" aria-hidden="true"></i> Delete business</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,150 @@
+{% set business_name = business.business_name or 'Untitled business' %}
+{% set business_type = business.business_type or 'Business' %}
+{% set normalized_type = business_type | lower %}
+{% set name_words = business_name.split() %}
+{% set initials = (name_words[0][0] if name_words else 'B') ~ (name_words[1][0] if name_words | length > 1 else '') %}
+
+{% if 'travel' in normalized_type or 'tour' in normalized_type or 'agency' in normalized_type %}
+    {% set category_class = 'category-travel' %}{% set category_icon = 'bi-airplane' %}
+{% elif 'restaurant' in normalized_type or 'food' in normalized_type or 'dining' in normalized_type %}
+    {% set category_class = 'category-food' %}{% set category_icon = 'bi-cup-hot' %}
+{% elif 'cafe' in normalized_type or 'coffee' in normalized_type %}
+    {% set category_class = 'category-food' %}{% set category_icon = 'bi-cup-hot' %}
+{% elif 'hotel' in normalized_type or 'lodging' in normalized_type or 'resort' in normalized_type or 'homestay' in normalized_type %}
+    {% set category_class = 'category-hospitality' %}{% set category_icon = 'bi-building' %}
+{% elif 'salon' in normalized_type or 'beauty' in normalized_type or 'spa' in normalized_type %}
+    {% set category_class = 'category-beauty' %}{% set category_icon = 'bi-scissors' %}
+{% elif 'clinic' in normalized_type or 'medical' in normalized_type or 'hospital' in normalized_type %}
+    {% set category_class = 'category-health' %}{% set category_icon = 'bi-heart-pulse' %}
+{% elif 'gym' in normalized_type or 'fitness' in normalized_type %}
+    {% set category_class = 'category-fitness' %}{% set category_icon = 'bi-activity' %}
+{% elif 'retail' in normalized_type or 'store' in normalized_type or 'shop' in normalized_type %}
+    {% set category_class = 'category-retail' %}{% set category_icon = 'bi-shop' %}
+{% elif 'education' in normalized_type or 'school' in normalized_type or 'academy' in normalized_type %}
+    {% set category_class = 'category-education' %}{% set category_icon = 'bi-mortarboard' %}
+{% elif 'automotive' in normalized_type or 'garage' in normalized_type or 'car' in normalized_type %}
+    {% set category_class = 'category-automotive' %}{% set category_icon = 'bi-car-front' %}
+{% else %}
+    {% set category_class = 'category-default' %}{% set category_icon = 'bi-buildings' %}
+{% endif %}
+
+{% set location_parts = [] %}
+{% if business.city %}{% set _ = location_parts.append(business.city) %}{% endif %}
+{% if business.state and business.state not in location_parts %}{% set _ = location_parts.append(business.state) %}{% endif %}
+{% if business.country and business.country not in location_parts %}{% set _ = location_parts.append(business.country) %}{% endif %}
+
+<article class="business-card {{ category_class }}" aria-labelledby="business-name-{{ business.id }}">
+    <div class="business-identity">
+        <div class="business-identity-pattern" aria-hidden="true"></div>
+        <div class="business-avatar" aria-hidden="true">{{ initials | upper }}</div>
+        <div class="business-category-chip">
+            <i class="bi {{ category_icon }}" aria-hidden="true"></i>
+            <span>{{ business_type }}</span>
+        </div>
+        <div class="dropdown business-manage">
+            <button class="business-manage-toggle" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Manage {{ business_name }}">
+                <i class="bi bi-three-dots" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end business-manage-menu">
+                {% if business.google_is_connected %}
+                <li>
+                    <a class="dropdown-item" href="{{ url_for('google_business.connect_google_business', business_id=business.id, reconnect=1) }}">
+                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Reconnect Google Account
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <form method="POST" action="{{ url_for('google_business.disconnect_google_business', business_id=business.id) }}">
+                        {{ csrf_field() }}
+                        <button type="submit" class="dropdown-item business-menu-warning">
+                            <i class="bi bi-x-circle" aria-hidden="true"></i> Disconnect Google Account
+                        </button>
+                    </form>
+                </li>
+                {% endif %}
+                <li{% if business.google_is_connected %} class="business-danger-separator"{% endif %}>
+                    <button type="button" class="dropdown-item business-menu-danger" data-bs-toggle="modal" data-bs-target="#deleteBusinessModal" data-business-id="{{ business.id }}" data-business-name="{{ business_name }}">
+                        <i class="bi bi-trash3" aria-hidden="true"></i> Delete business
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="business-card-body">
+        <div class="business-details">
+            <div class="business-title-row">
+                <h2 id="business-name-{{ business.id }}" title="{{ business_name }}">{{ business_name }}</h2>
+                {% if business.google_is_connected %}
+                <span class="business-status status-connected"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Google connected</span>
+                {% else %}
+                <span class="business-status status-disconnected"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Google not connected</span>
+                {% endif %}
+            </div>
+            <p class="business-type-label">{{ business_type }}</p>
+            <p class="business-location">
+                <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                <span>{{ location_parts | join(', ') if location_parts else 'Location not set' }}</span>
+            </p>
+        </div>
+
+        <a href="{{ url_for('dashboard.dashboard', business_id=business.id) }}" class="business-primary-action">
+            <span><i class="bi bi-speedometer2" aria-hidden="true"></i> Open dashboard</span>
+            <i class="bi bi-arrow-right-short business-primary-arrow" aria-hidden="true"></i>
+        </a>
+
+        <div class="business-quick-actions" aria-label="Quick actions for {{ business_name }}">
+            <a href="{{ url_for('businesses.upload_reviews_page', business_id=business.id) }}" class="business-action-tile">
+                <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                <span><strong>Upload reviews</strong><small>Add review data</small></span>
+            </a>
+            <a href="{{ url_for('analysis.review_assistant') }}" class="business-action-tile">
+                <i class="bi bi-magic" aria-hidden="true"></i>
+                <span><strong>Review assistant</strong><small>Draft a response</small></span>
+            </a>
+            {% if business.google_is_connected %}
+            <a href="{{ url_for('google_business.live_dashboard', business_id=business.id) }}" class="business-action-tile">
+                <i class="bi bi-broadcast-pin" aria-hidden="true"></i>
+                <span><strong>Live dashboard</strong><small>Google insights</small></span>
+            </a>
+            <a href="{{ url_for('google_business.google_business_photos', business_id=business.id) }}" class="business-action-tile">
+                <i class="bi bi-images" aria-hidden="true"></i>
+                <span><strong>Upload photos</strong><small>Manage imagery</small></span>
+            </a>
+            {% else %}
+            <div class="business-action-tile business-action-unavailable" aria-disabled="true">
+                <i class="bi bi-broadcast-pin" aria-hidden="true"></i>
+                <span><strong>Live dashboard</strong><small>Connect Google first</small></span>
+            </div>
+            <div class="business-action-tile business-action-unavailable" aria-disabled="true">
+                <i class="bi bi-images" aria-hidden="true"></i>
+                <span><strong>Upload photos</strong><small>Connect Google first</small></span>
+            </div>
+            {% endif %}
+        </div>
+
+        <section class="business-google-panel{% if business.google_is_connected %} is-connected{% endif %}" aria-label="Google Business Profile connection">
+            <div class="business-google-icon" aria-hidden="true"><i class="bi bi-google"></i></div>
+            {% if business.google_is_connected %}
+            <div class="business-google-copy">
+                <span class="business-google-kicker"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Connected</span>
+                <h3>Connected to Google Business Profile</h3>
+                {% if business.google_email %}<p title="{{ business.google_email }}">{{ business.google_email }}</p>{% elif business.google_location_name %}<p>{{ business.google_location_name }}</p>{% else %}<p>Google connection is active.</p>{% endif %}
+            </div>
+            {% else %}
+            <div class="business-google-copy">
+                <span class="business-google-kicker">Google Business Profile</span>
+                <h3>Connect Google Business Profile</h3>
+                <p>Unlock live reviews, business insights, and photo management.</p>
+                <details class="business-google-notice">
+                    <summary>Before you connect</summary>
+                    {% include "_google_oauth_notice.html" %}
+                </details>
+                <a href="{{ url_for('google_business.connect_google_business', business_id=business.id) }}" class="business-connect-action">
+                    <i class="bi bi-google" aria-hidden="true"></i> Connect Google Business Profile
+                </a>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+</article>
