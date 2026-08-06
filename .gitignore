@@ -13,7 +13,7 @@ docs/*
 
 .idea/
 
-!.env.example
+.env.example
 
 docker-compose.local.yml
 
