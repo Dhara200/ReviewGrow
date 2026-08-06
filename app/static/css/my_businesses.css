@@ -33,12 +33,12 @@
 
 .business-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
     gap: 24px;
-    align-items: stretch;
+    align-items: start;
 }
 
-.business-grid-single { grid-template-columns: minmax(0, 780px); }
+.business-grid-single { grid-template-columns: minmax(0, 660px); }
 
 .business-card {
     --business-accent: var(--rs-primary);
@@ -57,10 +57,12 @@
 }
 
 .business-card:hover {
+    z-index: 3;
     transform: translateY(-2px);
     border-color: color-mix(in srgb, var(--business-accent) 30%, var(--rs-border));
     box-shadow: var(--rs-shadow);
 }
+.business-card:focus-within { z-index: 20; }
 
 .business-card.category-travel { --business-accent: #2563eb; --business-accent-soft: rgba(37, 99, 235, .11); --business-pattern: rgba(37, 99, 235, .13); }
 .business-card.category-food { --business-accent: #c2410c; --business-accent-soft: rgba(234, 88, 12, .11); --business-pattern: rgba(234, 88, 12, .12); }
@@ -68,9 +70,7 @@
 .business-card.category-beauty { --business-accent: #be185d; --business-accent-soft: rgba(190, 24, 93, .1); --business-pattern: rgba(190, 24, 93, .12); }
 .business-card.category-health { --business-accent: #0f766e; --business-accent-soft: rgba(13, 148, 136, .1); --business-pattern: rgba(13, 148, 136, .12); }
 .business-card.category-fitness { --business-accent: #047857; --business-accent-soft: rgba(5, 150, 105, .1); --business-pattern: rgba(5, 150, 105, .12); }
-.business-card.category-retail { --business-accent: #0369a1; --business-accent-soft: rgba(2, 132, 199, .1); --business-pattern: rgba(2, 132, 199, .12); }
-.business-card.category-education { --business-accent: #4f46e5; --business-accent-soft: rgba(79, 70, 229, .1); --business-pattern: rgba(79, 70, 229, .12); }
-.business-card.category-automotive { --business-accent: #475569; --business-accent-soft: rgba(71, 85, 105, .11); --business-pattern: rgba(71, 85, 105, .13); }
+.business-card.category-retail { --business-accent: #4f46e5; --business-accent-soft: rgba(79, 70, 229, .1); --business-pattern: rgba(79, 70, 229, .12); }
 
 .business-identity {
     position: relative;
@@ -201,7 +201,7 @@
     min-width: 0;
     flex: 1;
     flex-direction: column;
-    gap: 24px;
+    gap: 16px;
     padding: 24px;
 }
 
@@ -235,8 +235,7 @@
 
 .status-connected { border-color: rgba(16, 185, 129, .2); background: var(--rs-accent-soft); color: var(--rs-accent); }
 .status-disconnected { border-color: var(--rs-border); background: var(--rs-surface-muted); color: var(--rs-muted); }
-.business-type-label { margin: 6px 0 0; color: var(--rs-muted); font-size: .875rem; }
-.business-location { display: flex; align-items: flex-start; gap: 6px; margin: 12px 0 0; color: var(--rs-muted); font-size: .82rem; }
+.business-location { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 0; color: var(--rs-muted); font-size: .82rem; }
 .business-location i { flex: 0 0 auto; margin-top: 1px; color: var(--business-accent); }
 
 .business-primary-action {
@@ -257,10 +256,18 @@
     transition: transform 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
 }
 
-.business-primary-action span { display: inline-flex; align-items: center; gap: 9px; }
+.business-primary-action .business-primary-copy { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
+.business-primary-copy > span { display: block; min-width: 0; }
+.business-primary-copy strong,
+.business-primary-copy small { display: block; text-align: left; }
+.business-primary-copy strong { font-size: .9rem; }
+.business-primary-copy small { margin-top: 1px; color: rgba(255, 255, 255, .8); font-size: .68rem; font-weight: 550; }
 .business-primary-arrow { font-size: 1.35rem; transition: transform 200ms ease; }
 .business-primary-action:hover { transform: translateY(-1px); background: var(--rs-primary-dark); color: #fff; }
 .business-primary-action:hover .business-primary-arrow { transform: translateX(2px); }
+.business-primary-unavailable { border-color: var(--rs-border); background: var(--rs-surface-muted); color: var(--rs-muted); box-shadow: none; cursor: not-allowed; }
+.business-primary-unavailable .business-primary-copy small { color: var(--rs-muted); }
+.business-primary-unavailable:hover { transform: none; background: var(--rs-surface-muted); color: var(--rs-muted); }
 
 .business-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .business-action-tile {
@@ -285,7 +292,8 @@
 .business-action-tile small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .business-action-tile strong { font-size: .78rem; }
 .business-action-tile small { margin-top: 2px; color: var(--rs-muted); font-size: .68rem; }
-.business-action-tile[href]:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--business-accent) 35%, var(--rs-border)); background: var(--business-accent-soft); color: var(--rs-text); }
+.business-action-tile[href]:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--business-accent) 35%, var(--rs-border)); background: var(--business-accent-soft); color: var(--rs-text); }
+.business-action-tile[href]:hover > i { background: color-mix(in srgb, var(--business-accent-soft) 72%, var(--rs-surface)); }
 .business-action-unavailable { opacity: .62; cursor: not-allowed; }
 
 .business-google-panel {
@@ -294,7 +302,7 @@
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 12px;
     margin-top: auto;
-    padding: 16px;
+    padding: 14px;
     border: 1px solid var(--rs-border);
     border-radius: 16px;
     background: var(--rs-surface-muted);
@@ -373,9 +381,7 @@
 :root[data-theme="dark"] .business-card.category-beauty { --business-accent: #f472b6; }
 :root[data-theme="dark"] .business-card.category-health,
 :root[data-theme="dark"] .business-card.category-fitness { --business-accent: #34d399; }
-:root[data-theme="dark"] .business-card.category-retail { --business-accent: #38bdf8; }
-:root[data-theme="dark"] .business-card.category-education { --business-accent: #818cf8; }
-:root[data-theme="dark"] .business-card.category-automotive { --business-accent: #cbd5e1; }
+:root[data-theme="dark"] .business-card.category-retail { --business-accent: #818cf8; }
 
 @media (max-width: 767.98px) {
     .businesses-page { gap: 24px; }
@@ -393,7 +399,7 @@
     .business-identity { min-height: 104px; border-radius: 19px 19px 0 0; }
     .business-title-row { flex-direction: column; }
     .business-status { align-self: flex-start; }
-    .business-card-body { gap: 20px; }
+    .business-card-body { gap: 16px; }
     .business-action-tile { min-height: 68px; }
     .business-action-tile small { display: none; }
     .business-empty-state { padding: 40px 20px; }

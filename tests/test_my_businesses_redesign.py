@@ -99,6 +99,19 @@ class MyBusinessesRedesignTests(unittest.TestCase):
         self.assertGreaterEqual(html.count('name="csrf_token"'), 2)
         self.assertNotIn("None,", html)
 
+        connected_card = html.split('aria-labelledby="business-name-11"', 1)[1].split("</article>", 1)[0]
+        disconnected_card = html.split('aria-labelledby="business-name-12"', 1)[1].split("</article>", 1)[0]
+        primary_block = connected_card.split('<a href="/business/11/live-dashboard"', 1)[1].split("</a>", 1)[0]
+        quick_actions = connected_card.split('class="business-quick-actions"', 1)[1].split('class="business-google-panel', 1)[0]
+        self.assertIn("Live Dashboard", primary_block)
+        self.assertNotIn("Open dashboard", primary_block)
+        self.assertIn('/dashboard/11', quick_actions)
+        self.assertIn("Open dashboard", quick_actions)
+        self.assertNotIn("business-type-label", connected_card)
+        self.assertIn('aria-controls="business-manage-menu-11"', connected_card)
+        self.assertNotIn('href="/business/12/live-dashboard"', disconnected_card)
+        self.assertIn("business-primary-unavailable", disconnected_card)
+
     def test_one_business_uses_constrained_grid(self):
         response, _cursor = self.render([{
             "id": 9, "business_name": "Clinic", "business_type": "Medical Clinic",
@@ -108,6 +121,15 @@ class MyBusinessesRedesignTests(unittest.TestCase):
         self.assertIn(b"business-grid-single", response.data)
         self.assertIn(b"category-health", response.data)
         self.assertIn(b"Chennai, India", response.data)
+
+    def test_unknown_category_uses_default_identity(self):
+        response, _cursor = self.render([{
+            "id": 21, "business_name": "Unusual Company", "business_type": "Specialist Services",
+            "city": None, "state": None, "country": None, "google_is_connected": False,
+            "google_email": None, "google_location_name": None,
+        }])
+        self.assertIn(b"category-default", response.data)
+        self.assertIn(b"bi-buildings", response.data)
 
 
 if __name__ == "__main__":

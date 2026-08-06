@@ -20,10 +20,6 @@
     {% set category_class = 'category-fitness' %}{% set category_icon = 'bi-activity' %}
 {% elif 'retail' in normalized_type or 'store' in normalized_type or 'shop' in normalized_type %}
     {% set category_class = 'category-retail' %}{% set category_icon = 'bi-shop' %}
-{% elif 'education' in normalized_type or 'school' in normalized_type or 'academy' in normalized_type %}
-    {% set category_class = 'category-education' %}{% set category_icon = 'bi-mortarboard' %}
-{% elif 'automotive' in normalized_type or 'garage' in normalized_type or 'car' in normalized_type %}
-    {% set category_class = 'category-automotive' %}{% set category_icon = 'bi-car-front' %}
 {% else %}
     {% set category_class = 'category-default' %}{% set category_icon = 'bi-buildings' %}
 {% endif %}
@@ -42,10 +38,10 @@
             <span>{{ business_type }}</span>
         </div>
         <div class="dropdown business-manage">
-            <button class="business-manage-toggle" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Manage {{ business_name }}">
+            <button class="business-manage-toggle" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-controls="business-manage-menu-{{ business.id }}" aria-label="Manage {{ business_name }}">
                 <i class="bi bi-three-dots" aria-hidden="true"></i>
             </button>
-            <ul class="dropdown-menu dropdown-menu-end business-manage-menu">
+            <ul class="dropdown-menu dropdown-menu-end business-manage-menu" id="business-manage-menu-{{ business.id }}">
                 {% if business.google_is_connected %}
                 <li>
                     <a class="dropdown-item" href="{{ url_for('google_business.connect_google_business', business_id=business.id, reconnect=1) }}">
@@ -81,41 +77,43 @@
                 <span class="business-status status-disconnected"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Google not connected</span>
                 {% endif %}
             </div>
-            <p class="business-type-label">{{ business_type }}</p>
             <p class="business-location">
                 <i class="bi bi-geo-alt" aria-hidden="true"></i>
                 <span>{{ location_parts | join(', ') if location_parts else 'Location not set' }}</span>
             </p>
         </div>
 
-        <a href="{{ url_for('dashboard.dashboard', business_id=business.id) }}" class="business-primary-action">
-            <span><i class="bi bi-speedometer2" aria-hidden="true"></i> Open dashboard</span>
+        {% if business.google_is_connected %}
+        <a href="{{ url_for('google_business.live_dashboard', business_id=business.id) }}" class="business-primary-action">
+            <span class="business-primary-copy"><i class="bi bi-broadcast-pin" aria-hidden="true"></i><span><strong>Live Dashboard</strong><small>Live reviews, sync and insights</small></span></span>
             <i class="bi bi-arrow-right-short business-primary-arrow" aria-hidden="true"></i>
         </a>
+        {% else %}
+        <div class="business-primary-action business-primary-unavailable" aria-disabled="true">
+            <span class="business-primary-copy"><i class="bi bi-broadcast-pin" aria-hidden="true"></i><span><strong>Live Dashboard</strong><small>Connect Google to access live reviews</small></span></span>
+            <i class="bi bi-lock" aria-hidden="true"></i>
+        </div>
+        {% endif %}
 
         <div class="business-quick-actions" aria-label="Quick actions for {{ business_name }}">
+            <a href="{{ url_for('dashboard.dashboard', business_id=business.id) }}" class="business-action-tile">
+                <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                <span><strong>Open dashboard</strong><small>View reputation overview</small></span>
+            </a>
             <a href="{{ url_for('businesses.upload_reviews_page', business_id=business.id) }}" class="business-action-tile">
                 <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
-                <span><strong>Upload reviews</strong><small>Add review data</small></span>
+                <span><strong>Upload reviews</strong><small>Import CSV or review text</small></span>
             </a>
             <a href="{{ url_for('analysis.review_assistant') }}" class="business-action-tile">
                 <i class="bi bi-magic" aria-hidden="true"></i>
-                <span><strong>Review assistant</strong><small>Draft a response</small></span>
+                <span><strong>Review assistant</strong><small>Generate AI-powered replies</small></span>
             </a>
             {% if business.google_is_connected %}
-            <a href="{{ url_for('google_business.live_dashboard', business_id=business.id) }}" class="business-action-tile">
-                <i class="bi bi-broadcast-pin" aria-hidden="true"></i>
-                <span><strong>Live dashboard</strong><small>Google insights</small></span>
-            </a>
             <a href="{{ url_for('google_business.google_business_photos', business_id=business.id) }}" class="business-action-tile">
                 <i class="bi bi-images" aria-hidden="true"></i>
-                <span><strong>Upload photos</strong><small>Manage imagery</small></span>
+                <span><strong>Upload photos</strong><small>Manage Google profile photos</small></span>
             </a>
             {% else %}
-            <div class="business-action-tile business-action-unavailable" aria-disabled="true">
-                <i class="bi bi-broadcast-pin" aria-hidden="true"></i>
-                <span><strong>Live dashboard</strong><small>Connect Google first</small></span>
-            </div>
             <div class="business-action-tile business-action-unavailable" aria-disabled="true">
                 <i class="bi bi-images" aria-hidden="true"></i>
                 <span><strong>Upload photos</strong><small>Connect Google first</small></span>
@@ -127,7 +125,6 @@
             <div class="business-google-icon" aria-hidden="true"><i class="bi bi-google"></i></div>
             {% if business.google_is_connected %}
             <div class="business-google-copy">
-                <span class="business-google-kicker"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Connected</span>
                 <h3>Connected to Google Business Profile</h3>
                 {% if business.google_email %}<p title="{{ business.google_email }}">{{ business.google_email }}</p>{% elif business.google_location_name %}<p>{{ business.google_location_name }}</p>{% else %}<p>Google connection is active.</p>{% endif %}
             </div>
