@@ -10,6 +10,9 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
       MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+    
+    ports:
+      - "127.0.0.1:3306:3306"
 
     volumes:
       - mysql_data:/var/lib/mysql
