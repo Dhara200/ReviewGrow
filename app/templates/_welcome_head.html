@@ -1,0 +1,13 @@
+<script>
+    (function () {
+        try {
+            if (sessionStorage.getItem("reviewgrowWelcomeShown") !== "true") {
+                document.documentElement.classList.add("reviewgrow-welcome-pending");
+                sessionStorage.setItem("reviewgrowWelcomeShown", "true");
+            }
+        } catch (error) {
+            document.documentElement.classList.add("reviewgrow-welcome-pending");
+        }
+    })();
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">

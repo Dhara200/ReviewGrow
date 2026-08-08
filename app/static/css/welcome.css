@@ -1,0 +1,119 @@
+.reviewgrow-welcome {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 50% 42%, rgba(92, 129, 255, 0.16), transparent 34%),
+        linear-gradient(145deg, #080b16 0%, #10182b 52%, #07101d 100%);
+    opacity: 1;
+    transition: opacity 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reviewgrow-welcome-pending .reviewgrow-welcome {
+    display: flex;
+}
+
+.reviewgrow-welcome.is-leaving {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.reviewgrow-welcome__content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem;
+}
+
+.reviewgrow-welcome__logo-wrap {
+    position: relative;
+    display: grid;
+    width: clamp(88px, 10vw, 128px);
+    place-items: center;
+}
+
+.reviewgrow-welcome__glow {
+    position: absolute;
+    width: 145%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: rgba(94, 128, 255, 0.24);
+    filter: blur(30px);
+    opacity: 0;
+    animation: reviewgrow-glow 1800ms ease-in-out 180ms both;
+}
+
+.reviewgrow-welcome__logo {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: auto;
+    opacity: 0;
+    transform: scale(0.86);
+    filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.3));
+    animation: reviewgrow-logo-in 900ms cubic-bezier(0.2, 0.75, 0.25, 1) 100ms forwards;
+}
+
+.reviewgrow-welcome__text {
+    margin: 1.1rem 0 0;
+    color: rgba(255, 255, 255, 0.9);
+    font: inherit;
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: reviewgrow-text-in 650ms ease-out 550ms forwards;
+}
+
+@keyframes reviewgrow-logo-in {
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes reviewgrow-glow {
+    0%, 100% { opacity: 0.18; transform: scale(0.88); }
+    50% { opacity: 0.52; transform: scale(1.08); }
+}
+
+@keyframes reviewgrow-text-in {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .reviewgrow-welcome__logo-wrap {
+        width: clamp(82px, 25vw, 96px);
+    }
+
+    .reviewgrow-welcome__content {
+        padding: 1.5rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reviewgrow-welcome {
+        transition-duration: 80ms;
+    }
+
+    .reviewgrow-welcome__logo,
+    .reviewgrow-welcome__text,
+    .reviewgrow-welcome__glow {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    .reviewgrow-welcome__glow {
+        opacity: 0.2;
+    }
+}

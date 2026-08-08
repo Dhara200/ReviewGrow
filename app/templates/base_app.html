@@ -29,6 +29,7 @@
     <title>{% block title %}ReviewGrow App{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
+    {% include "_welcome_head.html" %}
     <script>
         (function () {
             const storedTheme = localStorage.getItem("reviewsense-theme");
@@ -52,6 +53,7 @@
 
 </head>
 <body>
+    {% include "_welcome_overlay.html" %}
     <script>
         window.reviewGrowCsrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
         window.reviewGrowCsrfHeaders = () => ({ "X-CSRF-Token": window.reviewGrowCsrfToken });
@@ -265,6 +267,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='reviewsense.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/welcome.js') }}"></script>
     <script>
         (() => {
             const confirmButton = document.getElementById("confirmDeleteAccount");
