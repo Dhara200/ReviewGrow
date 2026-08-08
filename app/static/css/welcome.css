@@ -33,7 +33,7 @@
 .reviewgrow-welcome__logo-wrap {
     position: relative;
     display: grid;
-    width: clamp(88px, 10vw, 128px);
+    width: clamp(148px, 14vw, 184px);
     place-items: center;
 }
 
@@ -60,10 +60,10 @@
 }
 
 .reviewgrow-welcome__text {
-    margin: 1.1rem 0 0;
+    margin: 1.25rem 0 0;
     color: rgba(255, 255, 255, 0.9);
     font: inherit;
-    font-size: clamp(1rem, 2vw, 1.2rem);
+    font-size: clamp(1.25rem, 2.2vw, 1.55rem);
     font-weight: 600;
     letter-spacing: 0.025em;
     opacity: 0;
@@ -90,13 +90,20 @@
     }
 }
 
-@media (max-width: 575.98px) {
+@media (max-width: 767.98px) {
     .reviewgrow-welcome__logo-wrap {
-        width: clamp(82px, 25vw, 96px);
+        width: clamp(124px, 34vw, 152px);
     }
 
     .reviewgrow-welcome__content {
-        padding: 1.5rem;
+        width: 100%;
+        padding: 1.5rem 1.25rem;
+    }
+
+    .reviewgrow-welcome__text {
+        margin-top: 1rem;
+        font-size: clamp(1.15rem, 5.2vw, 1.35rem);
+        text-align: center;
     }
 }
 
